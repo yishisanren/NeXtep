@@ -119,21 +119,17 @@ data class WorkspaceGeometry(
             val longSide = if (landscape) availableWidth else availableHeight
             val shortSide = if (landscape) availableHeight else availableWidth
             val gap = density.toInt().coerceAtLeast(1)
-            // Solve the main region and all portrait slots together. If H is the
-            // content's long side and r = shortSide/longSide, their short sides
-            // are H*r and (H-(N-1)*gap)*r/N. Including the rail divider, they
-            // must sum to shortSide. Independent strip/rail fractions leave bands.
             val count = WORKSPACE_SLOT_COUNT
-            val contentLongSide = (count * (shortSide - gap).toDouble() * longSide / shortSide +
-                (count - 1) * gap) / (count + 1)
-            val controlThickness = (longSide - contentLongSide).roundToInt().coerceIn(1, longSide - 1)
-            val mainShortSide = (shortSide.toDouble() * (longSide - controlThickness) / longSide)
-                .roundToInt().coerceIn(1, shortSide - 1)
+            // Remove the player reserve; keep portrait previews proportional.
+            val controlThickness = (WorkspaceControlMetrics.COMPACT_HEIGHT_DP * density)
+                .roundToInt().coerceIn(1, (longSide / 2).coerceAtLeast(1))
+            val railWidth = (gap + (longSide - controlThickness - (count - 1) * gap).toDouble() *
+                shortSide / longSide / count).roundToInt().coerceIn(1, shortSide - 1)
             return WorkspaceGeometry(
                 screenWidth = screenWidth,
                 screenHeight = screenHeight,
                 topHeight = controlThickness,
-                sidebarWidth = shortSide - mainShortSide,
+                sidebarWidth = railWidth,
                 sidebarSide = sidebarSide,
                 navigationInsets = safeInsets,
                 displayRotation = displayRotation,

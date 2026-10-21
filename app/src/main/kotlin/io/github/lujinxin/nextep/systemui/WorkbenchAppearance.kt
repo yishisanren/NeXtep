@@ -13,7 +13,7 @@ internal enum class WorkbenchAppearance(
     LIGHT(0xF2EDF1F7.toInt(), 0xF2DDE5F0.toInt(), 0xFFF9FBFE.toInt(),
         0xFF182333.toInt(), 0xFF526176.toInt(), 0xFFC2CCDB.toInt());
 
-    val accent: Int get() = if (this == DARK) 0xFFE8BE70.toInt() else 0xFF8C5D13.toInt()
+    val accent: Int get() = if (this == DARK) 0xFF8CCBEA.toInt() else 0xFF245D80.toInt()
 
     fun background(radius: Float = 0f, stroke: Int = 0) = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(panel, panelEnd),

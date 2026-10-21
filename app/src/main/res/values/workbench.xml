@@ -29,4 +29,13 @@
     <string name="workbench_wide">Move landscape app to the top</string>
     <string name="workbench_wide_failed">No landscape app can be placed at the top right now.</string>
     <string name="workbench_cancel">Cancel</string>
+    <string name="workbench_pay_short">Pay</string>
+    <string name="workbench_compare_short">Price</string>
+    <string name="workbench_choose_app">Choose an app on the desktop for side window %1$d. Tap + again to cancel.</string>
+    <string name="workbench_launch_failed">Could not open the app or place it in the side window. Try again or export diagnostics.</string>
+    <string name="workbench_search_running">Opening apps…</string>
+    <string name="workbench_search_failed_detail">%1$s: completed %2$d/%3$d. %4$s</string>
+    <string name="workbench_compare_space">There are not enough free side windows.</string>
+    <string name="workbench_launch_timeout">The app did not appear in the foreground before the timeout.</string>
+    <string name="workbench_launch_denied">The system denied this app launch or window move.</string>
 </resources>

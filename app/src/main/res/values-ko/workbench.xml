@@ -29,4 +29,13 @@
     <string name="workbench_wide">가로 앱을 상단에 배치</string>
     <string name="workbench_wide_failed">상단에 배치할 수 있는 가로 앱이 없습니다.</string>
     <string name="workbench_cancel">취소</string>
+    <string name="workbench_pay_short">결제</string>
+    <string name="workbench_compare_short">비교</string>
+    <string name="workbench_choose_app">홈 화면에서 작은 창 %1$d에 추가할 앱을 선택하세요. ＋를 다시 누르면 취소됩니다.</string>
+    <string name="workbench_launch_failed">앱을 실행하거나 작은 창으로 옮기지 못했습니다. 다시 시도하거나 진단을 내보내세요.</string>
+    <string name="workbench_search_running">앱 여는 중…</string>
+    <string name="workbench_search_failed_detail">%1$s: %2$d/%3$d 완료. %4$s</string>
+    <string name="workbench_compare_space">빈 작은 창이 부족합니다.</string>
+    <string name="workbench_launch_timeout">앱이 전면에 나타나기를 기다리는 시간이 초과되었습니다.</string>
+    <string name="workbench_launch_denied">시스템이 앱 실행 또는 이동을 거부했습니다.</string>
 </resources>

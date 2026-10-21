@@ -21,6 +21,7 @@ import android.widget.Toast
 import io.github.lujinxin.nextep.R
 import io.github.lujinxin.nextep.config.AppLanguage
 import io.github.lujinxin.nextep.logging.NeXtepLog
+import io.github.lujinxin.nextep.workspace.SidebarSide
 
 internal class WorkbenchToolsController(
     private val context: Context,
@@ -30,15 +31,24 @@ internal class WorkbenchToolsController(
     private val recentsHidden: () -> Boolean,
     private val setRecentsHidden: (Boolean) -> Unit,
     private val open: (Intent) -> Result<Unit>,
-    private val search: (List<Intent>) -> Result<Unit>,
+    private val search: (List<Intent>, (Result<Unit>) -> Unit) -> Result<Unit>,
     private val wideRequested: () -> Boolean,
     private val settings: () -> Unit,
     private val exit: () -> Unit,
-    private val media: () -> View,
+    private val theme: () -> Unit,
+    private val side: () -> SidebarSide,
+    private val setSide: (SidebarSide) -> Unit,
+    private val cancelSearch: () -> Unit,
 ) {
     private var dialog: AlertDialog? = null
+    private var searching = false
 
-    fun dismiss() { dialog?.dismiss(); dialog = null }
+    fun dismiss() {
+        val previous = dialog
+        dialog = null
+        if (searching) { searching = false; cancelSearch() }
+        previous?.dismiss()
+    }
 
     fun showPayment() {
         dismiss()
@@ -113,33 +123,68 @@ internal class WorkbenchToolsController(
             val requested = runCatching { WorkbenchIntents.searches(mode, term) }.getOrNull()
             if (requested == null) { query.error = string(R.string.workbench_query_empty); return@setOnClickListener }
             val available = requested.filter { canOpen(it.intent) }
+            targets.text = requested.joinToString("\n") { target ->
+                (if (target in available) "✓  " else "—  ") + target.name
+            }
             if (available.size < 2) { message(R.string.workbench_compare_missing); return@setOnClickListener }
-            search(available.map { it.intent }).onSuccess { dismiss() }
-                .onFailure { message(R.string.workbench_compare_failed) }
+            searching = true
+            query.isEnabled = false
+            for (index in 0 until buttons.childCount) buttons.getChildAt(index).isEnabled = false
+            window.getButton(AlertDialog.BUTTON_POSITIVE).apply {
+                isEnabled = false
+                text = string(R.string.workbench_search_running)
+            }
+            fun finished(result: Result<Unit>) {
+                if (dialog !== window) return
+                searching = false
+                query.isEnabled = true
+                for (index in 0 until buttons.childCount) buttons.getChildAt(index).isEnabled = true
+                window.getButton(AlertDialog.BUTTON_POSITIVE).apply {
+                    isEnabled = true
+                    text = string(R.string.workbench_search)
+                }
+                result.onSuccess { dismiss() }.onFailure { error ->
+                    if (error is java.util.concurrent.CancellationException) return@onFailure
+                    val failure = error as? io.github.lujinxin.nextep.workspace.WorkspaceLaunchSequence.Failure
+                    val original = failure?.cause ?: error
+                    val cause = if (original is java.lang.reflect.InvocationTargetException) original.targetException else original
+                    val reason = when (cause) {
+                        is io.github.lujinxin.nextep.workspace.WorkspaceSearchPlacement.NoSpace -> R.string.workbench_compare_space
+                        is java.util.concurrent.TimeoutException -> R.string.workbench_launch_timeout
+                        is SecurityException -> R.string.workbench_launch_denied
+                        else -> R.string.workbench_launch_failed
+                    }
+                    val name = available.getOrNull(failure?.index ?: 0)?.name.orEmpty()
+                    query.error = string(R.string.workbench_search_failed_detail,
+                        name, failure?.completed ?: 0, available.size, string(reason))
+                    NeXtepLog.warn("compare_launch", "Search sequence failed index=" + failure?.index, error)
+                }
+            }
+            search(available.map { it.intent }, ::finished).onFailure { finished(Result.failure(it)) }
         }
     }
 
     fun showMore() {
         dismiss()
         fun checked(checked: Boolean, id: Int) = (if (checked) "✓  " else "    ") + string(id)
-        val items = arrayOf(string(R.string.workbench_compare), string(R.string.workbench_wide),
+        val items = arrayOf(string(R.string.workbench_theme),
+            string(if (side() == SidebarSide.LEFT) R.string.window_side_right else R.string.window_side_left),
+            string(R.string.workbench_wide),
             checked(recentsHidden(), R.string.workbench_hide_recents),
             checked(captureAllowed(), R.string.workbench_capture), string(R.string.workbench_export),
-            string(R.string.media_control_title), string(R.string.open_settings), string(R.string.window_exit))
+            string(R.string.open_settings), string(R.string.window_exit))
         show(builder().setTitle(string(R.string.workbench_more)).setItems(items) { _, index ->
             when (index) {
-                0 -> showSearch()
-                1 -> if (!wideRequested()) message(R.string.workbench_wide_failed)
-                2 -> setRecentsHidden(!recentsHidden())
-                3 -> {
+                0 -> theme()
+                1 -> setSide(if (side() == SidebarSide.LEFT) SidebarSide.RIGHT else SidebarSide.LEFT)
+                2 -> if (!wideRequested()) message(R.string.workbench_wide_failed)
+                3 -> setRecentsHidden(!recentsHidden())
+                4 -> {
                     val allowed = !captureAllowed()
                     setCaptureAllowed(allowed)
                     message(if (captureAllowed()) R.string.workbench_capture_on else R.string.workbench_capture_off)
                 }
-                4 -> exportDiagnostics()
-                5 -> show(builder().setTitle(string(R.string.media_control_title)).setView(column().apply {
-                    addView(media(), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(76)))
-                }).setNegativeButton(string(R.string.workbench_cancel), null).create())
+                5 -> exportDiagnostics()
                 6 -> settings()
                 7 -> exit()
             }
@@ -186,10 +231,8 @@ internal class WorkbenchToolsController(
         }
     }
 
-    private fun canOpen(intent: Intent): Boolean = runCatching {
-        val info = context.packageManager.resolveActivity(intent, 0)?.activityInfo ?: return@runCatching false
-        info.exported && info.enabled && info.applicationInfo.enabled
-    }.getOrDefault(false)
+    private fun canOpen(intent: Intent): Boolean =
+        io.github.lujinxin.nextep.framework.WorkspaceIntentResolver.resolve(context.packageManager, intent) != null
 
     private fun show(value: AlertDialog): Boolean {
         dismiss()
@@ -200,7 +243,12 @@ internal class WorkbenchToolsController(
                 if (!captureAllowed()) addFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 setBackgroundDrawable(appearance().background(dp(22).toFloat(), dp(1)))
             }
-            value.setOnDismissListener { if (dialog === value) dialog = null }
+            value.setOnDismissListener {
+                if (dialog === value) {
+                    dialog = null
+                    if (searching) { searching = false; cancelSearch() }
+                }
+            }
             value.show()
             value.window?.setLayout(minOf(context.resources.displayMetrics.widthPixels - dp(24), dp(460)),
                 WindowManager.LayoutParams.WRAP_CONTENT)
@@ -220,6 +268,6 @@ internal class WorkbenchToolsController(
         setPadding(dp(20), dp(8), dp(20), dp(8))
     }
     private fun message(id: Int) = Toast.makeText(context, string(id), Toast.LENGTH_LONG).show()
-    private fun string(id: Int) = AppLanguage.string(context, id)
+    private fun string(id: Int, vararg arguments: Any) = AppLanguage.string(context, id, *arguments)
     private fun dp(value: Int) = (value * context.resources.displayMetrics.density).toInt()
 }

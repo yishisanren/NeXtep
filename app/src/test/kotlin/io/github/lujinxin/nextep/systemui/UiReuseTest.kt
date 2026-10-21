@@ -91,8 +91,8 @@ class UiReuseTest {
 
     @Test fun catalogueRefreshKeepsExistingTilesAndUpdatesClickTargetsAfterReordering() {
         val clicked = mutableListOf<Intent>()
-        val strip = TopAppStripView(RuntimeEnvironment.getApplication(), SidebarSide.RIGHT,
-            { clicked.add(it) }, {}, {}, {}, {}, {}, { _, _ -> false }, { _, _ -> false })
+        val strip = TopAppStripView(RuntimeEnvironment.getApplication(),
+            { clicked.add(it) }, {}, { _, _ -> false }, { _, _ -> false })
         val render = strip.javaClass.getDeclaredMethod("renderApps", List::class.java).apply { isAccessible = true }
         val row = field(strip, "appRow") as LinearLayout
         fun entry(key: String, label: String = key, version: Int = 0) = TopAppRepository.AppEntry(

@@ -108,7 +108,7 @@ class WorkspaceLayoutProfileTest {
         val migrated = checkNotNull(WorkspaceLayoutProfile.decode(old.joinToString(",")))
         assertEquals(buttons, migrated)
         assertEquals(2222, migrated.canvas.height)
-        assertEquals("6", migrated.encode().substringBefore(','))
+        assertEquals("8", migrated.encode().substringBefore(','))
     }
 
     @Test
@@ -180,6 +180,32 @@ class WorkspaceLayoutProfileTest {
                     assertEquals(normal, wide.withWideSlot(null))
                 }
             }
+        }
+    }
+
+    @Test fun previousWorkbenchProfilesLoseThePlayerReserveButKeepTheirRecordedMetrics() {
+        val geometry = WorkspaceGeometry(1080, 2354, 474, 218, SidebarSide.RIGHT)
+        val old = WorkspaceLayoutProfile(geometry, 480, 3).encode().replaceFirst("8,", "6,")
+        val migrated = checkNotNull(WorkspaceLayoutProfile.decode(old))
+        assertEquals(426, migrated.geometry.topHeight)
+        assertEquals(1080, migrated.geometry.screenWidth)
+        assertEquals(2354, migrated.geometry.screenHeight)
+        assertEquals(480, migrated.densityDpi)
+        assertEquals(WorkspaceNavigationInsets(), migrated.geometry.navigationInsets)
+        assertEquals(migrated, WorkspaceLayoutProfile.decode(migrated.encode()))
+    }
+
+    @Test fun oldWideProfilesValidateTheirOldPlayerHeightBeforeMigrating() {
+        val geometry = WorkspaceGeometry(1080, 2354, 1009, 207, SidebarSide.RIGHT)
+        for (index in 0..3) {
+            val parts = WorkspaceLayoutProfile(geometry, 480, 3, index).encode().split(',').toMutableList()
+            parts[0] = "7"
+            parts[21 + index * 3] = "607" // Previous 134dp header plus 16:9 wide window.
+            val migrated = checkNotNull(WorkspaceLayoutProfile.decode(parts.joinToString(",")))
+            assertNull(migrated.wideSlotIndex)
+            assertEquals(426, migrated.geometry.topHeight)
+            parts[21 + index * 3] = "606"
+            assertNull(WorkspaceLayoutProfile.decode(parts.joinToString(",")))
         }
     }
 

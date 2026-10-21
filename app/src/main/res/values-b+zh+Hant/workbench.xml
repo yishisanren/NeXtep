@@ -29,4 +29,13 @@
     <string name="workbench_wide">橫向應用置頂</string>
     <string name="workbench_wide_failed">目前沒有可置頂的橫向應用。</string>
     <string name="workbench_cancel">取消</string>
+    <string name="workbench_pay_short">支付</string>
+    <string name="workbench_compare_short">比價</string>
+    <string name="workbench_choose_app">請在桌面選擇應用，加入第%1$d個小窗；再次點擊＋可取消。</string>
+    <string name="workbench_launch_failed">應用啟動或移入小窗失敗，請重試或匯出診斷。</string>
+    <string name="workbench_search_running">正在開啟應用…</string>
+    <string name="workbench_search_failed_detail">%1$s：已完成%2$d/%3$d。%4$s</string>
+    <string name="workbench_compare_space">空閒小窗不足，請先騰出位置。</string>
+    <string name="workbench_launch_timeout">等待應用出現在前景逾時。</string>
+    <string name="workbench_launch_denied">系統拒絕啟動或移動此應用。</string>
 </resources>

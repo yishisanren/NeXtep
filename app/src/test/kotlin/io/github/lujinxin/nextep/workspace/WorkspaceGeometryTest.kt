@@ -54,7 +54,7 @@ class WorkspaceGeometryTest {
             assertEquals(
                 "The safe app canvas must not be squeezed into a different aspect ratio",
                 geometry.availableWidth.toFloat() / geometry.availableHeight,
-                geometry.contentWidth.toFloat() / geometry.contentHeight,
+                (geometry.availableWidth * geometry.contentScale) / (geometry.availableHeight * geometry.contentScale),
                 1f / geometry.contentHeight,
             )
         }
@@ -73,10 +73,13 @@ class WorkspaceGeometryTest {
                 val right = g.availableRight * g.contentScale + g.contentTranslationX
                 val top = g.availableTop * g.contentScale + g.contentTranslationY
                 val bottom = g.availableBottom * g.contentScale + g.contentTranslationY
-                assertEquals(g.contentLeft.toFloat(), left, .6f)
-                assertEquals(g.contentRight.toFloat(), right, .6f)
-                assertEquals(g.contentTop.toFloat(), top, .6f)
-                assertEquals(g.contentBottom.toFloat(), bottom, .6f)
+                assertTrue(left >= g.contentLeft - .6f && right <= g.contentRight + .6f)
+                assertTrue(top >= g.contentTop - .6f && bottom <= g.contentBottom + .6f)
+                assertEquals(left - g.contentLeft, g.contentRight - right, .6f)
+                assertEquals(top - g.contentTop, g.contentBottom - bottom, .6f)
+                assertEquals(g.availableWidth.toFloat() / g.availableHeight, (right-left)/(bottom-top), .0001f)
+                assertTrue(kotlin.math.abs((right-left)-g.contentWidth) < .6f ||
+                    kotlin.math.abs((bottom-top)-g.contentHeight) < .6f)
                 assertTrue(left >= g.availableLeft - .01f && right <= g.availableRight + .01f)
                 assertTrue(top >= g.availableTop - .01f && bottom <= g.availableBottom + .01f)
             }

@@ -81,7 +81,7 @@ class TaskSwitcherView(
         setOnClickListener {
             // The coordinator serializes exchanges and retains the latest selection.
             // Filtering busy taps here prevents that queue from ever receiving them.
-            if (currentState is SlotState.Ready || currentState is SlotState.Occupied ||
+            if (currentState is SlotState.Empty || currentState is SlotState.Ready || currentState is SlotState.Occupied ||
                 currentState is SlotState.Failed) {
                 listener?.onSlotClicked(slotIndex)
             }
@@ -116,7 +116,7 @@ class TaskSwitcherView(
     fun setBackgroundSwipeEnabled(enabled: Boolean) = backgroundSwipe.setEnabled(enabled)
     fun setBackgroundSwipeSide(side: SidebarSide) = backgroundSwipe.setSide(side)
     fun cancelBackgroundSwipe() = backgroundSwipe.cancel()
-    fun acceptsAppDrop() = !busy && currentState is SlotState.Ready
+    fun acceptsAppDrop() = !busy && (currentState is SlotState.Ready || currentState is SlotState.Occupied)
     fun setDropHighlighted(highlighted: Boolean) {
         foreground = if (highlighted) GradientDrawable().apply {
             setColor(Color.argb(35, 62, 190, 198))

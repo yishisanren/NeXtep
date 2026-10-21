@@ -29,4 +29,13 @@
     <string name="workbench_wide">横向きアプリを上部に配置</string>
     <string name="workbench_wide_failed">上部に配置できる横向きアプリがありません。</string>
     <string name="workbench_cancel">キャンセル</string>
+    <string name="workbench_pay_short">支払</string>
+    <string name="workbench_compare_short">比較</string>
+    <string name="workbench_choose_app">ホーム画面で小窓%1$dに追加するアプリを選択してください。＋で取り消せます。</string>
+    <string name="workbench_launch_failed">アプリを起動または小窓に移動できません。再試行するか診断情報を出力してください。</string>
+    <string name="workbench_search_running">アプリを起動中…</string>
+    <string name="workbench_search_failed_detail">%1$s：%2$d/%3$d完了。%4$s</string>
+    <string name="workbench_compare_space">空いている小窓が不足しています。</string>
+    <string name="workbench_launch_timeout">アプリの表示を待機中にタイムアウトしました。</string>
+    <string name="workbench_launch_denied">システムがアプリの起動または移動を拒否しました。</string>
 </resources>

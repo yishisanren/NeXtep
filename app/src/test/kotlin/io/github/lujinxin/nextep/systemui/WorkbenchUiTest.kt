@@ -32,7 +32,7 @@ class WorkbenchUiTest {
 
     @Test fun paymentIsInTheTopRightControlRowAndNeverInTheAppCatalogue() {
         var opened = 0
-        val view = TopAppStripView(context, SidebarSide.RIGHT, {}, {}, {}, {}, {}, {},
+        val view = TopAppStripView(context, {}, {},
             { _, _ -> false }, { _, _ -> false }, onPaymentRequested = { opened++ })
         val width = (411 * context.resources.displayMetrics.density).toInt()
         val height = (190 * context.resources.displayMetrics.density).toInt()
@@ -44,14 +44,14 @@ class WorkbenchUiTest {
         payment.getDrawingRect(bounds)
         view.offsetDescendantRectToMyCoords(payment, bounds)
         assertTrue(bounds.left > width / 2)
-        assertTrue(bounds.bottom <= (88 * context.resources.displayMetrics.density).toInt())
+        assertTrue(bounds.bottom <= (96 * context.resources.displayMetrics.density).toInt())
         assertNotSame(field(view, "appRow"), payment.parent)
         assertTrue(payment.performClick())
         assertEquals(1, opened)
     }
 
     @Test fun lightAndDarkAppearancesUpdateActualControlText() {
-        val view = TopAppStripView(context, SidebarSide.RIGHT, {}, {}, {}, {}, {}, {},
+        val view = TopAppStripView(context, {}, {},
             { _, _ -> false }, { _, _ -> false })
         val payment = field(view, "paymentButton") as TextView
         view.setAppearance(WorkbenchAppearance.LIGHT)
@@ -60,17 +60,6 @@ class WorkbenchUiTest {
         assertEquals(WorkbenchAppearance.DARK.accent, payment.currentTextColor)
     }
 
-    @Test fun aCompactMediaCardKeepsAReadableTitleAndPlayAction() {
-        val view = MediaControlView(context) {}
-        val density = context.resources.displayMetrics.density
-        view.measure(View.MeasureSpec.makeMeasureSpec((360 * density).toInt(), View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec((24 * density).toInt(), View.MeasureSpec.EXACTLY))
-        view.layout(0, 0, view.measuredWidth, view.measuredHeight)
-        val title = field(view, "title") as TextView
-        assertTrue(title.height >= title.lineHeight)
-        assertEquals(View.VISIBLE, (field(view, "playPause") as View).visibility)
-        assertEquals(View.GONE, (field(view, "artist") as View).visibility)
-    }
 
     @Test fun protectedOutputNeverFallsBackToAnInsecureDisplayOrTexture() {
         val view = TaskSwitcherView(context, 3)

@@ -83,10 +83,17 @@ class NeXtepWindowController(
             publishPrivacy()
         }, { intent -> slotCoordinator?.openExternalInMain(intent)
             ?: Result.failure(IllegalStateException("Workspace unavailable")) },
-        { intents -> slotCoordinator?.openSearches(intents)
+        { intents, done -> slotCoordinator?.openSearches(intents, done)
             ?: Result.failure(IllegalStateException("Workspace unavailable")) },
         ::pinCurrentLandscape, { setCaptureAllowed(false); onSettingsRequested() }, onExitRequested,
-        { checkNotNull(topAppStrip).mediaPanel() })
+        ::toggleAppearance, { sidebarSide }, onSidebarSideRequested,
+        { slotCoordinator?.cancelApplicationLaunch() })
+    private fun toggleAppearance() {
+        appearance = if (appearance == WorkbenchAppearance.DARK) WorkbenchAppearance.LIGHT else WorkbenchAppearance.DARK
+        workbenchPreferences?.edit()?.putString("appearance", appearance.name)?.apply()
+        applyAppearance()
+    }
+
     private val wallpaperReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
@@ -284,7 +291,6 @@ class NeXtepWindowController(
         sidebarSide = side
         val geometry = geometry()
         applyWindowGeometry(geometry)
-        topAppStrip?.setSidebarSide(side)
         sidebarView?.let { panel -> applySlotLayout(panel, geometry) }
         applySidebarBackdrop(geometry)
         records.firstOrNull { it.title == "NeXtepSidebar" }?.view?.let { sidebar ->
@@ -326,24 +332,16 @@ class NeXtepWindowController(
             title = "NeXtepTopBar",
             view = TopAppStripView(
                 context = context,
-                initialSidebarSide = sidebarSide,
                 onAppClicked = { intent ->
-                    slotCoordinator?.openInMain(
+                    val result = if (slotCoordinator?.selectingDesktopApp == true) slotCoordinator?.openFromLauncher(intent)
+                    else slotCoordinator?.openInMain(
                         intent,
                         autoMinimizeCurrent = SystemUiRuntime.shouldAutoMinimizeMainOnTopAppSwitch(),
-                    )?.onFailure { error ->
+                    )
+                    result?.onFailure { error ->
                         NeXtepLog.warn("top_apps", "Unable to open ${intent.component} in main", error)
                     }
                 },
-                onMediaClicked = { session ->
-                    slotCoordinator?.openMediaInMain(session)?.onFailure { error ->
-                        NeXtepLog.warn("media_control", "Unable to open media app in main", error)
-                        android.widget.Toast.makeText(context, AppLanguage.string(context, R.string.media_open_failed), android.widget.Toast.LENGTH_SHORT).show()
-                    }
-                },
-                onSidebarSideRequested = onSidebarSideRequested,
-                onSettingsRequested = onSettingsRequested,
-                onExitRequested = onExitRequested,
                 onFrostStrengthChanged = { strength ->
                     if (frostStrength != strength) {
                         frostStrength = strength
@@ -357,11 +355,6 @@ class NeXtepWindowController(
                 },
                 onAppDragTouch = internalDrag::touch,
                 onPaymentRequested = tools::showPayment,
-                onThemeRequested = {
-                    appearance = if (appearance == WorkbenchAppearance.DARK) WorkbenchAppearance.LIGHT else WorkbenchAppearance.DARK
-                    workbenchPreferences?.edit()?.putString("appearance", appearance.name)?.apply()
-                    applyAppearance()
-                },
                 onToolsRequested = tools::showMore,
                 onCompareRequested = tools::showSearch,
             ).also { topAppStrip = it },
@@ -708,7 +701,6 @@ class NeXtepWindowController(
                 geometry.controlLeft, geometry.controlTop, frostStrength, view.background)
             if (view.background !== background) view.background = background
         }
-        topAppStrip?.setMediaWallpaperLight(appearance == WorkbenchAppearance.LIGHT)
         applySidebarBackdrop(geometry)
     }
 
@@ -771,7 +763,7 @@ class NeXtepWindowController(
     private fun observeTasks(tasks: List<io.github.lujinxin.nextep.task.TaskRepository.TaskSnapshot>, states: List<SlotState>) {
         observedTasks = tasks
         publishPrivacy()
-        if (!workspaceVisible || suspended) return
+        if (!workspaceVisible || suspended || slotCoordinator?.launchingApps == true) return
         val scene = SystemServerWorkspaceBridge.scene(context)
         val foregroundId = tasks.firstOrNull { it.displayId == android.view.Display.DEFAULT_DISPLAY }?.taskId
         if (foregroundId != suppressedAutoTaskId) suppressedAutoTaskId = null

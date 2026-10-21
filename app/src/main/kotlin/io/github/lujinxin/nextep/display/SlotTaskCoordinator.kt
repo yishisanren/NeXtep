@@ -60,6 +60,122 @@ class SlotTaskCoordinator(
     private val taskRepository = TaskRepository(applicationContext)
     private val handler = Handler(Looper.getMainLooper())
     private val slotRecords = MutableList(slots.size) { SlotRecord() }
+    private data class LaunchRequest(val intent: Intent, val slot: Int?, val displayId: Int?) {
+        var observed: TaskRepository.TaskSnapshot? = null
+        var returnTaskId: Int? = null
+    }
+    private val desktopSelection = io.github.lujinxin.nextep.workspace.WorkspaceSlotSelection()
+    val selectingDesktopApp: Boolean get() = desktopSelection.target != null
+    val launchingApps: Boolean get() = appLaunch.running
+    private val appLaunch = io.github.lujinxin.nextep.workspace.WorkspaceLaunchSequence<LaunchRequest>(
+        schedule = { delay, action -> handler.postDelayed({ action() }, delay) },
+        start = ::startAppRequest, ready = ::observeAppRequest, commit = ::commitAppRequest,
+        busy = { busy ->
+            slots.forEach { it.view.setBusy(busy || suspended || recentSelectionPending) }
+            if (!busy && active && !suspended) {
+                reconcile("application launch finished")
+                dispatchPendingSelection()
+            }
+        },
+    )
+
+    fun cancelApplicationLaunch() = appLaunch.cancel()
+
+    private fun clearDesktopSelection() {
+        desktopSelection.target?.index?.let { index ->
+            slots[index].view.setDropHighlighted(false)
+            slots[index].view.showState(slotRecords[index].state)
+        }
+        desktopSelection.clear()
+    }
+
+    private fun beginDesktopSelection(index: Int, ready: SlotState.Ready) {
+        val same = desktopSelection.target ==
+            io.github.lujinxin.nextep.workspace.WorkspaceSlotSelection.Target(index, ready.displayId)
+        clearDesktopSelection()
+        if (same) return
+        val target = desktopSelection.toggle(index, ready.displayId)
+        try {
+            showHomeOnDefaultDisplay()
+            slots[index].view.showWaiting()
+            slots[index].view.setDropHighlighted(true)
+            showMessage(AppLanguage.string(applicationContext, R.string.workbench_choose_app, index + 1))
+            handler.postDelayed({ if (desktopSelection.target == target) clearDesktopSelection() }, 120_000L)
+        } catch (error: Throwable) {
+            clearDesktopSelection()
+            showMessage(AppLanguage.string(applicationContext, R.string.workbench_launch_failed))
+            NeXtepLog.warn("slot_picker", "Unable to show HOME", error)
+        }
+    }
+
+    private fun startAppRequest(request: LaunchRequest) {
+        check(active && !suspended)
+        mainSelectionGeneration++
+        request.returnTaskId = if (request.slot == null) null else taskRepository.foregroundTask()?.taskId
+        val component = checkNotNull(request.intent.component)
+        val existing = taskRepository.findTaskForComponent(component,
+            request.intent.targetUser() ?: android.os.Process.myUserHandle())
+        if (existing != null && existing.displayId != Display.DEFAULT_DISPLAY) promoteExistingToMain(existing)
+        val options = android.app.ActivityOptions.makeBasic().apply { setLaunchDisplayId(Display.DEFAULT_DISPLAY) }
+        UserTargetedActivityLauncher.start(applicationContext, request.intent, options.toBundle()).getOrThrow()
+        NeXtepLog.info("app_launch", "Started package=" + component.packageName + " slot=" + request.slot)
+    }
+
+    private fun observeAppRequest(request: LaunchRequest): Boolean {
+        check(active && !suspended)
+        val foreground = taskRepository.foregroundTask() ?: return false
+        val user = io.github.lujinxin.nextep.framework.TaskInfoCompat.userIdentifier(
+            request.intent.targetUser() ?: android.os.Process.myUserHandle())
+        if (foreground.component.packageName != request.intent.component?.packageName ||
+            foreground.userId != user || !isExchangeableMainTask(foreground)) return false
+        request.observed = foreground
+        return true
+    }
+
+    private fun commitAppRequest(request: LaunchRequest) {
+        val task = checkNotNull(request.observed)
+        val index = request.slot
+        if (index == null) {
+            mainTaskPresenter.presentTask(task.taskId, geometryProvider()).getOrThrow()
+        } else {
+            check(slots[index].displayId() == request.displayId) { "Slot display changed" }
+            runTransition("launch task to slot=" + index) {
+                when (val state = slotRecords[index].state) {
+                    is SlotState.Ready -> parkMainTaskInSlot(index, state, task, leaveOverview = false)
+                    is SlotState.Occupied -> swapWithMain(index, state)
+                    else -> error("Slot no longer available")
+                }
+            }.getOrThrow()
+            // Opening a router Activity can create a second task. Restore the
+            // previous main explicitly, rather than whichever old task resumes.
+            request.returnTaskId?.takeIf { it != task.taskId }?.let { id ->
+                taskRepository.findTask(id)?.takeIf { it.displayId == Display.DEFAULT_DISPLAY }?.let {
+                    taskRepository.bringTaskToFront(id).getOrThrow()
+                    mainTaskPresenter.presentTask(id, geometryProvider()).getOrThrow()
+                }
+            }
+        }
+        NeXtepLog.info("app_launch", "Task observed and placed slot=" + index + " task=" + task.taskId)
+    }
+
+    private fun launchApplicationInSlot(index: Int, source: Intent): Result<Unit> = runCatching {
+        check(validActiveSlot(index) && !recentSelectionPending && !appLaunch.running)
+        check(slotRecords[index].pendingComponent == null)
+        check(slotRecords[index].state is SlotState.Ready || slotRecords[index].state is SlotState.Occupied)
+        check(slotRecords[index].state !is SlotState.Ready || slotRecords[index].retainedTaskId == null)
+        val normalized = checkNotNull(normalizeLaunchIntent(source)) { "No exported launcher Activity" }
+        val display = checkNotNull(slots[index].displayId())
+        clearDesktopSelection()
+        appLaunch.begin(listOf(LaunchRequest(normalized, index, display))) { result ->
+            result.onFailure {
+                if (it !is java.util.concurrent.CancellationException) {
+                    NeXtepLog.warn("app_launch", "Unable to place application in slot=" + index, it)
+                    showMessage(AppLanguage.string(applicationContext, R.string.workbench_launch_failed))
+                }
+            }
+        }.getOrThrow()
+    }
+
     private var active = false
     private var suspended = false
     private var transitionInProgress = false
@@ -115,6 +231,8 @@ class SlotTaskCoordinator(
     fun deactivate() {
         ensureMainThread()
         if (!active) return
+        clearDesktopSelection()
+        appLaunch.cancel()
         // Never destroy a display while a task failed to leave it.
         try {
             parkTasksBeforeExit()
@@ -216,6 +334,8 @@ class SlotTaskCoordinator(
         if (!active || suspended == value) return
         if (value) {
             suspended = true
+            clearDesktopSelection()
+            appLaunch.cancel()
             cancelPendingDragExchange()
             onSlotDragEnded()
             recentSelectionGeneration += 1
@@ -246,12 +366,12 @@ class SlotTaskCoordinator(
 
     fun launchInSlot(intent: Intent, slotIndex: Int = 0): Result<Unit> {
         ensureMainThread()
-        return assignIntent(slotIndex, intent)
+        return launchApplicationInSlot(slotIndex, intent)
     }
 
     fun openInMain(sourceIntent: Intent, autoMinimizeCurrent: Boolean = false): Result<Unit> {
         ensureMainThread()
-        if (!active || suspended) {
+        if (!active || suspended || appLaunch.running) {
             return Result.failure(IllegalStateException("Workspace transition is busy"))
         }
         if (transitionInProgress || recentSelectionPending) {
@@ -337,7 +457,7 @@ class SlotTaskCoordinator(
 
     fun openMediaInMain(session: android.media.session.MediaController): Result<Unit> {
         ensureMainThread()
-        if (!active || suspended) {
+        if (!active || suspended || appLaunch.running) {
             return Result.failure(IllegalStateException("Workspace transition is busy"))
         }
         if (transitionInProgress || recentSelectionPending) {
@@ -376,7 +496,8 @@ class SlotTaskCoordinator(
 
     fun openExternalInMain(sourceIntent: Intent): Result<Unit> {
         ensureMainThread()
-        if (!active || suspended) {
+        clearDesktopSelection()
+        if (!active || suspended || appLaunch.running) {
             return Result.failure(IllegalStateException("Workspace transition is busy"))
         }
         if (transitionInProgress || recentSelectionPending) {
@@ -402,6 +523,17 @@ class SlotTaskCoordinator(
 
     fun openFromLauncher(sourceIntent: Intent): Result<Unit> {
         ensureMainThread()
+        desktopSelection.target?.let { target ->
+            clearDesktopSelection()
+            if (slots[target.index].displayId() != target.displayId ||
+                slotRecords[target.index].state !is SlotState.Ready) {
+                showMessage(AppLanguage.string(applicationContext, R.string.window_layout_pending))
+                return Result.failure(IllegalStateException("Selected side window changed"))
+            }
+            return launchApplicationInSlot(target.index, sourceIntent).onFailure {
+                showMessage(AppLanguage.string(applicationContext, R.string.workbench_launch_failed))
+            }
+        }
         if (!active) return Result.failure(IllegalStateException("Workspace is inactive"))
         val normalized = normalizeLaunchIntent(sourceIntent)
             ?: return Result.failure(IllegalArgumentException("App does not resolve to a launcher Activity"))
@@ -469,31 +601,40 @@ class SlotTaskCoordinator(
         }.getOrThrow()
     }
 
-    fun openSearches(sources: List<Intent>): Result<Unit> = runCatching {
+    fun openSearches(sources: List<Intent>, complete: (Result<Unit>) -> Unit): Result<Unit> = runCatching {
         ensureMainThread()
-        check(active && !suspended && !transitionInProgress && !recentSelectionPending)
-        val intents = sources.map { checkNotNull(normalizeExternalIntent(it)) { "Search app has no supported entry" } }
-        val first = taskRepository.findTaskForComponent(checkNotNull(intents.first().component), intents.first().targetUser())
+        check(active && !suspended && !transitionInProgress && !recentSelectionPending && !appLaunch.running)
+        require(sources.size in 2..5)
+        val intents = sources.map { checkNotNull(normalizeExternalIntent(it)) { "No supported search Activity" } }
+        fun key(intent: Intent): String = checkNotNull(intent.component).packageName + "@" +
+            io.github.lujinxin.nextep.framework.TaskInfoCompat.userIdentifier(
+                intent.targetUser() ?: android.os.Process.myUserHandle())
+        val first = taskRepository.findTaskForComponent(checkNotNull(intents.first().component),
+            intents.first().targetUser() ?: android.os.Process.myUserHandle())
         val promoted = first?.let { task -> slotRecords.indexOfFirst {
             (it.state as? SlotState.Occupied)?.taskId == task.taskId
         }.takeIf { it >= 0 } }
         val destinations = io.github.lujinxin.nextep.workspace.WorkspaceSearchPlacement.plan(
-            intents.map { checkNotNull(it.component).packageName },
-            slotRecords.map { record ->
+            intents.map(::key), slotRecords.map { record ->
                 when (val state = record.state) {
-                    is SlotState.Occupied -> state.component.packageName
-                    is SlotState.Ready -> if (record.pendingComponent == null && record.retainedTaskId == null) null else "reserved"
+                    is SlotState.Occupied -> state.component.packageName + "@" +
+                        taskRepository.findTask(state.taskId)?.userId
+                    is SlotState.Ready -> if (record.pendingComponent == null &&
+                        record.retainedTaskId == null) null else "reserved"
                     else -> "unavailable"
                 }
             }, promoted,
         )
-        // The complete reservation is checked above, before changing the current tasks.
-        openExternalInMain(intents.first()).getOrThrow()
-        destinations.forEachIndexed { index, slot -> assignIntent(slot, intents[index + 1], external = true).getOrThrow() }
+        val requests = intents.mapIndexed { index, intent ->
+            val slot = if (index == 0) null else destinations[index - 1]
+            LaunchRequest(intent, slot, slot?.let { checkNotNull(slots[it].displayId()) })
+        }
+        clearDesktopSelection()
+        appLaunch.begin(requests, complete).getOrThrow()
     }
 
     override fun onContentDropped(slotIndex: Int, event: android.view.DragEvent): Boolean {
-        if (!validActiveSlot(slotIndex) || transitionInProgress) return false
+        if (!validActiveSlot(slotIndex) || transitionInProgress || appLaunch.running) return false
         val target = slotRecords[slotIndex].state as? SlotState.Occupied ?: return false
         val handled = ContentDropCompat.deliver(event, target.component.packageName) { source ->
             val intent = Intent(source).apply {
@@ -572,7 +713,7 @@ class SlotTaskCoordinator(
     }
 
     override fun onSlotClicked(slotIndex: Int) {
-        if (!active || suspended || slotIndex !in slots.indices) return
+        if (!active || suspended || slotIndex !in slots.indices || appLaunch.running) return
         if (transitionInProgress || recentSelectionPending) {
             val selectedTaskId = (slotRecords[slotIndex].state as? SlotState.Occupied)?.taskId
             pendingSelection = {
@@ -584,7 +725,8 @@ class SlotTaskCoordinator(
             NeXtepLog.info("slot_coordinator", "Queued slot tap slot=$slotIndex")
             return
         }
-        if (slotRecords[slotIndex].state is SlotState.Failed) {
+        if (slotRecords[slotIndex].state is SlotState.Failed || slotRecords[slotIndex].state is SlotState.Empty) {
+            slots[slotIndex].activate()
             // A failed layout is not necessarily an empty display. Reconcile its
             // actual owner before accepting another task into the visible '+' slot.
             reconcile("retry failed slot tap")
@@ -593,6 +735,7 @@ class SlotTaskCoordinator(
                 return
             }
         }
+        if (slotRecords[slotIndex].state is SlotState.Occupied) clearDesktopSelection()
         when (val state = slotRecords[slotIndex].state) {
             is SlotState.Occupied -> runTransition(
                 "swap slot=$slotIndex taskId=${state.taskId}",
@@ -600,27 +743,17 @@ class SlotTaskCoordinator(
                 swapWithMain(slotIndex, state)
             }
             is SlotState.Ready -> {
-                if (slotRecords[slotIndex].pendingComponent != null) return
+                if (slotRecords[slotIndex].pendingComponent != null || slotRecords[slotIndex].retainedTaskId != null) {
+                    showMessage(AppLanguage.string(applicationContext, R.string.window_layout_pending))
+                    return
+                }
                 val mainTask = taskRepository.foregroundTask()
-                if (mainTask != null && mainTask.component.packageName == TriggerBroadcastContract.resolveHomePackage(applicationContext)) {
+                if (mainTask != null && mainTask.component.packageName == TriggerBroadcastContract.resolveHomePackage(applicationContext) &&
+                    !selectingDesktopApp) {
                     requestRecentTask(slotIndex, state, mainTask.taskId)
-                    return
-                }
-                if (!isExchangeableMainTask(mainTask)) {
-                    NeXtepLog.info(
-                        "slot_coordinator",
-                        "Ignored empty slot tap slot=$slotIndex; main task is unavailable or HOME",
-                    )
-                    return
-                }
-                val parkedTask = checkNotNull(mainTask)
-                runTransition(
-                    "park main taskId=${parkedTask.taskId} slot=$slotIndex",
-                ) {
-                    parkMainTaskInSlot(slotIndex, state, parkedTask)
-                }
+                } else beginDesktopSelection(slotIndex, state)
             }
-            else -> Unit
+            else -> showMessage(AppLanguage.string(applicationContext, R.string.window_layout_pending))
         }
     }
 
@@ -643,8 +776,8 @@ class SlotTaskCoordinator(
                 taskRepository.foregroundTask()?.taskId != homeTaskId || transitionInProgress
             ) return@query
             when (selection) {
-                RecentTaskSelection.NotVisible -> Unit // HOME itself stays outside slots.
-                is RecentTaskSelection.Unavailable -> showMessage(selection.message)
+                RecentTaskSelection.NotVisible -> beginDesktopSelection(slotIndex, ready)
+                is RecentTaskSelection.Unavailable -> beginDesktopSelection(slotIndex, ready)
                 is RecentTaskSelection.Selected -> runTransition(
                     "center recent task=${selection.task.taskId} slot=$slotIndex",
                 ) { assignRecentTask(slotIndex, ready, selection.task) }.onFailure {
@@ -718,13 +851,14 @@ class SlotTaskCoordinator(
         android.widget.Toast.makeText(applicationContext, message, android.widget.Toast.LENGTH_SHORT).show()
     }
 
-    override fun onIntentDropped(slotIndex: Int, intent: Intent): Boolean {
-        if (!validActiveSlot(slotIndex)) return false
-        return assignIntent(slotIndex, intent).isSuccess
-    }
+    override fun onIntentDropped(slotIndex: Int, intent: Intent): Boolean =
+        launchApplicationInSlot(slotIndex, intent).onFailure {
+            NeXtepLog.warn("app_drop", "Application drop rejected slot=" + slotIndex, it)
+            showMessage(AppLanguage.string(applicationContext, R.string.workbench_launch_failed))
+        }.isSuccess
 
     override fun onSlotDragStarting(drag: SlotTaskDrag): Boolean {
-        if (!active || suspended || transitionInProgress || recentSelectionPending || activeDrag != null ||
+        if (!active || suspended || appLaunch.running || transitionInProgress || recentSelectionPending || activeDrag != null ||
             !matchesDrag(drag)
         ) return false
         activeDrag = drag
@@ -1098,7 +1232,8 @@ class SlotTaskCoordinator(
             .addCategory(Intent.CATEGORY_HOME)
             .setPackage(homePackage)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
-        applicationContext.startActivity(homeIntent)
+        val options = android.app.ActivityOptions.makeBasic().apply { setLaunchDisplayId(Display.DEFAULT_DISPLAY) }
+        applicationContext.startActivity(homeIntent, options.toBundle())
     }
 
     private fun isExchangeableMainTask(task: TaskRepository.TaskSnapshot?): Boolean {
@@ -1254,7 +1389,7 @@ class SlotTaskCoordinator(
             // As in 1.1.1, serialize logical moves only. Shell's later animation
             // must not turn the visual reconciliation delay into an input lock.
             transitionInProgress = false
-            slots.forEach { it.view.setBusy(suspended || recentSelectionPending) }
+            slots.forEach { it.view.setBusy(suspended || recentSelectionPending || appLaunch.running) }
             NeXtepLog.info("slot_coordinator", "Transition move completed $label")
             dispatchPendingSelection()
             handler.postDelayed({
@@ -1622,18 +1757,8 @@ class SlotTaskCoordinator(
         restoreTaskLayout(task, layout, restoreResizeMode = false)
     }
 
-    private fun normalizeExternalIntent(source: Intent): Intent? {
-        val component = source.component ?: packageManager.resolveActivity(source, 0)
-            ?.activityInfo
-            ?.let { ComponentName(it.packageName, it.name) }
-            ?: return null
-        val info = runCatching { packageManager.getActivityInfo(component, 0) }.getOrNull()
-            ?: return null
-        if (!info.exported || !info.enabled) return null
-        return Intent(source)
-            .setComponent(component)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
+    private fun normalizeExternalIntent(source: Intent): Intent? =
+        io.github.lujinxin.nextep.framework.WorkspaceIntentResolver.resolve(packageManager, source)
 
     private fun Intent.targetUser() = getParcelableExtra(
         TriggerBroadcastContract.EXTRA_TARGET_USER,
