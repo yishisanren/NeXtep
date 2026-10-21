@@ -6,6 +6,22 @@ import android.os.UserHandle
 import io.github.lujinxin.nextep.logging.NeXtepLog
 
 object TaskInfoCompat {
+    private fun member(fields: List<String>, methods: List<String> = emptyList()) =
+        CachedMember(fields, methods) { candidate, error ->
+            NeXtepLog.warn("task_info_compat", "Member $candidate failed", error)
+        }
+    private val displayIdMember = member(listOf("displayId", "mDisplayId"), listOf("getDisplayId"))
+    private val configurationMember = member(listOf("configuration", "mConfiguration"), listOf("getConfiguration"))
+    private val windowConfigurationMember = member(listOf("windowConfiguration", "mWindowConfiguration"), listOf("getWindowConfiguration"))
+    private val boundsMember = member(emptyList(), listOf("getBounds"))
+    private val windowingModeMember = member(listOf("windowingMode", "mWindowingMode"), listOf("getWindowingMode"))
+    private val resizeModeMember = member(listOf("resizeMode", "mResizeMode"), listOf("getResizeMode"))
+    private val densityMember = member(listOf("densityDpi"), listOf("getDensityDpi"))
+    private val tokenMember = member(listOf("token", "mToken"), listOf("getToken"))
+    private val extraMember = member(listOf("mOplusExtraConfiguration"))
+    private val scenarioMember = member(listOf("mScenario"), listOf("getScenario"))
+    private val userMember = member(listOf("userId", "mUserId"), listOf("getUserId"))
+    private val userHandleMember = member(listOf("mHandle", "identifier"), listOf("getIdentifier"))
     data class WindowState(
         val displayId: Int,
         val bounds: Rect,
@@ -17,125 +33,33 @@ object TaskInfoCompat {
     )
 
     fun readWindowState(info: ActivityManager.RunningTaskInfo): WindowState? {
-        val displayId = readInt(
-            target = info,
-            fieldNames = listOf("displayId", "mDisplayId"),
-            methodNames = listOf("getDisplayId"),
-        ) ?: return missing("displayId", info)
+        val displayId = (displayIdMember.read(info) as? Number)?.toInt() ?: return missing("displayId", info)
 
-        val configuration = readMember(
-            target = info,
-            fieldNames = listOf("configuration", "mConfiguration"),
-            methodNames = listOf("getConfiguration"),
-        ) ?: return missing("configuration", info)
+        val configuration = configurationMember.read(info) ?: return missing("configuration", info)
 
-        val windowConfiguration = readMember(
-            target = configuration,
-            fieldNames = listOf("windowConfiguration", "mWindowConfiguration"),
-            methodNames = listOf("getWindowConfiguration"),
-        ) ?: return missing("windowConfiguration", info)
+        val windowConfiguration = windowConfigurationMember.read(configuration) ?: return missing("windowConfiguration", info)
 
-        val bounds = (invokeNoArg(windowConfiguration, listOf("getBounds")) as? Rect)
+        val bounds = (boundsMember.read(windowConfiguration) as? Rect)
             ?.let(::Rect)
             ?: Rect()
-        val windowingMode = readInt(
-            target = windowConfiguration,
-            fieldNames = listOf("windowingMode", "mWindowingMode"),
-            methodNames = listOf("getWindowingMode"),
-        ) ?: 0
-        val resizeMode = readInt(
-            target = info,
-            fieldNames = listOf("resizeMode", "mResizeMode"),
-            methodNames = listOf("getResizeMode"),
-        )
-        val densityDpi = readInt(
-            target = configuration,
-            fieldNames = listOf("densityDpi"),
-            methodNames = listOf("getDensityDpi"),
-        ) ?: return missing("densityDpi", info)
-        val token = readMember(
-            target = info,
-            fieldNames = listOf("token", "mToken"),
-            methodNames = listOf("getToken"),
-        )
+        val windowingMode = (windowingModeMember.read(windowConfiguration) as? Number)?.toInt() ?: 0
+        val resizeMode = (resizeModeMember.read(info) as? Number)?.toInt()
+        val densityDpi = (densityMember.read(configuration) as? Number)?.toInt() ?: return missing("densityDpi", info)
+        val token = tokenMember.read(info)
 
         // ColorOS FlexibleWindow keeps WINDOWING_MODE_FULLSCREEN. Confirmed on
         // PLK110 16.0.10.500: OplusExtraConfiguration.getScenario(), with FlexibleWindowManager
         // LAUNCH_SCENARIO_FLEXIBLE=1 and LAUNCH_SCENARIO_CANVAS=2. Missing OEM fields on
         // other ROMs leave the standard windowing-mode checks in charge.
-        val extra = readMember(configuration, listOf("mOplusExtraConfiguration"), emptyList())
-        val scenario = extra?.let { readInt(it, listOf("mScenario"), listOf("getScenario")) }
+        val extra = extraMember.read(configuration)
+        val scenario = extra?.let { (scenarioMember.read(it) as? Number)?.toInt() }
         val vendorWindowed = scenario == 1 || scenario == 2
         return WindowState(displayId, bounds, windowingMode, resizeMode, densityDpi, token, vendorWindowed)
     }
 
-    fun readUserId(info: ActivityManager.RunningTaskInfo): Int? = readInt(
-        target = info,
-        fieldNames = listOf("userId", "mUserId"),
-        methodNames = listOf("getUserId"),
-    )
+    fun readUserId(info: ActivityManager.RunningTaskInfo): Int? = (userMember.read(info) as? Number)?.toInt()
 
-    fun userIdentifier(userHandle: UserHandle): Int? = readInt(
-        target = userHandle,
-        fieldNames = listOf("mHandle", "identifier"),
-        methodNames = listOf("getIdentifier"),
-    )
-
-    private fun readInt(
-        target: Any,
-        fieldNames: List<String>,
-        methodNames: List<String>,
-    ): Int? = (readMember(target, fieldNames, methodNames) as? Number)?.toInt()
-
-    private fun readMember(
-        target: Any,
-        fieldNames: List<String>,
-        methodNames: List<String>,
-    ): Any? {
-        var type: Class<*>? = target.javaClass
-        while (type != null) {
-            val currentType = type
-            for (fieldName in fieldNames) {
-                try {
-                    val field = currentType.getDeclaredField(fieldName).apply { isAccessible = true }
-                    return field.get(target)
-                } catch (_: NoSuchFieldException) {
-                    // Continue through candidates and the superclass chain.
-                } catch (error: Throwable) {
-                    NeXtepLog.warn(
-                        "task_info_compat",
-                        "Field ${currentType.name}#$fieldName failed",
-                        error,
-                    )
-                }
-            }
-            type = currentType.superclass
-        }
-        return invokeNoArg(target, methodNames)
-    }
-
-    private fun invokeNoArg(target: Any, methodNames: List<String>): Any? {
-        var type: Class<*>? = target.javaClass
-        while (type != null) {
-            val currentType = type
-            for (methodName in methodNames) {
-                try {
-                    val method = currentType.getDeclaredMethod(methodName).apply { isAccessible = true }
-                    return method.invoke(target)
-                } catch (_: NoSuchMethodException) {
-                    // Continue through candidates and the superclass chain.
-                } catch (error: Throwable) {
-                    NeXtepLog.warn(
-                        "task_info_compat",
-                        "Method ${currentType.name}#$methodName failed",
-                        error,
-                    )
-                }
-            }
-            type = currentType.superclass
-        }
-        return null
-    }
+    fun userIdentifier(userHandle: UserHandle): Int? = (userHandleMember.read(userHandle) as? Number)?.toInt()
 
     private fun missing(
         member: String,

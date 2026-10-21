@@ -16,9 +16,13 @@ internal class LoopingTitleView(context: Context) : TextView(context) {
     private var lastFrame = 0L
     private var offset = 0f
     private var line: StaticLayout? = null
-    private var lineKey = ""
+    private var lineText = ""
+    private var lineTextSize = 0f
+    private var lineTypeface: android.graphics.Typeface? = null
+    private var lineFakeBold = false
 
     fun setScrolling(enabled: Boolean, visible: Boolean) {
+        if (scrolling == enabled && running == visible) return
         if (scrolling != enabled) { offset = 0f; line = null }
         scrolling = enabled
         running = visible
@@ -34,9 +38,12 @@ internal class LoopingTitleView(context: Context) : TextView(context) {
         val value = text?.toString().orEmpty()
         if (value.isEmpty()) return
         paint.color = currentTextColor
-        val key = "$value|${paint.textSize}|${paint.typeface}|${paint.isFakeBoldText}"
-        if (line == null || lineKey != key) {
-            lineKey = key
+        if (line == null || lineText != value || lineTextSize != paint.textSize ||
+            lineTypeface !== paint.typeface || lineFakeBold != paint.isFakeBoldText) {
+            lineText = value
+            lineTextSize = paint.textSize
+            lineTypeface = paint.typeface
+            lineFakeBold = paint.isFakeBoldText
             line = StaticLayout.Builder.obtain(value, 0, value.length, paint,
                 kotlin.math.ceil(Layout.getDesiredWidth(value, paint).toDouble()).toInt().coerceAtLeast(1))
                 .setIncludePad(false).setMaxLines(1).build()

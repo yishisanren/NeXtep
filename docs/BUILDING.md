@@ -33,6 +33,18 @@ The debug APK is written below `app/build/outputs/apk/debug/`.
 
 Configure release signing locally before producing a distributable APK.
 
+## Local regression
+
+```bash
+sh ./gradlew :app:testDebugUnitTest :app:assembleRelease
+```
+
+The suite includes Android-free gesture, task-ownership and scheduling tests, plus
+Robolectric 4.17 tests using Android API 35 and native graphics for drawable and
+view reuse. The first run downloads test-only Android artifacts from Maven.
+Robolectric is not included in the APK. See [performance validation](PERFORMANCE.md)
+for the custom release's results and device-validation boundary.
+
 ## Device validation
 
 Because NeXtep hooks privileged system processes, validate changes on a recoverable test device and confirm that LSPosed can be disabled during recovery.

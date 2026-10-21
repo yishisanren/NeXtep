@@ -107,8 +107,11 @@ object WorkspaceWallpaperBackdrop {
         NeXtepLog.warn("wallpaper_backdrop", "Wallpaper surface capture unavailable", error)
     }.getOrNull()
 
-    fun crop(bitmap: Bitmap?, originX: Int, originY: Int, strength: Int): Drawable =
-        WallpaperCropDrawable(bitmap, originX, originY, strength.coerceIn(0, 100))
+    fun crop(bitmap: Bitmap?, originX: Int, originY: Int, strength: Int,
+        previous: Drawable? = null): Drawable =
+        (previous as? WallpaperCropDrawable ?: WallpaperCropDrawable()).apply {
+            update(bitmap, originX, originY, strength.coerceIn(0, 100))
+        }
 
     fun isLight(bitmap: Bitmap?, originX: Int, originY: Int, width: Int, height: Int): Boolean =
         runCatching {
@@ -131,30 +134,53 @@ object WorkspaceWallpaperBackdrop {
 
 }
 
-private class WallpaperCropDrawable(
-    private val bitmap: Bitmap?,
-    private val originX: Int,
-    private val originY: Int,
-    private val strength: Int,
-) : Drawable() {
+private class WallpaperCropDrawable : Drawable() {
+    private var bitmap: Bitmap? = null
+    private var originX = 0
+    private var originY = 0
+    private var strength = -1
+    private var density = 0f
+    private val sourceRect = Rect()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         colorFilter = null
     }
 
-    // Blur the original full-resolution wallpaper with Android's GPU blur.
-    // A quadratic curve preserves detail in the first half of the slider.
-    private val blurredWallpaper = bitmap?.takeIf { strength > 0 }?.let { source ->
-        android.graphics.RenderNode("NeXtep-FrostedWallpaper").apply {
-            setPosition(0, 0, source.width, source.height)
-            val recording = beginRecording(source.width, source.height)
-            recording.drawBitmap(source, 0f, 0f, paint)
-            endRecording()
-            val fraction = strength / 100f
-            val radius = 32f * fraction * fraction * android.content.res.Resources.getSystem().displayMetrics.density
-            setRenderEffect(android.graphics.RenderEffect.createBlurEffect(
-                radius.coerceAtLeast(0.01f), radius.coerceAtLeast(0.01f), android.graphics.Shader.TileMode.CLAMP,
-            ))
+    private var blurredWallpaper: android.graphics.RenderNode? = null
+
+    fun update(source: Bitmap?, x: Int, y: Int, blur: Int) {
+        val imageChanged = bitmap !== source
+        val blurChanged = strength != blur
+        val updatedDensity = android.content.res.Resources.getSystem().displayMetrics.density
+        val densityChanged = density != updatedDensity
+        if (!imageChanged && !blurChanged && !densityChanged && originX == x && originY == y) return
+        bitmap = source
+        originX = x
+        originY = y
+        strength = blur
+        density = updatedDensity
+        if (source == null || blur == 0) {
+            blurredWallpaper?.discardDisplayList()
+            blurredWallpaper = null
+        } else {
+            val newNode = blurredWallpaper == null
+            val node = blurredWallpaper ?: android.graphics.RenderNode("NeXtep-FrostedWallpaper")
+                .also { blurredWallpaper = it }
+            if (imageChanged || newNode) {
+                node.setPosition(0, 0, source.width, source.height)
+                val recording = node.beginRecording(source.width, source.height)
+                try { recording.drawBitmap(source, 0f, 0f, null) }
+                finally { node.endRecording() }
+            }
+            // Strength changes update only the effect, retaining the recorded wallpaper.
+            if (blurChanged || newNode || densityChanged) {
+                val fraction = strength / 100f
+                val radius = 32f * fraction * fraction * density
+                node.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(
+                    radius.coerceAtLeast(0.01f), radius.coerceAtLeast(0.01f), android.graphics.Shader.TileMode.CLAMP,
+                ))
+            }
         }
+        invalidateSelf()
     }
 
     override fun draw(canvas: Canvas) {
@@ -180,7 +206,8 @@ private class WallpaperCropDrawable(
             canvas.drawRenderNode(node)
             canvas.restoreToCount(save)
         } else {
-            canvas.drawBitmap(source, Rect(left, top, right, bottom), bounds, paint)
+            sourceRect.set(left, top, right, bottom)
+            canvas.drawBitmap(source, sourceRect, bounds, paint)
         }
         drawTint(canvas)
     }
@@ -194,11 +221,14 @@ private class WallpaperCropDrawable(
     }
 
     override fun setAlpha(alpha: Int) {
+        if (paint.alpha == alpha) return
         paint.alpha = alpha
+        invalidateSelf()
     }
 
     override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) {
         paint.colorFilter = colorFilter
+        invalidateSelf()
     }
 
     @Deprecated("Deprecated in Java")

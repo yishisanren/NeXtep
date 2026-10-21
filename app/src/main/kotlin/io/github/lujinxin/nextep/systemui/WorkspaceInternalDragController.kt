@@ -38,12 +38,25 @@ internal class WorkspaceInternalDragController(
         data object Main : Target
         data object Background : Target
     }
-    private data class Session(val source: View, val payload: Payload, val preview: Preview)
+    private data class DropSlot(val target: Target.Slot, val view: TaskSwitcherView, val bounds: Rect)
+    private data class Session(val source: View, val payload: Payload, val preview: Preview,
+        val geometry: WorkspaceGeometry, val targets: List<DropSlot>)
     private val manager = context.getSystemService(WindowManager::class.java)
     private var session: Session? = null
     private var hovered: Target? = null
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val timeout = Runnable { cancel() }
+    private val frames = FrameCoalescer(
+        post = { session?.preview?.postOnAnimation(it) },
+        remove = { session?.preview?.removeCallbacks(it) },
+    ) {
+        session?.let { current ->
+            current.preview.invalidate()
+            val point = current.preview.point
+            val target = targetAt(current, point.x, point.y)
+            if (target != hovered) { hovered = target; onHover(target) }
+        }
+    }
 
     fun start(source: View, payload: Payload): Boolean {
         if (session != null || !source.isAttachedToWindow || source.width <= 0 || source.height <= 0) return false
@@ -69,8 +82,12 @@ internal class WorkspaceInternalDragController(
                 setFitInsetsTypes(0)
                 layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
             }
+            val targets = slots().mapIndexedNotNull { index, slot ->
+                val slotBounds = Rect()
+                if (slot.getScreenVisibleRect(slotBounds)) DropSlot(Target.Slot(index), slot, slotBounds) else null
+            }
             manager.addView(view, params)
-            session = Session(source, payload, view)
+            session = Session(source, payload, view, screen, targets)
             source.parent?.requestDisallowInterceptTouchEvent(true)
             source.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
             handler.postDelayed(timeout, 30_000L)
@@ -97,17 +114,14 @@ internal class WorkspaceInternalDragController(
 
     fun touch(source: View, event: MotionEvent): Boolean {
         val current = session?.takeIf { it.source === source } ?: return false
-        val point = PointF(event.rawX, event.rawY)
         when (event.actionMasked) {
             MotionEvent.ACTION_MOVE -> {
-                current.preview.point.set(point)
-                current.preview.invalidate()
-                val target = targetAt(point, current.payload)
-                if (target != hovered) { hovered = target; onHover(target) }
+                current.preview.point.set(event.rawX, event.rawY)
+                frames.request()
             }
             MotionEvent.ACTION_UP -> {
-                (current.payload as? Payload.Slot)?.drag?.dropPoint = point
-                val target = targetAt(point, current.payload)
+                (current.payload as? Payload.Slot)?.drag?.dropPoint = PointF(event.rawX, event.rawY)
+                val target = targetAt(current, event.rawX, event.rawY)
                 try {
                     val handled = target != null && onDrop(current.payload, target)
                     NeXtepLog.info("slot_drag", "Internal drop target=$target handled=$handled")
@@ -123,6 +137,7 @@ internal class WorkspaceInternalDragController(
     fun cancel() {
         handler.removeCallbacks(timeout)
         val current = session ?: return
+        frames.cancel()
         session = null
         hovered = null
         onHover(null)
@@ -135,18 +150,17 @@ internal class WorkspaceInternalDragController(
         (current.source as? TaskSwitcherView)?.finishInternalDrag()
     }
 
-    private fun targetAt(point: PointF, payload: Payload): Target? {
-        val bounds = Rect()
-        slots().forEachIndexed { index, slot ->
-            if (slot.getScreenVisibleRect(bounds) && bounds.contains(point.x.toInt(), point.y.toInt()) &&
-                (payload is Payload.Slot || slot.acceptsAppDrop())) return Target.Slot(index)
+    private fun targetAt(current: Session, x: Float, y: Float): Target? {
+        current.targets.forEach { slot ->
+            if (slot.bounds.contains(x.toInt(), y.toInt()) &&
+                (current.payload is Payload.Slot || slot.view.acceptsAppDrop())) return slot.target
         }
-        if (payload !is Payload.Slot) return null
-        val screen = geometry()
-        if (point.x >= screen.controlLeft && point.x < screen.controlLeft + screen.controlWidth &&
-            point.y >= screen.controlTop && point.y < screen.controlTop + screen.controlHeight) return Target.Background
-        if (point.x >= screen.contentLeft && point.x < screen.contentRight &&
-            point.y >= screen.contentTop && point.y < screen.contentBottom) return Target.Main
+        if (current.payload !is Payload.Slot) return null
+        val screen = current.geometry
+        if (x >= screen.controlLeft && x < screen.controlLeft + screen.controlWidth &&
+            y >= screen.controlTop && y < screen.controlTop + screen.controlHeight) return Target.Background
+        if (x >= screen.contentLeft && x < screen.contentRight &&
+            y >= screen.contentTop && y < screen.contentBottom) return Target.Main
         return null
     }
 

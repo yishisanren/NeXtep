@@ -269,6 +269,7 @@ object SystemUiRuntime {
 
     private val lifecycleReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            SystemUiBottomCornerGestureMonitor.reset()
             if (intent.action == Intent.ACTION_USER_PRESENT) refreshWorkspaceConfig()
             if (!::workspaceController.isInitialized || !workspaceController.isActive()) return
             when (intent.action) {

@@ -14,8 +14,8 @@ android {
         applicationId = "io.github.lujinxin.nextep"
         minSdk = 35
         targetSdk = 36
-        versionCode = 12
-        versionName = "1.2.3-corner.1"
+        versionCode = 14
+        versionName = "1.2.3-corner.3"
 
     }
 
@@ -35,6 +35,8 @@ android {
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
+
+    testOptions.unitTests.isIncludeAndroidResources = true
 }
 
 dependencies {
@@ -47,4 +49,5 @@ dependencies {
     implementation("androidx.viewpager:viewpager:1.0.0")
     implementation("cn.6tail:lunar:1.7.7")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.17")
 }

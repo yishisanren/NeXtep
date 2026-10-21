@@ -11,7 +11,7 @@ import io.github.lujinxin.nextep.systemui.SystemUiHook
 import io.github.lujinxin.nextep.systemserver.SystemServerHook
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
-import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
+import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
 import io.github.libxposed.api.XposedModuleInterface.SystemServerStartingParam
 
 class NeXtepHookEntry : XposedModule() {
@@ -34,7 +34,7 @@ class NeXtepHookEntry : XposedModule() {
         SystemServerHook.install(this, param.classLoader)
     }
 
-    override fun onPackageLoaded(param: PackageLoadedParam) {
+    override fun onPackageReady(param: PackageReadyParam) {
         if (!param.isFirstPackage) return
         val packageName = param.packageName
         NeXtepLog.info(
@@ -44,8 +44,8 @@ class NeXtepHookEntry : XposedModule() {
 
         if (packageName == "com.android.systemui") {
             if (!EmergencyDisable.isRequested() && FeatureGate.SYSTEM_UI.defaultEnabled) {
-                TaskSurfaceCompat.initialize(param.defaultClassLoader)
-                SystemUiHook.install(this, param.defaultClassLoader)
+                TaskSurfaceCompat.initialize(param.classLoader)
+                SystemUiHook.install(this, param.classLoader)
             }
             return
         }
@@ -58,13 +58,13 @@ class NeXtepHookEntry : XposedModule() {
             if (!EmergencyDisable.isRequested() &&
                 FeatureGate.LAUNCHER_TRANSFORM.defaultEnabled
             ) {
-                OplusMultiAppHook.install(this, param.defaultClassLoader)
+                OplusMultiAppHook.install(this, param.classLoader)
             }
             return
         }
 
         if (EmergencyDisable.isRequested() || !FeatureGate.LAUNCHER_TRANSFORM.defaultEnabled) return
 
-        ColorOsLauncherHook.install(this, packageName, param.defaultClassLoader)
+        ColorOsLauncherHook.install(this, packageName, param.classLoader)
     }
 }

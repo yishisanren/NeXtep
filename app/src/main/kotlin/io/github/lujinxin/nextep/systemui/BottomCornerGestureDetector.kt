@@ -1,6 +1,9 @@
 package io.github.lujinxin.nextep.systemui
 
-class BottomCornerGestureDetector(density: Float) {
+class BottomCornerGestureDetector(
+    density: Float,
+    private val canActivate: () -> Boolean = { true },
+) {
     enum class Result { IGNORED, OBSERVING, ABANDONED, CONFIRMED }
 
     private val startSize = 72f * density
@@ -40,6 +43,7 @@ class BottomCornerGestureDetector(density: Float) {
             observing = y >= screenHeight - cornerHeight &&
                 (x <= cornerWidth || x >= screenWidth - cornerWidth)
             if (!observing) return Result.IGNORED
+            if (!canActivate()) return finish(Result.ABANDONED)
             fromLeft = x <= cornerWidth
             downX = x
             downY = y
@@ -62,7 +66,7 @@ class BottomCornerGestureDetector(density: Float) {
             }
             if (inward >= minimumDistance && upward >= minimumDistance &&
                 inward <= upward * 2f && upward <= inward * 2f
-            ) return finish(Result.CONFIRMED)
+            ) return finish(if (canActivate()) Result.CONFIRMED else Result.ABANDONED)
             if (maxOf(inward, upward) >= minimumDistance &&
                 minOf(inward, upward) < maxOf(inward, upward) / 3f
             ) return finish(Result.ABANDONED)

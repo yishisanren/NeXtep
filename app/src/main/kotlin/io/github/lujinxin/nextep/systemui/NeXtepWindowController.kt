@@ -156,7 +156,6 @@ class NeXtepWindowController(
                 .setInterpolator(transitionInterpolator)
                 .start()
         }
-        refreshWallpaperBackdrop()
         topAppStrip?.setWorkspaceVisible(true)
         topAppStrip?.refresh()
         if (FeatureGate.VIRTUAL_DISPLAY_SLOTS.defaultEnabled) {
@@ -300,7 +299,7 @@ class NeXtepWindowController(
                 onFrostStrengthChanged = { strength ->
                     if (frostStrength != strength) {
                         frostStrength = strength
-                        refreshWallpaperBackdrop()
+                        applyWallpaperBackdrop(geometry())
                     }
                 },
                 onAppDragStarting = { source, intent ->
@@ -478,8 +477,8 @@ class NeXtepWindowController(
             val thickness = resources.displayMetrics.density
             val edge = if (logicalSidebarSide(this@NeXtepWindowController.geometry()) == SidebarSide.LEFT) width - thickness else 0f
             canvas.drawRect(edge, 0f, edge + thickness, height.toFloat(), dividerPaint)
-            slotWindows.drop(1).forEach { slot ->
-                val y = slot.view.top.toFloat()
+            for (index in 1 until slotWindows.size) {
+                val y = slotWindows[index].view.top.toFloat()
                 canvas.drawRect(0f, y - thickness, width.toFloat(), y, dividerPaint)
             }
         }
@@ -652,8 +651,11 @@ class NeXtepWindowController(
     }
 
     private fun applyWallpaperBackdrop(geometry: WorkspaceGeometry) {
-        records.firstOrNull { it.title == "NeXtepTopBar" }?.view?.background =
-            WorkspaceWallpaperBackdrop.crop(wallpaperBitmap, geometry.controlLeft, geometry.controlTop, frostStrength)
+        records.firstOrNull { it.title == "NeXtepTopBar" }?.view?.let { view ->
+            val background = WorkspaceWallpaperBackdrop.crop(wallpaperBitmap,
+                geometry.controlLeft, geometry.controlTop, frostStrength, view.background)
+            if (view.background !== background) view.background = background
+        }
         topAppStrip?.setMediaWallpaperLight(WorkspaceWallpaperBackdrop.isLight(
             wallpaperBitmap, geometry.controlLeft, geometry.controlTop, geometry.controlWidth, geometry.controlHeight,
         ))
@@ -661,8 +663,11 @@ class NeXtepWindowController(
     }
 
     private fun applySidebarBackdrop(geometry: WorkspaceGeometry) {
-        records.firstOrNull { it.title == "NeXtepSidebar" }?.view?.background =
-            WorkspaceWallpaperBackdrop.crop(wallpaperBitmap, geometry.sidebarLeft, geometry.sidebarTop, frostStrength)
+        records.firstOrNull { it.title == "NeXtepSidebar" }?.view?.let { view ->
+            val background = WorkspaceWallpaperBackdrop.crop(wallpaperBitmap,
+                geometry.sidebarLeft, geometry.sidebarTop, frostStrength, view.background)
+            if (view.background !== background) view.background = background
+        }
     }
 
     private fun logicalSidebarSide(geometry: WorkspaceGeometry): SidebarSide =

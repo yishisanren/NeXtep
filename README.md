@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Android-16%2B-3DDC84?style=flat&logo=android&logoColor=white" alt="Android 16+">
   <img src="https://img.shields.io/github/v/release/lujinxin/NeXtep?display_name=tag&sort=semver" alt="Latest release">
-  <img src="https://img.shields.io/badge/status-stable-2EA44F?style=flat" alt="Status: stable">
+  <img src="https://img.shields.io/badge/status-custom_preview-E59B2D?style=flat" alt="Status: custom preview">
   <img src="https://img.shields.io/badge/Root-Required-C62828?style=flat" alt="Root required">
   <img src="https://img.shields.io/badge/license-Apache--2.0-4C1?style=flat" alt="Apache License 2.0">
   <img src="https://img.shields.io/badge/LSPosed-Module-3F51B5?style=flat" alt="LSPosed module">
@@ -28,7 +28,7 @@
 
 # NeXtep
 
-This fork's `1.2.3-corner.1` replaces the status-bar gesture with diagonal inward/upward swipes from either bottom corner. This custom build has not been device-tested; the release links, in-app update checks, and original device compatibility statements below refer to upstream. Installing an upstream build restores the original gesture.
+This fork's `1.2.3-corner.3` uses diagonal inward/upward swipes from either bottom corner and reduces repeated work in gesture monitoring, task animation, dragging, wallpaper blur, and app-strip refreshes. [Custom APK releases](https://github.com/yishisanren/NeXtep/releases) · [Performance changes and local validation](docs/PERFORMANCE.md). This release awaits user device validation; no device FPS improvement is claimed. In-app update checks and the original compatibility statements below refer to upstream. Installing an upstream build restores the original gesture.
 
 **NeXtep** is an **LSPosed module** that adds a **native side workspace** to ColorOS 16 / 17 while keeping the **stock launcher**. It provides **one main window and three live task slots**, with task switching, drag-and-drop, media controls, and customizable app shortcuts integrated into SystemUI.
 

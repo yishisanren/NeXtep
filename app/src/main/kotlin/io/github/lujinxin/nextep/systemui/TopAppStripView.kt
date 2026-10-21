@@ -122,6 +122,7 @@ class TopAppStripView(
     private var touchableInsetsListener: Any? = null
     private var internalAppDragActive = false
     private var deferredApps: List<TopAppRepository.AppEntry>? = null
+    private val appTiles = linkedMapOf<String, AppTile>()
     private val dismissHint = TextView(context).apply {
         text = AppLanguage.string(context, R.string.window_drop_background)
         textSize = 18f
@@ -383,42 +384,69 @@ class TopAppStripView(
         // Keep the touch-owning tile attached until its drag finishes.
         if (internalAppDragActive) { deferredApps = entries; return }
         val scrollX = appScroll.scrollX
-        appRow.removeAllViews()
+        var structureChanged = false
+        val keys = entries.mapTo(hashSetOf()) { it.key }
+        val obsolete = appTiles.entries.iterator()
+        while (obsolete.hasNext()) {
+            val tile = obsolete.next()
+            if (tile.key !in keys) {
+                appRow.removeView(tile.value)
+                obsolete.remove()
+                structureChanged = true
+            }
+        }
         if (entries.isEmpty()) {
+            appRow.removeAllViews()
             appRow.addView(messageView(AppLanguage.string(context, R.string.apps_none_available)))
         } else {
-            entries.forEach { entry -> appRow.addView(appTile(entry)) }
+            if (appTiles.isEmpty()) appRow.removeAllViews()
+            entries.forEachIndexed { index, entry ->
+                val tile = appTiles.getOrPut(entry.key) { AppTile() }
+                tile.bind(entry)
+                if (appRow.getChildAt(index) !== tile) {
+                    appRow.removeView(tile)
+                    appRow.addView(tile, index)
+                    structureChanged = true
+                }
+            }
         }
-        appScroll.post { appScroll.scrollTo(scrollX, 0) }
+        if (structureChanged) appScroll.post { appScroll.scrollTo(scrollX, 0) }
         NeXtepLog.info("top_apps", "Rendered ${entries.size} launcher activities")
     }
 
-    private fun appTile(entry: TopAppRepository.AppEntry): View = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
-        gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-        isClickable = true
-        isLongClickable = true
-        contentDescription = entry.label
-        setPadding(dp(5), 0, dp(5), dp(WorkspaceControlMetrics.APP_BOTTOM_PADDING_DP))
-        addView(
-            ImageView(context).apply {
-                setImageDrawable(entry.icon)
-                scaleType = ImageView.ScaleType.FIT_CENTER
-            },
-            LinearLayout.LayoutParams(dp(WorkspaceControlMetrics.APP_ICON_SIZE_DP), dp(WorkspaceControlMetrics.APP_ICON_SIZE_DP)),
-        )
-        layoutParams = LinearLayout.LayoutParams(dp(APP_TILE_WIDTH_DP), LayoutParams.MATCH_PARENT)
-        setOnClickListener { onAppClicked(Intent(entry.launchIntent)) }
-        setOnLongClickListener { tile ->
-            val started = onAppDragStarting(tile, Intent(entry.launchIntent))
-            internalAppDragActive = started
-            NeXtepLog.info(
-                "top_apps",
-                "Internal drag started=$started component=${entry.launchIntent.component}",
+    private inner class AppTile : LinearLayout(context) {
+        private lateinit var entry: TopAppRepository.AppEntry
+        private val icon = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
+
+        init {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            isClickable = true
+            isLongClickable = true
+            setPadding(dp(5), 0, dp(5), dp(WorkspaceControlMetrics.APP_BOTTOM_PADDING_DP))
+            addView(
+                icon,
+                LinearLayout.LayoutParams(dp(WorkspaceControlMetrics.APP_ICON_SIZE_DP), dp(WorkspaceControlMetrics.APP_ICON_SIZE_DP)),
             )
-            started
+            layoutParams = LinearLayout.LayoutParams(dp(APP_TILE_WIDTH_DP), LayoutParams.MATCH_PARENT)
+            setOnClickListener { onAppClicked(Intent(entry.launchIntent)) }
+            setOnLongClickListener { tile ->
+                val started = onAppDragStarting(tile, Intent(entry.launchIntent))
+                internalAppDragActive = started
+                NeXtepLog.info(
+                    "top_apps",
+                    "Internal drag started=$started component=${entry.launchIntent.component}",
+                )
+                started
+            }
+            setOnTouchListener { tile, event -> onAppDragTouch(tile, event) }
         }
-        setOnTouchListener { tile, event -> onAppDragTouch(tile, event) }
+
+        fun bind(value: TopAppRepository.AppEntry) {
+            entry = value
+            if (!android.text.TextUtils.equals(contentDescription, value.label)) contentDescription = value.label
+            if (icon.drawable !== value.icon) icon.setImageDrawable(value.icon)
+        }
     }
 
     private fun updateSideButtons() {

@@ -73,14 +73,15 @@ object TopTextStyle {
     fun typeface(family: String, bold: Boolean): Typeface {
         val resolved = resolveFamily(family)
         return typefaces.getOrPut("$resolved|$bold") {
-            val base = systemFonts.firstOrNull { it.id == resolved }?.let { option ->
+            val base = if (resolved.startsWith("system:")) systemFonts.firstOrNull { it.id == resolved }?.let { option ->
                 runCatching {
                     val font = Font.Builder(option.file).setTtcIndex(option.index).build()
                     Typeface.CustomFallbackBuilder(FontFamily.Builder(font).build())
                         .setSystemFallback("sans-serif").setStyle(FontStyle(400, FontStyle.FONT_SLANT_UPRIGHT)).build()
                 }.getOrNull()
-            } ?: Typeface.create(if (resolved == DEFAULT_FAMILY || resolved.startsWith("system:")) null else resolved, Typeface.NORMAL)
-            Typeface.create(base, if (bold) Typeface.BOLD else Typeface.NORMAL)
+            } else null
+            val selected = base ?: Typeface.create(if (resolved == DEFAULT_FAMILY || resolved.startsWith("system:")) null else resolved, Typeface.NORMAL)
+            Typeface.create(selected, if (bold) Typeface.BOLD else Typeface.NORMAL)
         }
     }
 }

@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Android-16%2B-3DDC84?style=flat&logo=android&logoColor=white" alt="Android 16+">
   <img src="https://img.shields.io/github/v/release/lujinxin/NeXtep?display_name=tag&sort=semver" alt="最新版本">
-  <img src="https://img.shields.io/badge/status-stable-2EA44F?style=flat" alt="状态：正式版">
+  <img src="https://img.shields.io/badge/status-custom_preview-E59B2D?style=flat" alt="状态：定制预发布版">
   <img src="https://img.shields.io/badge/Root-Required-C62828?style=flat" alt="需要 Root">
   <img src="https://img.shields.io/badge/license-Apache--2.0-4C1?style=flat" alt="Apache 2.0 许可证">
   <img src="https://img.shields.io/badge/LSPosed-Module-3F51B5?style=flat" alt="LSPosed 模块">
@@ -28,7 +28,7 @@
 
 # NeXtep
 
-本 Fork 的 `1.2.3-corner.1` 将状态栏开启手势替换为左右底角斜向内上滑动。该定制版尚未真机验证；下方版本下载、内置更新和原有兼容性说明属于上游项目。安装上游版本会恢复原手势。
+本 Fork 的 `1.2.3-corner.3` 使用左右底角斜向内上滑手势，并优化常驻监听、任务动画、拖拽、壁纸模糊和应用栏刷新中的重复开销。[定制版 APK 下载](https://github.com/yishisanren/NeXtep/releases) · [优化内容与本地验证](docs/PERFORMANCE.md)。本版等待用户自行真机验收，不宣称未经测量的帧率提升。内置更新和下方原有兼容性说明仍属于上游项目；安装上游版本会恢复原手势。
 
 **NeXtep** 是一个 **LSPosed 模块**。它在保留 **ColorOS 16 / 17 原生桌面**的同时，为系统加入**原生侧边工作区**，提供**一个主窗口和三个实时小窗**，并将任务切换、拖动操作、媒体控制和自定义应用快捷方式集成到 SystemUI 中。
 

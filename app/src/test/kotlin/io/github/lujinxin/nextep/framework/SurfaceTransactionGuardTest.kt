@@ -7,6 +7,24 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class SurfaceTransactionGuardTest {
+    @Test
+    fun inactiveWorkspacePassesThroughAndNewOwnershipEnablesFittingImmediately() {
+        var owned = false
+        var appended = 0
+        var committed = 0
+        val guard = SurfaceTransactionGuard<Any>(shouldCompose = { owned }) { appended++ }
+        repeat(1000) { guard.intercept(Any()) { committed++ } }
+        assertEquals(1000, committed)
+        assertEquals(0, appended)
+        owned = true
+        guard.intercept(Any()) { committed++ }
+        assertEquals(1, appended)
+        owned = false
+        guard.intercept(Any()) { committed++ }
+        assertEquals(1002, committed)
+        assertEquals(1, appended)
+    }
+
     private data class Frame(val scale: Float, val y: Float, val alpha: Float = 1f)
 
     private class Transaction(private val surface: MutableMap<Int, Frame>) {

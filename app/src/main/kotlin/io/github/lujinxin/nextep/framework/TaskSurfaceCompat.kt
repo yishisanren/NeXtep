@@ -8,6 +8,7 @@ import android.content.Context
 import android.graphics.Rect
 import android.os.SystemClock
 import android.view.Display
+import android.view.SurfaceControl
 import android.view.animation.DecelerateInterpolator
 import io.github.lujinxin.nextep.logging.NeXtepLog
 import io.github.lujinxin.nextep.workspace.WorkspaceGeometry
@@ -59,6 +60,7 @@ object TaskSurfaceCompat {
     private val preparedPresentations = ConcurrentHashMap<Int, ActivePresentation>()
     private data class SlotSurface(val displayId: Int, val leash: Any, val crop: Rect) {
         var lastAppliedAt = 0L
+        val frame = SurfaceFrame(1f, 1f, 0f, 0f, crop)
     }
     private val slotSurfaces = ConcurrentHashMap<Int, SlotSurface>()
     private val displayExchanges = ConcurrentHashMap<Int, Long>()
@@ -71,6 +73,7 @@ object TaskSurfaceCompat {
     private val presentationAnimators = ConcurrentHashMap<Int, ValueAnimator>()
     private val transactionGuard = SurfaceTransactionGuard<Any>(
         appendOwnedTransforms = ::appendOwnedTransforms,
+        shouldCompose = { activePresentations.isNotEmpty() || preparedPresentations.isNotEmpty() || slotSurfaces.isNotEmpty() },
         onFailure = { NeXtepLog.warn("task_surface", "Native transaction fitting failed open", it) },
     )
 
@@ -132,16 +135,11 @@ object TaskSurfaceCompat {
         }
         val now = SystemClock.uptimeMillis()
         if (now - slot.lastAppliedAt < STEADY_REAPPLY_INTERVAL_MS) return@runCatching
-        val loader = checkNotNull(hostClassLoader)
-        val transaction = loader.loadClass("android.view.SurfaceControl\$Transaction")
-            .getDeclaredConstructor().newInstance()
         transactionGuard.ownedTransaction {
-            try {
-                writeFrame(transaction, slot.leash, SurfaceFrame(1f, 1f, 0f, 0f, slot.crop))
-                invokeRequired(transaction, "apply")
+            SurfaceControl.Transaction().use { transaction ->
+                writeFrame(transaction, slot.leash, slot.frame)
+                transaction.apply()
                 slot.lastAppliedAt = now
-            } finally {
-                invokeOptional(transaction, "close")
             }
         }
     }.onFailure { NeXtepLog.warn("slot_surface", "Unable to restore slot coordinates taskId=$taskId", it) }
@@ -442,21 +440,10 @@ object TaskSurfaceCompat {
         if (ownedTaskLeash(taskId) !== leash) return
         val frame = SurfaceFrame(scaleX, scaleY, positionX, positionY, crop)
         activePresentations[taskId]?.takeIf { it.leash === leash }?.frame = frame
-        val loader = hostClassLoader ?: error("SystemUI host class loader is unavailable")
-        val transactionClass = Class.forName(
-            "android.view.SurfaceControl\$Transaction",
-            false,
-            loader,
-        )
-        val transaction = transactionClass.getDeclaredConstructor().apply {
-            isAccessible = true
-        }.newInstance()
         transactionGuard.ownedTransaction {
-            try {
+            SurfaceControl.Transaction().use { transaction ->
                 writeFrame(transaction, leash, frame)
-                invokeRequired(transaction, "apply")
-            } finally {
-                invokeOptional(transaction, "close")
+                transaction.apply()
             }
         }
     }
@@ -494,7 +481,7 @@ object TaskSurfaceCompat {
             ) return@forEach
             // A queued Shell finish may still contain the former main transform.
             // Preserve its visibility/layer writes, but commit local slot coordinates.
-            writeFrame(transaction, slot.leash, SurfaceFrame(1f, 1f, 0f, 0f, slot.crop))
+            writeFrame(transaction, slot.leash, slot.frame)
         }
     }
 
@@ -508,12 +495,12 @@ object TaskSurfaceCompat {
     }
 
     private fun writeFrame(transaction: Any, leash: Any, frame: SurfaceFrame) {
-        setCrop(transaction, leash, frame.crop)
+        val nativeTransaction = transaction as SurfaceControl.Transaction
+        val surface = leash as SurfaceControl
         // Keep native visibility, fade, layer order and parenting intact.
-        if (!invokeOptional(transaction, "setMatrix", leash, frame.scaleX, 0f, 0f, frame.scaleY)) {
-            invokeRequired(transaction, "setScale", leash, frame.scaleX, frame.scaleY)
-        }
-        invokeRequired(transaction, "setPosition", leash, frame.positionX, frame.positionY)
+        nativeTransaction.setCrop(surface, frame.crop)
+            .setScale(surface, frame.scaleX, frame.scaleY)
+            .setPosition(surface, frame.positionX, frame.positionY)
     }
 
     private fun sourceCrop(geometry: WorkspaceGeometry) = Rect(
@@ -629,7 +616,7 @@ object TaskSurfaceCompat {
     }
 
     private fun isValid(leash: Any): Boolean =
-        (runCatching { invokeRequired(leash, "isValid") }.getOrNull() as? Boolean) == true
+        (leash as? SurfaceControl)?.isValid == true
 
     private fun invokeRequired(target: Any, name: String, vararg arguments: Any?): Any? {
         val method = findCompatibleMethod(target.javaClass, name, arguments)

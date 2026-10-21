@@ -17,6 +17,13 @@ import java.lang.reflect.Proxy
 object SystemUiBottomCornerGestureMonitor {
     private var monitor: Any? = null
     private var receiver: Any? = null
+    private var resetGesture: (() -> Unit)? = null
+    private var generation = 0
+
+    fun reset() {
+        generation++
+        resetGesture?.invoke()
+    }
 
     fun install(context: Context) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
@@ -26,8 +33,12 @@ object SystemUiBottomCornerGestureMonitor {
         if (receiver != null) return
         var newMonitor: Any? = null
         var newReceiver: Any? = null
+        var displayManager: DisplayManager? = null
+        var displayListener: DisplayManager.DisplayListener? = null
         runCatching {
-            val display = context.getSystemService(DisplayManager::class.java)
+            val displays = context.getSystemService(DisplayManager::class.java)
+            displayManager = displays
+            val display = displays
                 .getDisplay(Display.DEFAULT_DISPLAY) ?: error("Default display unavailable")
             val keyguard = context.getSystemService(KeyguardManager::class.java)
             val power = context.getSystemService(PowerManager::class.java)
@@ -39,12 +50,43 @@ object SystemUiBottomCornerGestureMonitor {
             newMonitor = inputMonitor
             val pilfer = inputMonitor.javaClass.getMethod("pilferPointers")
             val size = Point()
-            var detector = BottomCornerGestureDetector(context.resources.displayMetrics.density)
+            val canActivate = { power?.isInteractive == true && keyguard?.isKeyguardLocked == false }
+            var density = context.resources.displayMetrics.density
+            var detector = BottomCornerGestureDetector(density, canActivate)
+            var rotation = display.rotation
+            @Suppress("DEPRECATION")
+            fun refreshViewport() {
+                val updatedSize = Point()
+                display.getRealSize(updatedSize)
+                val updatedRotation = display.rotation
+                val updatedDensity = context.resources.displayMetrics.density
+                // Refresh-rate notifications must not cancel an in-flight gesture.
+                if (size != updatedSize || rotation != updatedRotation || density != updatedDensity) {
+                    reset()
+                    size.set(updatedSize.x, updatedSize.y)
+                    rotation = updatedRotation
+                    density = updatedDensity
+                    detector = BottomCornerGestureDetector(density, canActivate)
+                }
+            }
+            refreshViewport()
+            val mainHandler = Handler(Looper.getMainLooper())
+            displayListener = object : DisplayManager.DisplayListener {
+                override fun onDisplayAdded(displayId: Int) = Unit
+                override fun onDisplayRemoved(displayId: Int) = Unit
+                override fun onDisplayChanged(displayId: Int) {
+                    if (displayId == Display.DEFAULT_DISPLAY) runCatching { refreshViewport() }
+                        .onFailure {
+                            detector.reset()
+                            size.set(0, 0)
+                            NeXtepLog.warn("bottom_corner_gesture", "Viewport refresh failed open", it)
+                        }
+                }
+            }.also { displays.registerDisplayListener(it, mainHandler) }
             val receiverClass = Class.forName(
                 "android.view.BatchedInputEventReceiver\$SimpleBatchedInputEventReceiver",
             )
             val listenerClass = Class.forName("${receiverClass.name}\$InputEventListener")
-            val mainHandler = Handler(Looper.getMainLooper())
             val listener = Proxy.newProxyInstance(
                 listenerClass.classLoader, arrayOf(listenerClass),
             ) { proxy, method, args ->
@@ -58,27 +100,22 @@ object SystemUiBottomCornerGestureMonitor {
                             val event = args?.firstOrNull() as? MotionEvent
                             if (event == null || !event.isFromSource(InputDevice.SOURCE_TOUCHSCREEN) ||
                                 !SystemUiRuntime.isStatusBarGestureEnabled() ||
-                                (event.actionMasked != MotionEvent.ACTION_DOWN && !detector.isObserving) ||
-                                power?.isInteractive != true || keyguard?.isKeyguardLocked != false
+                                (event.actionMasked != MotionEvent.ACTION_DOWN && !detector.isObserving)
                             ) {
                                 detector.reset()
                                 false
                             } else {
-                                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-                                    detector = BottomCornerGestureDetector(context.resources.displayMetrics.density)
-                                }
-                                @Suppress("DEPRECATION")
-                                display.getRealSize(size)
                                 val result = detector.observe(
                                     event.actionMasked, event.rawX, event.rawY, event.pointerCount,
-                                    event.eventTime, size.x, size.y, display.rotation,
+                                    event.eventTime, size.x, size.y, rotation,
                                 )
                                 if (result == BottomCornerGestureDetector.Result.CONFIRMED) {
                                     // Cancel app/navigation input only after the diagonal is confirmed.
                                     pilfer.invoke(inputMonitor)
+                                    val confirmedGeneration = generation
                                     mainHandler.post {
                                         runCatching {
-                                            if (power?.isInteractive == true && keyguard?.isKeyguardLocked == false) {
+                                            if (generation == confirmedGeneration && canActivate()) {
                                                 SystemUiRuntime.toggleWorkspaceFromGesture()
                                             }
                                         }.onFailure { error ->
@@ -108,8 +145,12 @@ object SystemUiBottomCornerGestureMonitor {
                 .invoke(newReceiver, false)
             monitor = inputMonitor
             receiver = newReceiver
+            resetGesture = { detector.reset() }
             NeXtepLog.info("bottom_corner_gesture", "Installed default-display corner gesture monitor")
         }.onFailure { error ->
+            displayListener?.let { listener ->
+                runCatching { displayManager?.unregisterDisplayListener(listener) }
+            }
             for (resource in listOf(newReceiver, newMonitor)) {
                 runCatching { resource?.javaClass?.getMethod("dispose")?.invoke(resource) }
             }
