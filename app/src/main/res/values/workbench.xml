@@ -1,0 +1,32 @@
+<resources>
+    <string name="workbench_title">Multitasking workspace</string>
+    <string name="workbench_theme">Switch light / dark appearance</string>
+    <string name="workbench_payment">Pay and scan</string>
+    <string name="workbench_more">Workspace tools</string>
+    <string name="workbench_wechat_scan">WeChat · Scan</string>
+    <string name="workbench_wechat_pay">WeChat · Payment code</string>
+    <string name="workbench_alipay_scan">Alipay · Scan</string>
+    <string name="workbench_alipay_pay">Alipay · Payment code</string>
+    <string name="workbench_unavailable">This app version does not provide a supported entry.</string>
+    <string name="workbench_compare">Compare prices</string>
+    <string name="workbench_delivery">Delivery</string>
+    <string name="workbench_shopping">Shopping</string>
+    <string name="workbench_query">Product to search for</string>
+    <string name="workbench_search">Search across apps</string>
+    <string name="workbench_query_empty">Enter a product name (up to 200 characters).</string>
+    <string name="workbench_delivery_apps">JD Instant · Taobao Instant · Meituan Delivery</string>
+    <string name="workbench_shopping_apps">Pinduoduo · Douyin Mall · JD · Taobao</string>
+    <string name="workbench_compare_failed">Keep enough empty side windows and check the installed app versions.</string>
+    <string name="workbench_compare_missing">At least two supported apps must be installed.</string>
+    <string name="workbench_capture">Allow capture for this session</string>
+    <string name="workbench_capture_on">Capture allowed for this session. Protection returns on exit, lock or backgrounding.</string>
+    <string name="workbench_capture_off">Capture protection restored.</string>
+    <string name="workbench_hide_recents">Hide workspace tasks from Recents</string>
+    <string name="workbench_export">Export diagnostics</string>
+    <string name="workbench_exported">Diagnostics saved to Downloads.</string>
+    <string name="workbench_export_failed">Could not export diagnostics.</string>
+    <string name="workbench_drop_unsupported">This app cannot receive this content, or the source did not grant access.</string>
+    <string name="workbench_wide">Move landscape app to the top</string>
+    <string name="workbench_wide_failed">No landscape app can be placed at the top right now.</string>
+    <string name="workbench_cancel">Cancel</string>
+</resources>

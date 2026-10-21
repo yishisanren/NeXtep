@@ -38,6 +38,8 @@ object SystemServerHook {
             WorkspaceDisplayHierarchyHook.install(module, classLoader, nativeLayerHooker)
         }
         val aspectInstalled = installAspectHook(module, classLoader)
+        val sceneInstalled = HookGuard.run("workbench_scene") { WorkbenchTaskPolicyHook.installScenes(module, classLoader) }
+        val recentsInstalled = HookGuard.run("workbench_recents") { WorkbenchTaskPolicyHook.installRecents(module, classLoader) }
         val sizeCompatInstalled = installSizeCompatHook(module, classLoader)
         val landscapeRotationInstalled = HookGuard.run("workspace_landscape_rotation") {
             val rotationClass = classLoader.loadClass("com.android.server.wm.DisplayRotation")
@@ -70,7 +72,7 @@ object SystemServerHook {
             NeXtepLog.info("slot_display_config", "Installed package-independent slot capability matching")
         }
         if (!aspectInstalled && !sizeCompatInstalled &&
-            !slotConfigInstalled && !slotVideoExitInstalled && !landscapeRotationInstalled && !nativeLayersInstalled && !workspaceTasksInstalled && !workspaceHierarchyInstalled
+            !slotConfigInstalled && !slotVideoExitInstalled && !landscapeRotationInstalled && !nativeLayersInstalled && !workspaceTasksInstalled && !workspaceHierarchyInstalled && !sceneInstalled && !recentsInstalled
         ) {
             // Nothing was installed; keep the guard open for a potential future retry.
             installed.set(false)
@@ -83,7 +85,8 @@ object SystemServerHook {
                     "size-compat insets=$sizeCompatInstalled " +
                     "slot config=$slotConfigInstalled slot video exit=$slotVideoExitInstalled " +
                     "landscape rotation=$landscapeRotationInstalled native floating layers=$nativeLayersInstalled " +
-                    "workspace task fitting=$workspaceTasksInstalled display hierarchy=$workspaceHierarchyInstalled",
+                    "workspace task fitting=$workspaceTasksInstalled display hierarchy=$workspaceHierarchyInstalled " +
+                    "scene requests=$sceneInstalled recents privacy=$recentsInstalled",
             )
         }
     }

@@ -1,0 +1,32 @@
+<resources>
+    <string name="workbench_title">多任务工作台</string>
+    <string name="workbench_theme">切换浅色／深色外观</string>
+    <string name="workbench_payment">付款与扫一扫</string>
+    <string name="workbench_more">工作台工具</string>
+    <string name="workbench_wechat_scan">微信 · 扫一扫</string>
+    <string name="workbench_wechat_pay">微信 · 收付款码</string>
+    <string name="workbench_alipay_scan">支付宝 · 扫一扫</string>
+    <string name="workbench_alipay_pay">支付宝 · 付款码</string>
+    <string name="workbench_unavailable">当前应用版本没有可用的功能入口，请从应用内打开。</string>
+    <string name="workbench_compare">比价</string>
+    <string name="workbench_delivery">外卖</string>
+    <string name="workbench_shopping">购物</string>
+    <string name="workbench_query">输入要搜索的商品</string>
+    <string name="workbench_search">搜索比价</string>
+    <string name="workbench_query_empty">请输入商品名称，最多200字。</string>
+    <string name="workbench_delivery_apps">京东秒送 · 淘宝闪购 · 美团外卖</string>
+    <string name="workbench_shopping_apps">拼多多 · 抖音商城 · 京东 · 淘宝</string>
+    <string name="workbench_compare_failed">请留出足够的空侧窗，并检查已安装应用版本是否支持搜索入口。</string>
+    <string name="workbench_compare_missing">至少需要安装两个支持此入口的应用。</string>
+    <string name="workbench_capture">本次允许截图／录屏</string>
+    <string name="workbench_capture_on">本次已允许截图与录屏；退出、锁屏或退到后台后恢复保护。</string>
+    <string name="workbench_capture_off">已恢复截图保护。</string>
+    <string name="workbench_hide_recents">在最近任务中隐藏工作台应用</string>
+    <string name="workbench_export">导出诊断日志</string>
+    <string name="workbench_exported">诊断日志已保存到下载目录。</string>
+    <string name="workbench_export_failed">诊断日志导出失败。</string>
+    <string name="workbench_drop_unsupported">此应用无法接收该内容，或来源没有授予访问权限。</string>
+    <string name="workbench_wide">横向应用置顶</string>
+    <string name="workbench_wide_failed">当前没有可置顶的横向应用。</string>
+    <string name="workbench_cancel">取消</string>
+</resources>

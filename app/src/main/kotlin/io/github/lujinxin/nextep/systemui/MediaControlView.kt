@@ -99,6 +99,12 @@ class MediaControlView(
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         if (MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED) {
+            val compact = MeasureSpec.getSize(heightMeasureSpec) < dp(48)
+            setPadding(dp(8), if (compact) 0 else dp(5), dp(8), if (compact) 0 else dp(5))
+            artist.visibility = if (compact) GONE else VISIBLE
+            artwork.visibility = if (compact) GONE else VISIBLE
+            previous.visibility = if (compact) GONE else VISIBLE
+            next.visibility = if (compact) GONE else VISIBLE
             val artworkSize = minOf(dp(46),
                 (MeasureSpec.getSize(heightMeasureSpec) - paddingTop - paddingBottom).coerceAtLeast(1))
             artwork.layoutParams.width = artworkSize

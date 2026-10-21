@@ -10,6 +10,20 @@ import io.github.libxposed.api.XposedInterface
 /** Allow both landscape directions in workspace; rotation locks remain system-owned. */
 class WorkspaceLandscapeRotationHooker : XposedInterface.Hooker {
     override fun intercept(chain: XposedInterface.Chain): Any? {
+        val heldRotation = runCatching {
+            val orientation = chain.getArg(0) as? Int ?: return@runCatching null
+            if (!io.github.lujinxin.nextep.workspace.WorkspaceSceneRequest.landscape(orientation)) return@runCatching null
+            val target = chain.thisObject ?: return@runCatching null
+            val display = field(target, "mDisplayContent") ?: return@runCatching null
+            if (field(display, "mDisplayId") != Display.DEFAULT_DISPLAY) return@runCatching null
+            val context = field(target, "mContext") as? Context ?: return@runCatching null
+            if (!SystemServerWorkspaceBridge.isWorkspaceActive(context)) return@runCatching null
+            val portrait = field(target, "mPortraitRotation") as? Int ?: return@runCatching null
+            val last = chain.getArg(1) as? Int ?: return@runCatching null
+            if (last == portrait && SystemServerWorkspaceBridge.scene(context)
+                    ?.holdRotation(android.os.SystemClock.uptimeMillis()) == true) last else null
+        }.getOrNull()
+        if (heldRotation != null) return heldRotation
         val allowBothDirections = runCatching {
             if (chain.getArg(0) != ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) return@runCatching false
             val target = chain.thisObject ?: return@runCatching false

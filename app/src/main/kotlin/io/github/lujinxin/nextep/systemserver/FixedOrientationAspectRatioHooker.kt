@@ -8,6 +8,11 @@ import io.github.libxposed.api.XposedInterface
 class FixedOrientationAspectRatioHooker : XposedInterface.Hooker {
     override fun intercept(chain: XposedInterface.Chain): Any? {
         val context = findContext(chain.thisObject) ?: return chain.proceed()
+        val activity = readField(chain.thisObject, "mActivityRecord")
+        val displayId = activity?.let {
+            runCatching { it.javaClass.getMethod("getDisplayId").invoke(it) as? Int }.getOrNull()
+        }
+        if (displayId != null && SystemServerWorkspaceBridge.isWideDisplay(context, displayId)) return chain.proceed()
         val aspectRatio = SystemServerWorkspaceBridge.activePhysicalAspectRatio(context)
             ?: return chain.proceed()
         NeXtepLog.info("fixed_orientation_aspect", "Using recorded usable aspectRatio=$aspectRatio")

@@ -61,6 +61,32 @@ class NeXtepWindowController(
     private var sidebarSide = SystemServerWorkspaceBridge.sidebarSide(context)
     private var suspended = false
     private var workspaceVisible = false
+    private var wideSlotIndex: Int? = null
+    private var wideTaskId: Int? = null
+    private var seenSceneTime = -1L
+    private var suppressedAutoTaskId: Int? = null
+    private val autoPinnedTasks = mutableSetOf<Int>()
+    private val manifestLandscape = mutableMapOf<android.content.ComponentName, Boolean>()
+    private var observedTasks: List<io.github.lujinxin.nextep.task.TaskRepository.TaskSnapshot> = emptyList()
+    private val workbenchPreferences = runCatching {
+        context.createDeviceProtectedStorageContext().getSharedPreferences("nextep_workbench_v1", Context.MODE_PRIVATE)
+    }.getOrNull()
+    private var appearance = runCatching {
+        WorkbenchAppearance.valueOf(workbenchPreferences?.getString("appearance", "DARK") ?: "DARK")
+    }.getOrDefault(WorkbenchAppearance.DARK)
+    private var recentsHidden = workbenchPreferences?.getBoolean("hide_recents", false) ?: false
+    private val capturePolicy = io.github.lujinxin.nextep.workspace.WorkspaceCapturePolicy()
+    private val tools = WorkbenchToolsController(context, { appearance }, { capturePolicy.captureAllowed },
+        ::setCaptureAllowed, { recentsHidden }, { hidden ->
+            recentsHidden = hidden
+            workbenchPreferences?.edit()?.putBoolean("hide_recents", hidden)?.apply()
+            publishPrivacy()
+        }, { intent -> slotCoordinator?.openExternalInMain(intent)
+            ?: Result.failure(IllegalStateException("Workspace unavailable")) },
+        { intents -> slotCoordinator?.openSearches(intents)
+            ?: Result.failure(IllegalStateException("Workspace unavailable")) },
+        ::pinCurrentLandscape, { setCaptureAllowed(false); onSettingsRequested() }, onExitRequested,
+        { checkNotNull(topAppStrip).mediaPanel() })
     private val wallpaperReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
@@ -70,6 +96,14 @@ class NeXtepWindowController(
                     backdropGeneration.incrementAndGet()
                 }
                 Intent.ACTION_USER_PRESENT -> Unit
+                Intent.ACTION_SCREEN_OFF -> { setCaptureAllowed(false); tools.dismiss(); return }
+                Intent.ACTION_CLOSE_SYSTEM_DIALOGS -> {
+                    if (intent.getStringExtra("reason") in setOf("homekey", "recentapps")) {
+                        setCaptureAllowed(false)
+                        tools.dismiss()
+                    }
+                    return
+                }
                 else -> return
             }
             if (!suspended) refreshWallpaperBackdrop()
@@ -85,6 +119,8 @@ class NeXtepWindowController(
                 IntentFilter().apply {
                     addAction(Intent.ACTION_WALLPAPER_CHANGED)
                     addAction(Intent.ACTION_USER_PRESENT)
+                    addAction(Intent.ACTION_SCREEN_OFF)
+                    addAction(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
                 },
                 Context.RECEIVER_EXPORTED,
             )
@@ -98,7 +134,10 @@ class NeXtepWindowController(
     }
 
     fun suspendForLock() {
+        setCaptureAllowed(false)
+        tools.dismiss()
         suspended = true
+        publishPrivacy()
         cancelDragVisuals()
         backdropGeneration.incrementAndGet()
         slotCoordinator?.setSuspended(true)
@@ -117,6 +156,7 @@ class NeXtepWindowController(
     fun resumeAfterLock(): WorkspaceGeometry {
         check(records.size == EXPECTED_WINDOW_COUNT) { "Retained SystemUI windows are unavailable" }
         suspended = false
+        publishPrivacy()
         // Wake reuses attached windows and the recorded layout. Re-running show()
         // starts a fresh alpha=0 entry animation and repeats all display setup.
         val geometry = geometry()
@@ -135,9 +175,11 @@ class NeXtepWindowController(
     }
 
     fun show(): WorkspaceGeometry {
+        capturePolicy.reset()
         initializeIfNeeded()
         check(records.size == EXPECTED_WINDOW_COUNT) { "SystemUI windows are unavailable" }
         workspaceVisible = true
+        publishPrivacy()
         reconfigure().getOrThrow()
         records.forEach { record ->
             val view = record.view
@@ -166,10 +208,16 @@ class NeXtepWindowController(
 
     fun hide() {
         workspaceVisible = false
+        tools.dismiss()
+        setCaptureAllowed(false)
+        publishPrivacy()
         cancelDragVisuals()
         suspended = false
         backdropGeneration.incrementAndGet()
         slotCoordinator?.deactivate()
+        setWideLayout(null, null)
+        autoPinnedTasks.clear()
+        SystemServerWorkspaceBridge.clearScene(context)
         topAppStrip?.setWorkspaceVisible(false)
         records.forEach { record ->
             val view = record.view
@@ -308,6 +356,14 @@ class NeXtepWindowController(
                     )
                 },
                 onAppDragTouch = internalDrag::touch,
+                onPaymentRequested = tools::showPayment,
+                onThemeRequested = {
+                    appearance = if (appearance == WorkbenchAppearance.DARK) WorkbenchAppearance.LIGHT else WorkbenchAppearance.DARK
+                    workbenchPreferences?.edit()?.putString("appearance", appearance.name)?.apply()
+                    applyAppearance()
+                },
+                onToolsRequested = tools::showMore,
+                onCompareRequested = tools::showSearch,
             ).also { topAppStrip = it },
             width = geometry.screenWidth,
             height = geometry.topHeight,
@@ -361,6 +417,7 @@ class NeXtepWindowController(
             slotWindows = emptyList()
             initialized = false
         }
+        applyAppearance()
     }
 
     private fun addWindow(
@@ -381,6 +438,7 @@ class NeXtepWindowController(
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_SECURE or
                 interactionFlags or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT,
@@ -458,31 +516,17 @@ class NeXtepWindowController(
                 params.x = 0
                 params.y = 0
                 contentHighlightView?.layoutParams = FrameLayout.LayoutParams(
-                    geometry.contentWidth, geometry.contentHeight, Gravity.TOP or Gravity.LEFT,
+                    (geometry.availableWidth * geometry.contentScale).toInt(),
+                    (geometry.availableHeight * geometry.contentScale).toInt(), Gravity.TOP or Gravity.LEFT,
                 ).apply {
-                    leftMargin = geometry.contentLeft
-                    topMargin = geometry.contentTop
+                    leftMargin = (geometry.availableLeft * geometry.contentScale + geometry.contentTranslationX).toInt()
+                    topMargin = (geometry.availableTop * geometry.contentScale + geometry.contentTranslationY).toInt()
                 }
             }
         }
     }
 
-    private fun sidebarPanel(geometry: WorkspaceGeometry): View = object : FrameLayout(context) {
-        private val dividerPaint = android.graphics.Paint().apply {
-            color = Color.argb(90, 255, 255, 255)
-        }
-
-        override fun dispatchDraw(canvas: android.graphics.Canvas) {
-            super.dispatchDraw(canvas)
-            val thickness = resources.displayMetrics.density
-            val edge = if (logicalSidebarSide(this@NeXtepWindowController.geometry()) == SidebarSide.LEFT) width - thickness else 0f
-            canvas.drawRect(edge, 0f, edge + thickness, height.toFloat(), dividerPaint)
-            for (index in 1 until slotWindows.size) {
-                val y = slotWindows[index].view.top.toFloat()
-                canvas.drawRect(0f, y - thickness, width.toFloat(), y, dividerPaint)
-            }
-        }
-    }.apply {
+    private fun sidebarPanel(geometry: WorkspaceGeometry): View = FrameLayout(context).apply {
         sidebarView = this
         setBackgroundColor(Color.TRANSPARENT)
         if (FeatureGate.VIRTUAL_DISPLAY_SLOTS.defaultEnabled) {
@@ -502,6 +546,7 @@ class NeXtepWindowController(
                     internalDrag.start(source, WorkspaceInternalDragController.Payload.Slot(drag))
                 },
                 onInternalDragTouch = internalDrag::touch,
+                onTasksObserved = ::observeTasks,
             )
         }
     }
@@ -526,7 +571,7 @@ class NeXtepWindowController(
                     setStroke(dp(2).toInt(), Color.rgb(80, 216, 224))
                     cornerRadius = dp(8)
                 }
-            } else android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)
+            } else mainFrame()
     }
 
     private fun dropInternalPayload(
@@ -567,12 +612,12 @@ class NeXtepWindowController(
         val halfHeight = sourceRect.height() * 0.45f
         val startRect = android.graphics.RectF(point.x - halfWidth, point.y - halfHeight,
             point.x + halfWidth, point.y + halfHeight)
-        val sourcePreview = sourceView.capturePreview()
+        val sourcePreview = if (capturePolicy.captureAllowed) sourceView.capturePreview() else null
         val targetPreview = if (targetIndex != null) {
             if (slotCoordinator?.slotStates()?.getOrNull(targetIndex) is SlotState.Occupied) {
                 slotWindows[targetIndex].view.capturePreview()
             } else null
-        } else mainTaskPresenter.currentTaskId()?.let {
+        } else mainTaskPresenter.currentTaskId()?.takeIf { capturePolicy.captureAllowed }?.let {
             io.github.lujinxin.nextep.framework.TaskSurfaceCompat.capturePreview(it)
         }
         swapAnimator.animate(sourcePreview, targetPreview, startRect,
@@ -584,8 +629,15 @@ class NeXtepWindowController(
         panel.invalidate()
         val profile = viewport.layout()
         val bounds = profile.slots
+        topAppStrip?.setWideSlot(profile.wideSlotIndex?.let { slotWindows[it].view })
         slotWindows.forEachIndexed { index, slot ->
             slot.setLayoutProfile(profile)
+            slot.view.setBackgroundSwipeEnabled(slotBackgroundSwipeEnabled && index != profile.wideSlotIndex)
+            if (index == profile.wideSlotIndex) return@forEachIndexed
+            if (slot.view.parent !== panel) {
+                (slot.view.parent as? android.view.ViewGroup)?.removeView(slot.view)
+                panel.addView(slot.view)
+            }
             slot.view.setBackgroundSwipeSide(logicalSidebarSide(geometry))
             slot.view.layoutParams = FrameLayout.LayoutParams(
                 bounds[index].width,
@@ -656,9 +708,7 @@ class NeXtepWindowController(
                 geometry.controlLeft, geometry.controlTop, frostStrength, view.background)
             if (view.background !== background) view.background = background
         }
-        topAppStrip?.setMediaWallpaperLight(WorkspaceWallpaperBackdrop.isLight(
-            wallpaperBitmap, geometry.controlLeft, geometry.controlTop, geometry.controlWidth, geometry.controlHeight,
-        ))
+        topAppStrip?.setMediaWallpaperLight(appearance == WorkbenchAppearance.LIGHT)
         applySidebarBackdrop(geometry)
     }
 
@@ -672,6 +722,132 @@ class NeXtepWindowController(
 
     private fun logicalSidebarSide(geometry: WorkspaceGeometry): SidebarSide =
         geometry.panelSidebarSide
+
+    private fun mainFrame() = WorkbenchFrameDrawable(appearance.panelEnd or 0xFF000000.toInt(),
+        appearance.accent, dp(14), dp(1).coerceAtLeast(1f))
+
+    private fun applyAppearance() {
+        topAppStrip?.setAppearance(appearance)
+        sidebarView?.background = appearance.background()
+        slotWindows.forEach { it.view.setAppearance(appearance.card, appearance.outline, appearance.text) }
+        contentHighlightView?.background = mainFrame()
+    }
+
+    private fun setCaptureAllowed(allowed: Boolean) {
+        if (allowed && (!workspaceVisible || suspended)) return
+        if (allowed) capturePolicy.allowForSession() else capturePolicy.reset()
+        runCatching { applyCaptureFlags(allowed) }.onFailure {
+            capturePolicy.reset()
+            runCatching { applyCaptureFlags(false) }
+            NeXtepLog.warn("workspace_privacy", "Capture mode update failed; restoring protection", it)
+        }
+    }
+
+    private fun applyCaptureFlags(allowed: Boolean) {
+        var failure: Throwable? = null
+        fun failed(error: Throwable) { if (failure == null) failure = error else failure?.addSuppressed(error) }
+        slotWindows.forEach { slot -> runCatching { slot.view.setCaptureAllowed(allowed) }.onFailure(::failed) }
+        records.forEach { record ->
+            val params = record.view.layoutParams as? WindowManager.LayoutParams ?: return@forEach
+            params.flags = if (allowed) params.flags and WindowManager.LayoutParams.FLAG_SECURE.inv()
+                else params.flags or WindowManager.LayoutParams.FLAG_SECURE
+            runCatching { windowManager.updateViewLayout(record.view, params) }.onFailure(::failed)
+        }
+        failure?.let { throw it }
+    }
+
+    private fun publishPrivacy() {
+        val privateIds = if (workspaceVisible && !suspended && recentsHidden) {
+            val displays = slotWindows.mapNotNull { it.displayId() }.toSet()
+            observedTasks.filter { it.displayId in displays }.mapTo(mutableSetOf()) { it.taskId }.apply {
+                observedTasks.firstOrNull { it.displayId == android.view.Display.DEFAULT_DISPLAY }
+                    ?.takeIf { it.component.packageName != context.packageName }
+                    ?.let { add(it.taskId) }
+            }
+        } else emptySet()
+        SystemServerWorkspaceBridge.publishPrivateTasks(context, privateIds)
+    }
+
+    private fun observeTasks(tasks: List<io.github.lujinxin.nextep.task.TaskRepository.TaskSnapshot>, states: List<SlotState>) {
+        observedTasks = tasks
+        publishPrivacy()
+        if (!workspaceVisible || suspended) return
+        val scene = SystemServerWorkspaceBridge.scene(context)
+        val foregroundId = tasks.firstOrNull { it.displayId == android.view.Display.DEFAULT_DISPLAY }?.taskId
+        if (foregroundId != suppressedAutoTaskId) suppressedAutoTaskId = null
+        if (scene != null && scene.time > seenSceneTime && scene.taskId == wideTaskId &&
+            !io.github.lujinxin.nextep.workspace.WorkspaceSceneRequest.landscape(scene.orientation)) {
+            seenSceneTime = scene.time
+            setWideLayout(null, null)
+            return
+        }
+        wideSlotIndex?.let { index ->
+            val current = states.getOrNull(index)
+            if (current is SlotState.Occupied && current.taskId != wideTaskId ||
+                wideTaskId != null && tasks.none { it.taskId == wideTaskId }) {
+                if (foregroundId == wideTaskId) suppressedAutoTaskId = wideTaskId
+                setWideLayout(null, null)
+            }
+        }
+        val main = tasks.firstOrNull { it.displayId == android.view.Display.DEFAULT_DISPLAY } ?: return
+        if (scene != null && scene.time > seenSceneTime && scene.taskId == main.taskId &&
+            main.taskId != suppressedAutoTaskId &&
+            io.github.lujinxin.nextep.workspace.WorkspaceSceneRequest.landscape(scene.orientation)) {
+            if (pinTask(main.taskId)) { seenSceneTime = scene.time; autoPinnedTasks.add(main.taskId) }
+        } else if (wideSlotIndex == null && main.taskId !in autoPinnedTasks && landscapeCandidate(main)) {
+            if (pinTask(main.taskId)) autoPinnedTasks.add(main.taskId)
+        }
+    }
+
+    private fun landscapeCandidate(task: io.github.lujinxin.nextep.task.TaskRepository.TaskSnapshot): Boolean {
+        val fixed = manifestLandscape.getOrPut(task.component) {
+            runCatching {
+                val info = context.packageManager.getActivityInfo(task.component, 0)
+                io.github.lujinxin.nextep.workspace.WorkspaceSceneRequest.landscape(info.screenOrientation)
+            }.getOrDefault(false)
+        }
+        if (fixed) return true
+        if (task.bounds.width() <= task.bounds.height()) return false
+        return runCatching {
+            val info = context.packageManager.getApplicationInfo(task.component.packageName, 0)
+            info.category == android.content.pm.ApplicationInfo.CATEGORY_GAME ||
+                context.getSystemService(android.media.session.MediaSessionManager::class.java)
+                    .getActiveSessions(null).any { it.packageName == task.component.packageName &&
+                        it.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING }
+        }.getOrDefault(false)
+    }
+
+    private fun pinCurrentLandscape(): Boolean {
+        if (wideSlotIndex != null) { setWideLayout(null, null); return true }
+        val main = observedTasks.firstOrNull { it.displayId == android.view.Display.DEFAULT_DISPLAY } ?: return false
+        val scene = SystemServerWorkspaceBridge.scene(context)
+        if (!landscapeCandidate(main) && scene?.taskId != main.taskId) return false
+        return pinTask(main.taskId)
+    }
+
+    private fun pinTask(taskId: Int): Boolean {
+        val coordinator = slotCoordinator ?: return false
+        val states = coordinator.slotStates()
+        val index = wideSlotIndex ?: states.indexOfFirst { it is SlotState.Ready }.takeIf { it >= 0 }
+            ?: states.indexOfFirst { it is SlotState.Occupied }.takeIf { it >= 0 } ?: return false
+        val previousIndex = wideSlotIndex
+        val previousTask = wideTaskId
+        setWideLayout(index, taskId)
+        val result = coordinator.parkMainForWide(taskId, index)
+        if (result.isFailure) setWideLayout(previousIndex, previousTask)
+        return result.isSuccess
+    }
+
+    private fun setWideLayout(index: Int?, taskId: Int?) {
+        if (wideSlotIndex == index && wideTaskId == taskId) return
+        wideSlotIndex = index
+        wideTaskId = taskId
+        viewport.setWideSlot(index)
+        SystemServerWorkspaceBridge.publishWideDisplay(context, index?.let { slotWindows.getOrNull(it)?.displayId() })
+        val geometry = geometry()
+        applyWindowGeometry(geometry)
+        sidebarView?.let { applySlotLayout(it, geometry) }
+    }
 
     private fun dp(value: Int): Float = value * context.resources.displayMetrics.density
 

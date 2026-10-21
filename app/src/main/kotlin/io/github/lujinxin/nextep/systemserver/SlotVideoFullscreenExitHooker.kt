@@ -45,7 +45,7 @@ class SlotVideoFullscreenExitHooker(private val report: (String) -> Unit) : Xpos
             source != null && sourceTask != null && source !== destination &&
                 field(source, "mFocusedApp") === activity &&
                 call(source, "getDisplayId") == 0 && destination != null &&
-                isSlot(destination) && isDynamicFullscreen(activity, sourceLandscape).also {
+                isSlot(destination) && !isWideSlot(destination, activity) && isDynamicFullscreen(activity, sourceLandscape).also {
                     report("slot video migration: eligible=$it requested=${call(activity, "getRequestedOrientation")} " +
                         "manifest=${(field(activity, "info") as? ActivityInfo)?.screenOrientation}")
                 }
@@ -224,6 +224,13 @@ class SlotVideoFullscreenExitHooker(private val report: (String) -> Unit) : Xpos
         val info = call(display, "getDisplayInfo") ?: return false
         return (field(info, "name") as? String)?.startsWith("NeXtep-slot-") == true
     }
+
+    private fun isWideSlot(display: Any, activity: Any): Boolean = runCatching {
+        val service = field(activity, "mAtmService") ?: return@runCatching false
+        val context = field(service, "mContext") as? Context ?: return@runCatching false
+        val id = call(display, "getDisplayId") as? Int ?: return@runCatching false
+        io.github.lujinxin.nextep.workspace.SystemServerWorkspaceBridge.isWideDisplay(context, id)
+    }.getOrDefault(false)
 
     private fun field(target: Any, name: String): Any? =
         generateSequence(target.javaClass as Class<*>?) { it.superclass }

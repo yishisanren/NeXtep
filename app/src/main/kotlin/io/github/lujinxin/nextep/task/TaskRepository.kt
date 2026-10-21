@@ -64,9 +64,11 @@ class TaskRepository(context: Context) {
         val token: Any?,
         val userId: Int?,
         val vendorWindowed: Boolean = false,
+        val baseComponent: ComponentName = component,
     )
 
     private val activityManager = context.getSystemService(ActivityManager::class.java)
+    private val contextPackageManager = context.packageManager
 
     fun foregroundTask(): TaskSnapshot? = try {
         runningTasks().firstOrNull { snapshot ->
@@ -92,8 +94,19 @@ class TaskRepository(context: Context) {
             val userId = userHandle?.let(TaskInfoCompat::userIdentifier) ?: return@let snapshots
             snapshots.filter { it.userId == userId }
         }
-        return tasks.firstOrNull { it.component == component }
-            ?: tasks.firstOrNull { it.component.packageName == component.packageName }
+        tasks.firstOrNull { it.baseComponent == component }?.let { return it }
+        tasks.firstOrNull { it.component == component }?.let { return it }
+        val launcher = runCatching { contextPackageManager.getLaunchIntentForPackage(component.packageName)?.component }.getOrNull()
+        return selectForLaunch(tasks, component, launcher == component)
+    }
+
+    internal fun selectForLaunch(tasks: List<TaskSnapshot>, component: ComponentName, launcher: Boolean): TaskSnapshot? {
+        // A mini-program and the ordinary app can share a package but own
+        // different tasks. A launcher click must not steal the mini-program.
+        tasks.firstOrNull { it.baseComponent == component }?.let { return it }
+        tasks.firstOrNull { it.component == component }?.let { return it }
+        if (launcher) return null
+        return tasks.filter { it.component.packageName == component.packageName }.singleOrNull()
     }
 
     fun bringTaskToFront(taskId: Int): Result<Unit> = runCatching {
@@ -127,6 +140,7 @@ class TaskRepository(context: Context) {
             token = windowState.token,
             userId = TaskInfoCompat.readUserId(info),
             vendorWindowed = windowState.vendorWindowed,
+            baseComponent = info.baseIntent.component ?: info.baseActivity ?: component,
         )
     }
 

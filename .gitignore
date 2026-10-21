@@ -31,6 +31,7 @@ graphify-out/
 docs/*.md
 !docs/BUILDING.md
 !docs/ARCHITECTURE.md
+!docs/WORKBENCH.md
 docs/architecture/*
 !docs/architecture/nextep-architecture.json
 !docs/architecture/nextep-architecture.html

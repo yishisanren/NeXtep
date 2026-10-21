@@ -1,6 +1,6 @@
 # NeXtep Architecture
 
-NeXtep keeps the stock ColorOS launcher and adds a SystemUI-owned workspace with one main region and three live task slots.
+NeXtep keeps the stock ColorOS launcher and adds a SystemUI-owned workspace with one main region and four live task slots. A landscape scene can move one slot to the top, leaving three in the rail. See [the workbench fork](WORKBENCH.md) for tools, protected output and validation limits.
 
 ![NeXtep architecture](../assets/nextep-architecture.png)
 
@@ -11,7 +11,7 @@ The diagram maps process boundaries and responsibilities. Explore the standalone
 | Process | Responsibilities |
 |---------|------------------|
 | Ordinary NeXtep APK | Settings, Advanced and About pages; update checks; Quick Settings tile; trigger coordination and broker; persisted settings and permission-protected configuration services. |
-| `com.android.systemui` | Workspace state and lifecycle; control and app strips; media sessions; input and drag handling; main-task presentation; three VirtualDisplay slots; privileged app and clone catalogue. |
+| `com.android.systemui` | Workspace state and lifecycle; control and app strips; media sessions; input and drag handling; main-task presentation; four VirtualDisplay slots; privileged app and clone catalogue; payment/search dialogs and session capture policy. |
 | Resolved ColorOS HOME package | Launcher transforms and inverse input mapping; app-start redirection; desktop shortcut menus; reading the selected Recents card on supported launcher implementations. |
 | `com.coloros.assistantscreen` | Separate assistant-panel window transforms, input mapping and restoration based on workspace state. It remains a separate process from HOME. |
 | `com.oplus.multiapp` | Handles NeXtep-marked clone launches through the OEM resolver, preserving the requested Android user. Unmarked requests keep the OEM chooser behavior. |
@@ -51,7 +51,7 @@ SystemUI owns publication. Launcher and the assistant panel use this state to al
 
 [`WorkspaceViewport`](../app/src/main/kotlin/io/github/lujinxin/nextep/systemui/WorkspaceViewport.kt) and [`WorkspaceLayoutProfile`](../app/src/main/kotlin/io/github/lujinxin/nextep/workspace/WorkspaceLayoutProfile.kt) derive and record the shared layout. Both landscape directions, left/right slot placement and the optional three-button navigation adaptation use that model. After changing the system navigation mode, the user toggles navigation-button adaptation again.
 
-## Main window and three task slots
+## Main window and four task slots
 
 These are separate presentation responsibilities inside SystemUI.
 
@@ -59,7 +59,7 @@ These are separate presentation responsibilities inside SystemUI.
 
 [`NeXtepWindowController`](../app/src/main/kotlin/io/github/lujinxin/nextep/systemui/NeXtepWindowController.kt) owns workspace windows, the viewport, visual transitions and slot coordination. `TopAppStripView` includes media, layout/settings/exit controls and app shortcuts. `MediaControlView` follows the active media session and dispatches playback controls; opening its playback app uses the same main/slot task coordination.
 
-[`SlotTaskCoordinator`](../app/src/main/kotlin/io/github/lujinxin/nextep/display/SlotTaskCoordinator.kt) serializes task movement and exchanges. Each [`VirtualDisplaySlot`](../app/src/main/kotlin/io/github/lujinxin/nextep/display/VirtualDisplaySlot.kt) owns a `TextureView → Surface → VirtualDisplay` lifecycle. Slot resolution and density come from the current layout profile; they are not fixed device-specific constants.
+[`SlotTaskCoordinator`](../app/src/main/kotlin/io/github/lujinxin/nextep/display/SlotTaskCoordinator.kt) serializes task movement and exchanges. Each [`VirtualDisplaySlot`](../app/src/main/kotlin/io/github/lujinxin/nextep/display/VirtualDisplaySlot.kt) owns a secure `SurfaceView → Surface → VirtualDisplay` lifecycle. Temporary surface destruction disconnects output without destroying the task display. Slot resolution and density come from the current layout profile; the wide slot uses its own landscape canvas.
 
 Supported input paths include:
 

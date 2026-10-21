@@ -39,6 +39,10 @@ class TopAppStripView(
     private val onFrostStrengthChanged: (Int) -> Unit,
     private val onAppDragStarting: (View, Intent) -> Boolean,
     private val onAppDragTouch: (View, android.view.MotionEvent) -> Boolean,
+    private val onPaymentRequested: () -> Unit = {},
+    private val onThemeRequested: () -> Unit = {},
+    private val onToolsRequested: () -> Unit = {},
+    private val onCompareRequested: () -> Unit = {},
 ) : FrameLayout(context) {
     private var landscape = false
     private var controlOnLeft = false
@@ -50,6 +54,29 @@ class TopAppStripView(
 
     private val repository = TopAppRepository(context)
     private val mediaControl = MediaControlView(context, onMediaClicked)
+    private val mediaHost = FrameLayout(context).apply {
+        addView(mediaControl, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+    }
+    private var wideSlot: View? = null
+
+    internal fun setWideSlot(view: View?) {
+        if (wideSlot === view) return
+        wideSlot?.let { mediaHost.removeView(it) }
+        wideSlot = view
+        mediaControl.visibility = if (view == null) VISIBLE else GONE
+        view?.let {
+            (it.parent as? android.view.ViewGroup)?.removeView(it)
+            mediaHost.addView(it, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        }
+        requestLayout()
+    }
+
+    internal fun mediaPanel(): View = MediaControlView(context, onMediaClicked).apply {
+        addOnAttachStateChangeListener(object : OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) = setWorkspaceVisible(true)
+            override fun onViewDetachedFromWindow(v: View) = setWorkspaceVisible(false)
+        })
+    }
     private val titleView = LoopingTitleView(context).apply {
         visibility = View.GONE
         textSize = 16f
@@ -58,6 +85,13 @@ class TopAppStripView(
         maxLines = 1
         setSingleLine(true)
         ellipsize = android.text.TextUtils.TruncateAt.END
+    }
+    private val heading = TextView(context).apply {
+        text = AppLanguage.string(context, R.string.workbench_title)
+        textSize = 14f
+        setSingleLine(true)
+        ellipsize = android.text.TextUtils.TruncateAt.END
+        gravity = Gravity.CENTER_VERTICAL
     }
     private val titleIcon = ImageView(context).apply {
         contentDescription = "NeXtep"
@@ -90,10 +124,22 @@ class TopAppStripView(
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(6), 0, dp(6), 0)
     }
+    private val compareButton = TextView(context).apply {
+        text = AppLanguage.string(context, R.string.workbench_compare)
+        contentDescription = text
+        textSize = 12f
+        gravity = Gravity.CENTER
+        isFocusable = true
+        setOnClickListener { onCompareRequested() }
+    }
     private val appScroll = HorizontalScrollView(context).apply {
         isHorizontalScrollBarEnabled = false
         isFillViewport = true
-        addView(appRow, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
+        addView(LinearLayout(context).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(compareButton, LinearLayout.LayoutParams(dp(APP_TILE_WIDTH_DP), dp(44)))
+            addView(appRow, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
+        }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
     }
     private val leftButton = SideSelectionButton(context, SidebarSide.LEFT).apply {
         contentDescription = AppLanguage.string(context, R.string.window_side_left)
@@ -112,6 +158,10 @@ class TopAppStripView(
         contentDescription = AppLanguage.string(context, R.string.open_settings)
         setOnClickListener { onSettingsRequested() }
     }
+    private val paymentButton = toolButton("¥", R.string.workbench_payment, onPaymentRequested)
+    private val themeButton = toolButton("☀", R.string.workbench_theme, onThemeRequested)
+    private val toolsButton = toolButton("•••", R.string.workbench_more, onToolsRequested)
+    private var appearance = WorkbenchAppearance.DARK
     private val dividerPaint = Paint().apply { color = Color.argb(90, 255, 255, 255) }
     private var loading = false
     private var refreshPending = false
@@ -140,12 +190,12 @@ class TopAppStripView(
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(7), 0, dp(7), dp(WorkspaceControlMetrics.CONTENT_BOTTOM_PADDING_DP))
                 addView(
-                    mediaControl,
-                    LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(WorkspaceControlMetrics.MEDIA_HEIGHT_DP)),
-                )
-                addView(
                     actionRow(),
                     LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(WorkspaceControlMetrics.ACTION_HEIGHT_DP)),
+                )
+                addView(
+                    mediaHost,
+                    LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(WorkspaceControlMetrics.MEDIA_HEIGHT_DP)),
                 )
                 addView(
                     appScroll,
@@ -168,7 +218,11 @@ class TopAppStripView(
             val mediaHeight = WorkspaceControlMetrics.mediaHeightPixels(
                 MeasureSpec.getSize(heightMeasureSpec), resources.displayMetrics.density,
             )
-            mediaControl.layoutParams.height = mediaHeight
+            mediaHost.visibility = if (wideSlot == null && mediaHeight == 0) GONE else VISIBLE
+            mediaHost.layoutParams.height = if (wideSlot == null) mediaHeight else {
+                val fixed = WorkspaceControlMetrics.COMPACT_HEIGHT_DP - WorkspaceControlMetrics.MEDIA_HEIGHT_DP
+                (MeasureSpec.getSize(heightMeasureSpec) - dp(fixed)).coerceAtLeast(1)
+            }
         }
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
@@ -196,12 +250,19 @@ class TopAppStripView(
     }
 
     private fun updateTitle() {
+        heading.text = AppLanguage.string(context, R.string.workbench_title)
+        paymentButton.contentDescription = AppLanguage.string(context, R.string.workbench_payment)
+        themeButton.contentDescription = AppLanguage.string(context, R.string.workbench_theme)
+        toolsButton.contentDescription = AppLanguage.string(context, R.string.workbench_more)
+        compareButton.text = AppLanguage.string(context, R.string.workbench_compare)
+        compareButton.contentDescription = compareButton.text
         leftButton.contentDescription = AppLanguage.string(context, R.string.window_side_left)
         rightButton.contentDescription = AppLanguage.string(context, R.string.window_side_right)
         exitButton.contentDescription = AppLanguage.string(context, R.string.window_exit)
         settingsButton.contentDescription = AppLanguage.string(context, R.string.open_settings)
         dismissHint.text = AppLanguage.string(context, R.string.window_drop_background)
         mediaControl.refreshLanguage()
+        updateSideButtons()
         removeCallbacks(titleTick)
         titleTick.run()
     }
@@ -354,30 +415,56 @@ class TopAppStripView(
         postDelayed(refreshRetry, delay)
     }
 
+    internal fun setAppearance(value: WorkbenchAppearance) {
+        appearance = value
+        background = value.background()
+        titleView.setTextColor(value.text)
+        heading.setTextColor(value.text)
+        compareButton.setTextColor(value.accent)
+        compareButton.background = value.background(dp(12).toFloat(), dp(1))
+        listOf(paymentButton, themeButton, toolsButton).forEach {
+            it.setTextColor(value.accent)
+            it.background = value.background(dp(13).toFloat(), dp(1))
+        }
+        rightButton.glyphColor = value.text
+        rightButton.background = value.background(dp(13).toFloat(), dp(1))
+        setMediaWallpaperLight(value == WorkbenchAppearance.LIGHT)
+    }
+
+    private fun toolButton(glyph: String, label: Int, action: () -> Unit) = TextView(context).apply {
+        text = glyph
+        textSize = 23f
+        gravity = Gravity.CENTER
+        contentDescription = AppLanguage.string(context, label)
+        isFocusable = true
+        setOnClickListener { action() }
+    }
+
     private fun actionRow(): View = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         val buttonSize = dp(ACTION_BUTTON_SIZE_DP)
-        addView(leftButton, LinearLayout.LayoutParams(buttonSize, buttonSize))
-        addView(rightButton, LinearLayout.LayoutParams(buttonSize, buttonSize))
         addView(
-            FrameLayout(context).apply {
-                addView(titleView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-                addView(titleIcon, LayoutParams(dp(32), dp(32), Gravity.CENTER))
+            LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(heading, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(24)))
+                addView(FrameLayout(context).apply {
+                    addView(titleView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+                    addView(titleIcon, LayoutParams(dp(22), dp(22), Gravity.CENTER))
+                }, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
             },
             LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
                 marginStart = dp(10)
                 marginEnd = dp(10)
             },
         )
-        addView(
-            settingsButton,
-            LinearLayout.LayoutParams(buttonSize, buttonSize),
-        )
-        addView(
-            exitButton.apply { scaleX = if (sidebarSide == SidebarSide.LEFT) -1f else 1f },
-            LinearLayout.LayoutParams(buttonSize, buttonSize),
-        )
+        addView(themeButton, LinearLayout.LayoutParams(buttonSize, buttonSize))
+        addView(paymentButton, LinearLayout.LayoutParams(buttonSize, buttonSize))
+        rightButton.setOnClickListener {
+            onSidebarSideRequested(if (sidebarSide == SidebarSide.LEFT) SidebarSide.RIGHT else SidebarSide.LEFT)
+        }
+        addView(rightButton, LinearLayout.LayoutParams(buttonSize, buttonSize))
+        addView(toolsButton, LinearLayout.LayoutParams(buttonSize, buttonSize))
     }
 
     private fun renderApps(entries: List<TopAppRepository.AppEntry>) {
@@ -451,7 +538,10 @@ class TopAppStripView(
 
     private fun updateSideButtons() {
         leftButton.isSideSelected = sidebarSide == SidebarSide.LEFT
-        rightButton.isSideSelected = sidebarSide == SidebarSide.RIGHT
+        rightButton.isSideSelected = true
+        rightButton.representedSide = sidebarSide
+        rightButton.contentDescription = AppLanguage.string(context,
+            if (sidebarSide == SidebarSide.LEFT) R.string.window_side_right else R.string.window_side_left)
     }
 
     private fun installTouchableStatusBarPassThrough() {
@@ -503,7 +593,7 @@ class TopAppStripView(
 
     private companion object {
         const val APP_TILE_WIDTH_DP = 50
-        const val ACTION_BUTTON_SIZE_DP = 40
+        const val ACTION_BUTTON_SIZE_DP = 48
         const val REFRESH_INTERVAL_MS = 15_000L
         const val TOUCHABLE_INSETS_REGION = 3
     }
@@ -511,8 +601,12 @@ class TopAppStripView(
 
 private class SideSelectionButton(
     context: Context,
-    private val representedSide: SidebarSide,
+    representedSide: SidebarSide,
 ) : View(context) {
+    var representedSide = representedSide
+        set(value) { field = value; invalidate() }
+    var glyphColor = Color.WHITE
+        set(value) { field = value; invalidate() }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = dp(1.15f)
@@ -552,13 +646,13 @@ private class SideSelectionButton(
         } else {
             17f
         }
-        paint.color = Color.WHITE
+        paint.color = glyphColor
         paint.alpha = if (isSideSelected) 255 else 150
         paint.style = if (isSideSelected) Paint.Style.FILL_AND_STROKE else Paint.Style.STROKE
         canvas.drawRect(mainRect, paint)
-        repeat(3) { index ->
-            val top = 1f + index * 8f
-            canvas.drawRect(rect(stackLeft, top, stackLeft + 5f, top + 6f), paint)
+        repeat(io.github.lujinxin.nextep.display.WORKSPACE_SLOT_COUNT) { index ->
+            val top = 1f + index * 6f
+            canvas.drawRect(rect(stackLeft, top, stackLeft + 5f, top + 4f), paint)
         }
     }
 

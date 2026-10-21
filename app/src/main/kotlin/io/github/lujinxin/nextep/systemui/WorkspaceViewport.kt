@@ -57,6 +57,8 @@ internal class WorkspaceViewport(
     private var cached: Snapshot? = null
     private var cachedKey: String? = null
     private var profile: WorkspaceLayoutProfile? = null
+    private var baseProfile: WorkspaceLayoutProfile? = null
+    private var wideSlotIndex: Int? = null
     private val notifyChanged = Runnable { onChanged() }
     private val displayManager = context.getSystemService(DisplayManager::class.java)
 
@@ -110,6 +112,16 @@ internal class WorkspaceViewport(
         }
     }
 
+    fun setWideSlot(index: Int?) {
+        if (index == wideSlotIndex) return
+        wideSlotIndex = index
+        val recorded = baseProfile ?: layout().withWideSlot(null)
+        profile = recorded.withWideSlot(index)
+        SystemServerWorkspaceBridge.publishLayout(context, checkNotNull(profile))
+        handler.removeCallbacks(notifyChanged)
+        handler.post(notifyChanged)
+    }
+
     private fun refresh() {
         val metrics = context.resources.displayMetrics
         val rotation = displayManager?.getDisplay(Display.DEFAULT_DISPLAY)?.rotation ?: 0
@@ -119,7 +131,7 @@ internal class WorkspaceViewport(
         if (cachedKey == key && cached != null) return
         val encoded = runCatching { preferences?.getString(key, null) }.getOrNull()
         val savedProfile = WorkspaceLayoutProfile.decode(encoded)?.takeIf {
-            navigationButtonsEnabled || it.geometry.navigationInsets == WorkspaceNavigationInsets()
+            it.wideSlotIndex == null && (navigationButtonsEnabled || it.geometry.navigationInsets == WorkspaceNavigationInsets())
         }?.let { it.copy(geometry = it.geometry.copy(displayRotation = rotation)) }
         if (savedProfile != null) {
             val g = savedProfile.geometry
@@ -161,8 +173,9 @@ internal class WorkspaceViewport(
 
     private fun updateSnapshot(snapshot: Snapshot, key: String?, saved: WorkspaceLayoutProfile? = null) {
         if (cached != snapshot || profile == null) {
-            profile = saved ?: WorkspaceLayoutProfile.create(snapshot.width, snapshot.height,
+            baseProfile = saved ?: WorkspaceLayoutProfile.create(snapshot.width, snapshot.height,
                 (snapshot.density * 160).roundToInt(), snapshot.navigationInsets, snapshot.displayRotation)
+            profile = checkNotNull(baseProfile).withWideSlot(wideSlotIndex)
             SystemServerWorkspaceBridge.publishLayout(context, checkNotNull(profile))
         }
         cached = snapshot
@@ -175,7 +188,7 @@ internal class WorkspaceViewport(
                 val otherKeys = preferences?.all?.keys.orEmpty()
                     .filter { (it.startsWith(BUTTONS_PREFIX) || it.startsWith(FULL_PREFIX)) && it != key }
                 otherKeys.take((otherKeys.size - MAX_PROFILES + 1).coerceAtLeast(0)).forEach(::remove)
-                putString(key, checkNotNull(profile).encode())
+                putString(key, checkNotNull(baseProfile).encode())
             }?.apply()
         }.onFailure { NeXtepLog.warn("workspace_viewport", "Unable to save viewport profile", it) }
     }

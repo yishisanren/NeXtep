@@ -42,7 +42,7 @@
           "slots",
           "android"
         ],
-        "note": "主窗口在 Display 0 呈现；三个小窗使用独立 VirtualDisplay 承载任务。"
+        "note": "主窗口在 Display 0 呈现；四个小窗使用独立 VirtualDisplay 承载任务。"
       },
       {
         "id": "hosts",
@@ -260,7 +260,7 @@
     {
       "id": "slots",
       "type": "backend",
-      "label": "三个实时小窗",
+      "label": "四个实时小窗",
       "sublabel": "VirtualDisplay · 任务迁移",
       "pos": [
         970,
@@ -675,7 +675,7 @@
       "title": "两种任务呈现",
       "items": [
         "主窗口保持在 Display 0，桌面和普通应用分别适配",
-        "三个 VirtualDisplay 承载小窗任务，支持移动、交换及退后台"
+        "四个 VirtualDisplay 承载小窗任务，支持移动、交换及退后台"
       ]
     },
     {

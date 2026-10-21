@@ -28,9 +28,9 @@
 
 # NeXtep
 
-This fork's `1.2.3-corner.3` uses diagonal inward/upward swipes from either bottom corner and reduces repeated work in gesture monitoring, task animation, dragging, wallpaper blur, and app-strip refreshes. [Custom APK releases](https://github.com/yishisanren/NeXtep/releases) · [Performance changes and local validation](docs/PERFORMANCE.md). This release awaits user device validation; no device FPS improvement is claimed. In-app update checks and the original compatibility statements below refer to upstream. Installing an upstream build restores the original gesture.
+This fork's `1.3.0-workbench.1` adds four live side slots, light/dark appearance, a pinned landscape app, top-right payment tools, multi-app product search, and standard content drop-to-share. It keeps the existing app selection, bottom-corner diagonal gestures and corner.3 performance work. [Custom APK](https://github.com/yishisanren/NeXtep/releases/tag/v1.3.0-workbench.1) · [Features and validation limits](docs/WORKBENCH.md) · [Earlier performance work](docs/PERFORMANCE.md). This is a prerelease for user device validation. Payment/search routes, five-app operation, secure output and device smoothness have not passed device acceptance. In-app updates still target upstream; installing an upstream build replaces this fork's features.
 
-**NeXtep** is an **LSPosed module** that adds a **native side workspace** to ColorOS 16 / 17 while keeping the **stock launcher**. It provides **one main window and three live task slots**, with task switching, drag-and-drop, media controls, and customizable app shortcuts integrated into SystemUI.
+**NeXtep** is an **LSPosed module** that adds a **native side workspace** to ColorOS 16 / 17 while keeping the **stock launcher**. It provides **one main window and four live task slots**, with task switching, drag-and-drop, media controls, and customizable app shortcuts integrated into SystemUI.
 
 The project primarily targets **OnePlus PLK110**, previously verified on **Android 16 / ColorOS 16**. Recent feature and compatibility testing is based on **Android 17 / ColorOS 17**. It relies on private Android and ColorOS behavior, so **other devices, ROM versions, and vendor launchers require adaptation**.
 
@@ -43,9 +43,9 @@ The project primarily targets **OnePlus PLK110**, previously verified on **Andro
 ### Workspace and layout
 
 - **Stock launcher:** keeps the ColorOS launcher without registering a replacement HOME app, with adaptations for launcher shortcut menus, desktop search, and the assistant panel.
-- **One main window and three live slots:** keep several app tasks visible together and move whole tasks between the main window and slots.
+- **One main window and four live slots:** keep several app tasks visible together and move whole tasks between the main window and slots.
 - **Left and right layouts:** switch the slot sidebar using the layout buttons in the control area.
-- **Portrait and both landscape orientations:** keep the controls at the phone's physical top while the main app follows the landscape direction. The controls and three slots remain available during landscape video playback.
+- **Portrait and both landscape orientations:** controls stay at the phone's physical top. Landscape video/game requests can pin that task above the main window and three remaining side slots. The tools menu also provides a manual pin toggle.
 - **Navigation-button adaptation:** optionally fit the main window and slots around the system navigation bar. Enable it for three-button navigation and disable it for gesture navigation; after changing the system navigation mode, toggle the option again.
 - **Task retention:** restore eligible slot tasks that remain in the system when closing and reopening the workspace. Locking pauses slot output; unlocking restores the workspace with its tasks.
 - **System integration:** coexists with native floating windows above the workspace panels, and includes adaptations for keyboard focus, notification shade and Control Center interaction, brightness controls, and video-window sizing.
@@ -167,7 +167,7 @@ These switches are on the **Settings** page; appearance and app ordering are des
 
 ## Architecture
 
-The diagram shows how the regular APK coordinates with the LSPosed-injected SystemUI, stock launcher, assistant panel, app-clone service, and system_server. It separates main-window presentation from the three live slots and shows configuration reads, change notifications, and shared runtime state. Compatibility hooks are guarded individually and skip unavailable targets.
+The diagram shows how the regular APK coordinates with the LSPosed-injected SystemUI, stock launcher, assistant panel, app-clone service, and system_server. It separates main-window presentation from the four live slots and shows configuration reads, change notifications, and shared runtime state. Compatibility hooks are guarded individually and skip unavailable targets.
 
 [Architecture details](docs/ARCHITECTURE.md) · [Interactive diagram (download HTML to view)](docs/architecture/nextep-architecture.html) · [Diagram source](docs/architecture/nextep-architecture.json)
 

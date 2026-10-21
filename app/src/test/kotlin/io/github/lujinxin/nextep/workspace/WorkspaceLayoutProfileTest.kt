@@ -21,9 +21,11 @@ class WorkspaceLayoutProfileTest {
                         val drawnWidth = slot.width * transform.scaleX
                         val drawnHeight = slot.height * transform.scaleY
                         val message = "$width x $height navigation=$insets side=$side slot=$index"
-                        // Whole-buffer fitting may leave at most integer-pixel rounding.
+                        // One rounded rail-width pixel can expand to an aspect-ratio
+                        // worth of height; the live Surface is fitted uniformly too.
                         assertEquals(message, slot.width.toFloat(), drawnWidth, 1.5f)
-                        assertEquals(message, slot.height.toFloat(), drawnHeight, 1.5f)
+                        assertEquals(message, slot.height.toFloat(), drawnHeight,
+                            positioned.canvas.height.toFloat() / positioned.canvas.width + 1f)
                         assertEquals(message, slot.width / positioned.canvas.width.toFloat() * transform.scaleX,
                             slot.height / positioned.canvas.height.toFloat() * transform.scaleY, .000001f)
                     }
@@ -102,15 +104,11 @@ class WorkspaceLayoutProfileTest {
     @Test
     fun oldFullCanvasProfileMigratesUsingItsRecordedNavigationInsets() {
         val buttons = WorkspaceLayoutProfile.create(1080, 2354, 480, WorkspaceNavigationInsets(bottom = 132))
-        val old = buttons.encode().split(',').toMutableList()
-        old.removeAt(29)
-        old[0] = "2"
-        old[15] = "2354"
-        old[19] = "2354"
+        val old = legacyRecord(buttons, "2")
         val migrated = checkNotNull(WorkspaceLayoutProfile.decode(old.joinToString(",")))
         assertEquals(buttons, migrated)
         assertEquals(2222, migrated.canvas.height)
-        assertEquals("5", migrated.encode().substringBefore(','))
+        assertEquals("6", migrated.encode().substringBefore(','))
     }
 
     @Test
@@ -120,13 +118,7 @@ class WorkspaceLayoutProfileTest {
                 if (insets.bottom == 0) 286 else 303, SidebarSide.RIGHT, insets)
             val recorded = WorkspaceLayoutProfile(oldGeometry, 480, 3)
             for (version in listOf("2", "3")) {
-                val old = recorded.encode().split(',').toMutableList()
-                old.removeAt(29)
-                old[0] = version
-                if (version == "2") {
-                    old[15] = "2354"
-                    old[19] = "2354"
-                }
+                val old = legacyRecord(recorded, version)
                 val migrated = checkNotNull(WorkspaceLayoutProfile.decode(old.joinToString(",")))
                 assertEquals(insets, migrated.geometry.navigationInsets)
                 assertEquals(1080, migrated.canvas.width)
@@ -142,9 +134,7 @@ class WorkspaceLayoutProfileTest {
     @Test
     fun oldLayoutProfileKeepsRecordedDimensionsWhenRotationIsAdded() {
         val profile = WorkspaceLayoutProfile.create(2354, 1080, 480, WorkspaceNavigationInsets(left = 132))
-        val old = profile.encode().split(',').toMutableList()
-        old[0] = "4"
-        old.removeAt(29)
+        val old = legacyRecord(profile, "4")
         val restored = checkNotNull(WorkspaceLayoutProfile.decode(old.joinToString(",")))
         val reversed = restored.copy(geometry = restored.geometry.copy(displayRotation = 1))
         assertEquals(profile, restored)
@@ -160,5 +150,54 @@ class WorkspaceLayoutProfileTest {
         parts[14] = "300" // stale native canvas width must not be combined with this profile.
         assertNull(WorkspaceLayoutProfile.decode(parts.joinToString(",")))
         assertNull(WorkspaceLayoutProfile.decode("1080,2354,3,0,0,0,0"))
+    }
+
+    @Test
+    fun threeSlotCalibrationMigratesToFourSlotsUsingTheSameRecordedDisplay() {
+        val old = WorkspaceLayoutProfile(WorkspaceGeometry(1080, 2354, 590, 271, SidebarSide.RIGHT), 480, 3)
+        val migrated = checkNotNull(WorkspaceLayoutProfile.decode(legacyRecord(old, "5").joinToString(",")))
+        assertEquals(4, migrated.slots.size)
+        assertEquals(WorkspaceLayoutProfile.create(1080, 2354, 480, WorkspaceNavigationInsets()), migrated)
+    }
+
+    @Test
+    fun wideVideoAndThreeRailAppsKeepTheirCanvasAndSurviveBothLandscapeRotations() {
+        for ((width, height) in listOf(1080 to 2354, 2354 to 1080, 1600 to 2560)) {
+            for (rotation in if (width > height) listOf(1, 3) else listOf(0)) {
+                val normal = WorkspaceLayoutProfile.create(width, height, 480, WorkspaceNavigationInsets(), rotation)
+                for (index in 0..3) {
+                    val wide = normal.withWideSlot(index)
+                    assertEquals(4, wide.slots.size)
+                    assertTrue(wide.canvas(index).width > wide.canvas(index).height)
+                    assertEquals(wide, WorkspaceLayoutProfile.decode(wide.encode()))
+                    val rail = wide.slots.filterIndexed { i, _ -> i != index }
+                    assertEquals(3, rail.size)
+                    assertEquals(wide.geometry.sidebarLogicalHeight, rail.last().top + rail.last().height)
+                    for (slot in rail) assertTrue(slot.width > 0 && slot.height > 0)
+                    val g = wide.geometry
+                    assertTrue(g.availableLeft * g.contentScale + g.contentTranslationX >= g.contentLeft - 1f)
+                    assertTrue(g.availableTop * g.contentScale + g.contentTranslationY >= g.contentTop - 1f)
+                    assertEquals(normal, wide.withWideSlot(null))
+                }
+            }
+        }
+    }
+
+    private fun legacyRecord(profile: WorkspaceLayoutProfile, version: String): MutableList<String> {
+        val old = profile.encode().split(',').take(20).toMutableList()
+        old[0] = version
+        val usable = profile.geometry.sidebarLogicalHeight - profile.gapPixels * 2
+        val base = usable / 3
+        val extra = usable % 3
+        repeat(3) { index -> old.addAll(listOf(profile.geometry.sidebarWidth - profile.gapPixels,
+            base + if (index < extra) 1 else 0, index * (base + profile.gapPixels) + minOf(index, extra)).map(Int::toString)) }
+        if (version == "5") old += profile.geometry.displayRotation.toString()
+        if (version == "2") {
+            old[14] = minOf(profile.geometry.screenWidth, profile.geometry.screenHeight).toString()
+            old[15] = maxOf(profile.geometry.screenWidth, profile.geometry.screenHeight).toString()
+            old[18] = old[14]
+            old[19] = old[15]
+        }
+        return old
     }
 }

@@ -18,6 +18,8 @@ internal object WorkspaceControlMetrics {
         val fixedHeight = dp(STATUS_HEIGHT_DP) + dp(ACTION_HEIGHT_DP) + dp(APP_ICON_SIZE_DP) +
             dp(APP_BOTTOM_PADDING_DP) + dp(CONTENT_BOTTOM_PADDING_DP)
         // Keep status/actions/icons intact when the recorded control area is shorter.
-        return minOf(dp(MEDIA_HEIGHT_DP), (controlHeight - fixedHeight).coerceAtLeast(1))
+        val available = (controlHeight - fixedHeight).coerceAtLeast(0)
+        // Keep the card in the tools panel when an inline title/play row would clip.
+        return if (available < dp(24)) 0 else minOf(dp(MEDIA_HEIGHT_DP), available)
     }
 }

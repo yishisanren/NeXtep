@@ -82,7 +82,7 @@
     <string name="app_icon_description">NeXtep アイコン</string>
     <string name="about_tagline">一歩、さらにもう一歩。</string>
     <string name="about_tribute">OneStep に敬意を表し、ColorOS 標準ランチャーでサイドマルチタスクの体験を継承します。</string>
-    <string name="about_windows_title">メインウィンドウ 1 つ、小ウィンドウ 3 つ</string>
+    <string name="about_windows_title">メインウィンドウ 1 つ、小ウィンドウ 4 つ</string>
     <string name="about_features">複数のアプリを並べて操作し、ドラッグでウィンドウを交換したり、履歴カードからアプリを続けて追加したりできます。小ウィンドウを上部の操作エリアにドラッグすると、バックグラウンドに戻せます。上部にはメディア操作、よく使うアプリ、カスタムテキストなども表示できます。</string>
     <string name="about_compatibility">LSPosed を通じてシステム UI に組み込み、端末の元のランチャーを維持します。システム更新後は、一部の機能に調整が必要になる場合があります。</string>
     <string name="about_credits">ライセンス · Apache License 2.0\n作者 · lujinxin (Jensen Lu)</string>

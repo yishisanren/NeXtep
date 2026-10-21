@@ -9,7 +9,8 @@ import android.graphics.drawable.GradientDrawable
 import android.view.DragEvent
 import android.view.Gravity
 import android.view.MotionEvent
-import android.view.TextureView
+import android.view.SurfaceView
+import android.view.SurfaceHolder
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
@@ -30,10 +31,14 @@ class TaskSwitcherView(
         fun onSlotBackgroundSwiped(drag: SlotTaskDrag): Boolean
         fun onSlotDragEnded()
         fun onSlotDropped(slotIndex: Int, drag: SlotTaskDrag): Boolean
+        fun onContentDropped(slotIndex: Int, event: DragEvent): Boolean = false
     }
 
-    var textureView: TextureView = createTextureView()
+    var textureView: SurfaceView = createSurfaceView()
         private set
+    private var captureAllowed = false
+    private var outputWidth = 0
+    private var outputHeight = 0
 
     private val statusView = TextView(context).apply {
         setTextColor(Color.WHITE)
@@ -59,10 +64,14 @@ class TaskSwitcherView(
     )
 
     init {
-        clipToOutline = false
+        background = GradientDrawable().apply {
+            cornerRadius = dp(14).toFloat()
+            setColor(Color.rgb(30, 42, 58))
+            setStroke(dp(1), Color.rgb(57, 72, 91))
+        }
+        clipToOutline = true
         isClickable = true
-        setBackgroundColor(Color.TRANSPARENT)
-        addView(textureView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(textureView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
         addView(
             statusView,
             LayoutParams(dp(30), dp(30), Gravity.CENTER),
@@ -158,29 +167,48 @@ class TaskSwitcherView(
         }
     }
 
-    fun replaceTextureView(listener: TextureView.SurfaceTextureListener): TextureView {
+    fun replaceTextureView(listener: SurfaceHolder.Callback): SurfaceView {
         backgroundSwipe.cancel()
         waiting = true
         val previous = textureView
         previous.animate().cancel()
-        previous.surfaceTextureListener = null
+        previous.holder.removeCallback(listener)
         removeView(previous)
 
-        return createTextureView().also { replacement ->
-            replacement.surfaceTextureListener = listener
+        return createSurfaceView().also { replacement ->
+            replacement.holder.addCallback(listener)
             textureView = replacement
             addView(
                 replacement,
                 0,
-                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT),
+                LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER),
             )
         }
     }
 
     override fun onInterceptTouchEvent(event: MotionEvent): Boolean = true
 
+    fun setOutputSize(width: Int, height: Int) {
+        require(width > 0 && height > 0)
+        if (outputWidth == width && outputHeight == height) return
+        outputWidth = width
+        outputHeight = height
+        requestLayout()
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        if (outputWidth <= 0 || outputHeight <= 0) return
+        val scale = minOf(measuredWidth.toFloat() / outputWidth, measuredHeight.toFloat() / outputHeight)
+        textureView.measure(MeasureSpec.makeMeasureSpec((outputWidth * scale).toInt().coerceAtLeast(1), MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec((outputHeight * scale).toInt().coerceAtLeast(1), MeasureSpec.EXACTLY))
+    }
+
     fun capturePreview(): Bitmap? = runCatching {
-        val bitmap = textureView.bitmap ?: return@runCatching null
+        if (!captureAllowed) return@runCatching null
+        val task = currentState as? SlotState.Occupied ?: return@runCatching null
+        val bitmap = io.github.lujinxin.nextep.framework.TaskSurfaceCompat.capturePreview(task.taskId)
+            ?: return@runCatching null
         // TextureView returns its logical portrait buffer. Follow the rail's
         // actual transform so reverse-landscape drag/swap previews face correctly.
         val panelRotation = (parent as? View)?.rotation ?: 0f
@@ -221,7 +249,8 @@ class TaskSwitcherView(
             val localDrag = event.localState as? SlotTaskDrag
             val accepted = !busy && (localDrag != null &&
                 currentState.inDragTargetStates() || currentState !is SlotState.Occupied &&
-                AppDragContract.accepts(event.clipDescription))
+                AppDragContract.accepts(event.clipDescription) ||
+                currentState is SlotState.Occupied && ContentDropCompat.accepts(event.clipDescription))
             NeXtepLog.info(
                 "slot_drag",
                 "slot=$slotIndex started accepted=$accepted busy=$busy state=$currentState " +
@@ -258,7 +287,8 @@ class TaskSwitcherView(
             val intent = AppDragContract.readLaunchIntent(event.clipData)
             val handled = !busy && if (localDrag != null) {
                 listener?.onSlotDropped(slotIndex, localDrag) == true
-            } else intent != null && listener?.onIntentDropped(slotIndex, intent) == true
+            } else if (intent != null) listener?.onIntentDropped(slotIndex, intent) == true
+            else listener?.onContentDropped(slotIndex, event) == true
             NeXtepLog.info(
                 "slot_drag",
                 "slot=$slotIndex drop handled=$handled component=${intent?.component}",
@@ -341,7 +371,22 @@ class TaskSwitcherView(
             setColor(color)
         }
 
-    private fun createTextureView(): TextureView = TextureView(context)
+    fun setCaptureAllowed(allowed: Boolean) {
+        captureAllowed = allowed
+        textureView.setSecure(!allowed)
+    }
+
+    fun setAppearance(card: Int, outline: Int, text: Int) {
+        (background as? GradientDrawable)?.apply { setColor(card); setStroke(dp(1), outline) }
+        statusView.setTextColor(text)
+    }
+
+    private fun createSurfaceView(): SurfaceView = SurfaceView(context).apply {
+        // SurfaceTexture cannot present protected buffers. The display AND its
+        // output layer must remain secure to show payment/password windows.
+        setSecure(!captureAllowed)
+        setZOrderMediaOverlay(true)
+    }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 

@@ -1,0 +1,32 @@
+<resources>
+    <string name="workbench_title">マルチタスク</string>
+    <string name="workbench_theme">ライト／ダーク表示を切り替え</string>
+    <string name="workbench_payment">支払いとスキャン</string>
+    <string name="workbench_more">ワークスペースのツール</string>
+    <string name="workbench_wechat_scan">WeChat · スキャン</string>
+    <string name="workbench_wechat_pay">WeChat · 支払いコード</string>
+    <string name="workbench_alipay_scan">Alipay · スキャン</string>
+    <string name="workbench_alipay_pay">Alipay · 支払いコード</string>
+    <string name="workbench_unavailable">このアプリのバージョンでは利用できません。アプリ内から開いてください。</string>
+    <string name="workbench_compare">価格比較</string>
+    <string name="workbench_delivery">デリバリー</string>
+    <string name="workbench_shopping">買い物</string>
+    <string name="workbench_query">検索する商品</string>
+    <string name="workbench_search">各アプリで検索</string>
+    <string name="workbench_query_empty">商品名を200文字以内で入力してください。</string>
+    <string name="workbench_delivery_apps">京東秒送 · 淘宝閃購 · 美団デリバリー</string>
+    <string name="workbench_shopping_apps">拼多多 · 抖音商城 · 京東 · 淘宝</string>
+    <string name="workbench_compare_failed">空きウィンドウを確保し、アプリが検索リンクに対応しているか確認してください。</string>
+    <string name="workbench_compare_missing">対応するアプリが2つ以上必要です。</string>
+    <string name="workbench_capture">今回のみ画面キャプチャを許可</string>
+    <string name="workbench_capture_on">今回のみキャプチャを許可しました。終了、ロック、バックグラウンド移行で保護を戻します。</string>
+    <string name="workbench_capture_off">画面キャプチャの保護を戻しました。</string>
+    <string name="workbench_hide_recents">最近のタスクでワークスペースのアプリを非表示</string>
+    <string name="workbench_export">診断ログを書き出す</string>
+    <string name="workbench_exported">診断ログをダウンロードに保存しました。</string>
+    <string name="workbench_export_failed">診断ログを保存できませんでした。</string>
+    <string name="workbench_drop_unsupported">受信アプリが未対応か、送信元からアクセスが許可されていません。</string>
+    <string name="workbench_wide">横向きアプリを上部に配置</string>
+    <string name="workbench_wide_failed">上部に配置できる横向きアプリがありません。</string>
+    <string name="workbench_cancel">キャンセル</string>
+</resources>

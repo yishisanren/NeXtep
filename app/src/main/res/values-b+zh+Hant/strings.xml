@@ -82,7 +82,7 @@
     <string name="app_icon_description">NeXtep 圖示</string>
     <string name="about_tagline">一步，再進一步。</string>
     <string name="about_tribute">向 OneStep 致敬，在原生 ColorOS 桌面上延續側邊多工的體驗。</string>
-    <string name="about_windows_title">一個主視窗，三個小視窗</string>
+    <string name="about_windows_title">一個主視窗，四個小視窗</string>
     <string name="about_features">並排處理不同應用程式，拖曳交換視窗，從背景卡片連續新增應用程式。將小視窗拖曳至頂部控制區，即可移回背景。頂部還提供媒體控制、常用應用程式和自訂文字等功能。</string>
     <string name="about_compatibility">本專案透過 LSPosed 接入系統介面，保留手機原有桌面。系統升級後，部分功能可能需要調整。</string>
     <string name="about_credits">開源授權 · Apache License 2.0\n作者 · lujinxin (Jensen Lu)</string>

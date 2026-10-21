@@ -13,9 +13,9 @@ class WorkspaceControlMetricsTest {
             val mediaHeight = WorkspaceControlMetrics.mediaHeightPixels(controlHeight, 3f)
             val rowHeight = controlHeight - (WorkspaceControlMetrics.STATUS_HEIGHT_DP +
                 WorkspaceControlMetrics.ACTION_HEIGHT_DP + WorkspaceControlMetrics.CONTENT_BOTTOM_PADDING_DP) * 3 - mediaHeight
-            assertEquals((WorkspaceControlMetrics.APP_ICON_SIZE_DP +
-                WorkspaceControlMetrics.APP_BOTTOM_PADDING_DP) * 3, rowHeight)
-            assertTrue("Artwork and two text rows must fit in the smaller card", mediaHeight >= 48 * 3)
+            assertTrue(rowHeight >= (WorkspaceControlMetrics.APP_ICON_SIZE_DP +
+                WorkspaceControlMetrics.APP_BOTTOM_PADDING_DP) * 3)
+            assertTrue("A clipped media card must move to tools", mediaHeight == 0 || mediaHeight >= 24 * 3)
         }
     }
 

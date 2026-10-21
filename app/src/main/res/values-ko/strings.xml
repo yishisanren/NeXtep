@@ -82,7 +82,7 @@
     <string name="app_icon_description">NeXtep 아이콘</string>
     <string name="about_tagline">한 걸음, 그리고 또 한 걸음.</string>
     <string name="about_tribute">OneStep에 경의를 표하며, ColorOS 기본 런처에서 측면 멀티태스킹 경험을 이어갑니다.</string>
-    <string name="about_windows_title">기본 창 하나, 작은 창 세 개</string>
+    <string name="about_windows_title">기본 창 하나, 작은 창 네 개</string>
     <string name="about_features">앱을 나란히 사용하고, 드래그로 창을 바꾸며, 최근 앱 카드에서 앱을 연속으로 추가할 수 있습니다. 작은 창을 상단 제어 영역으로 드래그하면 백그라운드로 이동합니다. 상단에는 미디어 제어, 자주 사용하는 앱, 사용자 지정 텍스트 등의 기능도 있습니다.</string>
     <string name="about_compatibility">LSPosed를 통해 시스템 UI에 통합되며 휴대전화의 기존 런처를 유지합니다. 시스템 업데이트 후 일부 기능은 조정이 필요할 수 있습니다.</string>
     <string name="about_credits">라이선스 · Apache License 2.0\n개발자 · lujinxin (Jensen Lu)</string>

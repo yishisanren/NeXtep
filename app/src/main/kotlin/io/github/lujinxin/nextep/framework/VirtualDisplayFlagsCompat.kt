@@ -8,9 +8,9 @@ object VirtualDisplayFlagsCompat {
 
     fun resolveCandidates(): List<Resolved> {
         val fallbackValue = DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY or
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION or DisplayManager.VIRTUAL_DISPLAY_FLAG_SECURE
         var value = fallbackValue
-        val names = mutableListOf("OWN_CONTENT_ONLY", "PRESENTATION")
+        val names = mutableListOf("OWN_CONTENT_ONLY", "PRESENTATION", "SECURE")
 
         listOf(
             "VIRTUAL_DISPLAY_FLAG_TRUSTED" to "TRUSTED",
@@ -36,7 +36,7 @@ object VirtualDisplayFlagsCompat {
         val preferred = Resolved(value, names.toList())
         val fallback = Resolved(
             fallbackValue,
-            listOf("OWN_CONTENT_ONLY", "PRESENTATION"),
+            listOf("OWN_CONTENT_ONLY", "PRESENTATION", "SECURE"),
         )
         return listOf(preferred, ownFocus, fallback).distinctBy { it.value }.also { candidates ->
             NeXtepLog.info(

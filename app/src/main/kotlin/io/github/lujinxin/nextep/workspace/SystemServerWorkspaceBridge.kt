@@ -18,6 +18,10 @@ object SystemServerWorkspaceBridge {
     private const val GEOMETRY_KEY = "nextep_workspace_geometry_v1"
     private val geometryObservationStarted = AtomicBoolean(false)
     @Volatile private var observedGeometry: WorkspaceGeometry? = null
+    @Volatile private var privateTaskIds: Set<Int> = emptySet()
+    private const val PRIVATE_TASKS_KEY = "nextep_workspace_private_task_ids_v1"
+    private const val SCENE_KEY = "nextep_workspace_scene_request_v1"
+    private const val WIDE_DISPLAY_KEY = "nextep_workspace_wide_display_v1"
 
     /** Subscribe once in system_server. WM animation callbacks then read only RAM. */
     fun startGeometryObservation(context: Context) {
@@ -26,12 +30,18 @@ object SystemServerWorkspaceBridge {
         handler.post {
             runCatching {
                 val resolver = context.contentResolver
-                fun refresh() { observedGeometry = readActiveGeometry(context) }
+                fun refresh() {
+                    observedGeometry = readActiveGeometry(context)
+                    privateTaskIds = if (observedGeometry == null) emptySet() else
+                        Settings.Global.getString(resolver, PRIVATE_TASKS_KEY).orEmpty().split(',')
+                            .mapNotNull(String::toIntOrNull).filter { it >= 0 }.toSet()
+                }
                 val observer = object : ContentObserver(handler) {
                     override fun onChange(selfChange: Boolean) = refresh()
                 }
                 resolver.registerContentObserver(Settings.Global.getUriFor(ACTIVE_KEY), false, observer)
                 resolver.registerContentObserver(Settings.Global.getUriFor(GEOMETRY_KEY), false, observer)
+                resolver.registerContentObserver(Settings.Global.getUriFor(PRIVATE_TASKS_KEY), false, observer)
                 refresh()
             }.onFailure {
                 geometryObservationStarted.set(false)
@@ -41,6 +51,37 @@ object SystemServerWorkspaceBridge {
     }
 
     fun observedActiveGeometry(): WorkspaceGeometry? = observedGeometry
+
+    fun privateTask(taskId: Int): Boolean = observedGeometry != null && taskId in privateTaskIds
+
+    fun publishPrivateTasks(context: Context, taskIds: Set<Int>) {
+        runCatching {
+            val value = taskIds.filter { it >= 0 }.sorted().joinToString(",")
+            if (Settings.Global.getString(context.contentResolver, PRIVATE_TASKS_KEY) != value)
+                Settings.Global.putString(context.contentResolver, PRIVATE_TASKS_KEY, value)
+        }.onFailure { NeXtepLog.warn("workspace_privacy", "Unable to publish private tasks", it) }
+    }
+
+    internal fun publishScene(context: Context, request: WorkspaceSceneRequest) {
+        Settings.Global.putString(context.contentResolver, SCENE_KEY, request.encode())
+    }
+
+    internal fun scene(context: Context): WorkspaceSceneRequest? = runCatching {
+        WorkspaceSceneRequest.decode(Settings.Global.getString(context.contentResolver, SCENE_KEY))
+            ?.takeIf { it.fresh(android.os.SystemClock.uptimeMillis()) }
+    }.getOrNull()
+
+    internal fun clearScene(context: Context) {
+        runCatching { Settings.Global.putString(context.contentResolver, SCENE_KEY, "") }
+    }
+
+    fun publishWideDisplay(context: Context, displayId: Int?) {
+        runCatching { Settings.Global.putInt(context.contentResolver, WIDE_DISPLAY_KEY, displayId ?: -1) }
+    }
+
+    fun isWideDisplay(context: Context, displayId: Int): Boolean = displayId > 0 && runCatching {
+        Settings.Global.getInt(context.contentResolver, WIDE_DISPLAY_KEY, -1) == displayId && isWorkspaceActive(context)
+    }.getOrDefault(false)
 
     fun publishLayout(context: Context, profile: WorkspaceLayoutProfile) {
         runCatching {

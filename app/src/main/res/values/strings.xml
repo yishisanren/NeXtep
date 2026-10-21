@@ -90,7 +90,7 @@
     <string name="app_icon_description">NeXtep icon</string>
     <string name="about_tagline">One step, then another.</string>
     <string name="about_tribute">A tribute to OneStep, bringing side-by-side multitasking to the native ColorOS launcher.</string>
-    <string name="about_windows_title">One main window, three small windows</string>
+    <string name="about_windows_title">One main window, four small windows</string>
     <string name="about_features">Use apps side by side, drag to swap windows, and add apps from recent-task cards. Drag a small window to the top controls to send it to the background. The top area also offers media controls, frequently used apps, and custom text.</string>
     <string name="about_compatibility">This project integrates with the system UI through LSPosed and keeps your phone’s original launcher. Some features may need adjustments after system updates.</string>
     <string name="about_credits">License · Apache License 2.0\nAuthor · lujinxin (Jensen Lu)</string>

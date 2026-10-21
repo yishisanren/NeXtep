@@ -1,0 +1,32 @@
+<resources>
+    <string name="workbench_title">멀티태스킹 작업 공간</string>
+    <string name="workbench_theme">밝은 테마 / 어두운 테마 전환</string>
+    <string name="workbench_payment">결제 및 스캔</string>
+    <string name="workbench_more">작업 공간 도구</string>
+    <string name="workbench_wechat_scan">WeChat · 스캔</string>
+    <string name="workbench_wechat_pay">WeChat · 결제 코드</string>
+    <string name="workbench_alipay_scan">Alipay · 스캔</string>
+    <string name="workbench_alipay_pay">Alipay · 결제 코드</string>
+    <string name="workbench_unavailable">이 앱 버전에서는 지원하지 않습니다. 앱에서 직접 열어 주세요.</string>
+    <string name="workbench_compare">가격 비교</string>
+    <string name="workbench_delivery">배달</string>
+    <string name="workbench_shopping">쇼핑</string>
+    <string name="workbench_query">검색할 상품</string>
+    <string name="workbench_search">여러 앱에서 검색</string>
+    <string name="workbench_query_empty">상품명을 200자 이내로 입력해 주세요.</string>
+    <string name="workbench_delivery_apps">JD 즉시 배송 · Taobao 즉시 배송 · Meituan 배달</string>
+    <string name="workbench_shopping_apps">Pinduoduo · Douyin Mall · JD · Taobao</string>
+    <string name="workbench_compare_failed">빈 보조 창을 확보하고 앱이 검색 링크를 지원하는지 확인해 주세요.</string>
+    <string name="workbench_compare_missing">지원되는 앱이 두 개 이상 필요합니다.</string>
+    <string name="workbench_capture">이번 세션에서 화면 캡처 허용</string>
+    <string name="workbench_capture_on">이번 세션에서 캡처가 허용됩니다. 종료, 잠금 또는 백그라운드 전환 시 보호가 복원됩니다.</string>
+    <string name="workbench_capture_off">화면 캡처 보호가 복원되었습니다.</string>
+    <string name="workbench_hide_recents">최근 작업에서 작업 공간 앱 숨기기</string>
+    <string name="workbench_export">진단 로그 내보내기</string>
+    <string name="workbench_exported">진단 로그가 다운로드 폴더에 저장되었습니다.</string>
+    <string name="workbench_export_failed">진단 로그를 저장하지 못했습니다.</string>
+    <string name="workbench_drop_unsupported">대상 앱이 지원하지 않거나 원본 앱에서 접근을 허용하지 않았습니다.</string>
+    <string name="workbench_wide">가로 앱을 상단에 배치</string>
+    <string name="workbench_wide_failed">상단에 배치할 수 있는 가로 앱이 없습니다.</string>
+    <string name="workbench_cancel">취소</string>
+</resources>

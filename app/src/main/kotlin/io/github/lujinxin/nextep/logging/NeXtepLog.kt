@@ -5,6 +5,9 @@ import android.util.Log
 
 object NeXtepLog {
     private const val TAG = "NeXtep"
+    private val events = java.util.ArrayDeque<String>()
+
+    fun diagnostics(): String = synchronized(events) { events.joinToString("\n") }
 
     fun debug(feature: String, message: String) = write(Log.DEBUG, feature, message, null)
     fun info(feature: String, message: String) = write(Log.INFO, feature, message, null)
@@ -14,6 +17,12 @@ object NeXtepLog {
         write(Log.ERROR, feature, message, error)
 
     private fun write(priority: Int, feature: String, message: String, error: Throwable?) {
+        synchronized(events) {
+            if (events.size == 128) events.removeFirst()
+            // Deliberately exclude message/Intent/ClipData: they may contain a
+            // search phrase, URI, account label or text dragged from another app.
+            events.addLast("${android.os.SystemClock.uptimeMillis()} priority=$priority feature=$feature error=${error?.javaClass?.simpleName ?: "none"}")
+        }
         val enriched = "pid=${android.os.Process.myPid()} thread=${Thread.currentThread().name} " +
             "feature=$feature sdk=${Build.VERSION.SDK_INT} message=$message"
         val output = if (error == null) enriched else "$enriched\n${Log.getStackTraceString(error)}"
