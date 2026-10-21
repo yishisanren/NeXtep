@@ -16,8 +16,8 @@
     <string name="tile_add_manually">請在控制中心編輯頁面新增 NeXtep</string>
     <string name="tile_entry_title">控制中心入口</string>
     <string name="tile_entry_summary">新增 NeXtep 快捷開關</string>
-    <string name="gesture_title">狀態列觸發手勢</string>
-    <string name="gesture_summary">從右側向左滑動，開啟或關閉工作區。</string>
+    <string name="gesture_title">底角觸發手勢</string>
+    <string name="gesture_summary">從左下角向右上、或右下角向左上斜滑，開啟或關閉工作區。</string>
     <string name="background_swipe_title">小視窗 App 橫滑移至背景</string>
     <string name="background_swipe_summary">左側小視窗向左滑，右側小視窗向右滑。</string>
     <string name="auto_minimize_title">頂列切換時縮小原應用程式</string>

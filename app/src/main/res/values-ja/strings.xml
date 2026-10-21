@@ -16,8 +16,8 @@
     <string name="tile_add_manually">クイック設定の編集画面から NeXtep を追加してください。</string>
     <string name="tile_entry_title">クイック設定ショートカット</string>
     <string name="tile_entry_summary">NeXtep タイルを追加</string>
-    <string name="gesture_title">ステータスバーのジェスチャー</string>
-    <string name="gesture_summary">右側から左にスワイプして、ワークスペースを開閉します。</string>
+    <string name="gesture_title">画面下隅のジェスチャー</string>
+    <string name="gesture_summary">画面の左下または右下から中央へ斜め上にスワイプして、ワークスペースを開閉します。</string>
     <string name="background_swipe_title">小ウィンドウをスワイプしてバックグラウンドへ</string>
     <string name="background_swipe_summary">左側のウィンドウは左へ、右側のウィンドウは右へスワイプします。</string>
     <string name="auto_minimize_title">トップバーで切り替える際に前のアプリを最小化</string>

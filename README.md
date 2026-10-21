@@ -28,6 +28,8 @@
 
 # NeXtep
 
+This fork's `1.2.3-corner.1` replaces the status-bar gesture with diagonal inward/upward swipes from either bottom corner. This custom build has not been device-tested; the release links and original device compatibility statements below refer to upstream.
+
 **NeXtep** is an **LSPosed module** that adds a **native side workspace** to ColorOS 16 / 17 while keeping the **stock launcher**. It provides **one main window and three live task slots**, with task switching, drag-and-drop, media controls, and customizable app shortcuts integrated into SystemUI.
 
 The project primarily targets **OnePlus PLK110**, previously verified on **Android 16 / ColorOS 16**. Recent feature and compatibility testing is based on **Android 17 / ColorOS 17**. It relies on private Android and ColorOS behavior, so **other devices, ROM versions, and vendor launchers require adaptation**.
@@ -123,7 +125,7 @@ Testing has not covered every app or edge case. Other devices and ROMs require s
 
 After enabling the module and rebooting, unlock the device. Use any of these entry points:
 
-- **Status-bar gesture:** swipe horizontally to the left from the top-right status-bar area. Swiping down still opens the system notification shade or Control Center. The gesture is enabled by default and can be disabled independently.
+- **Bottom-corner gesture:** swipe with one finger diagonally inward and upward from either bottom corner to open or close the workspace. Corners follow the current screen orientation. Start within 72 dp of both edges, then move at least 32 dp inward and upward. Short, horizontal, vertical, and multi-finger gestures do not trigger it. The existing gesture preference is preserved.
 - **Control Center tile:** in NeXtep's Settings, tap **Add** in the **Control Center entry** row and confirm. Pull down Control Center and tap **NeXtep** to toggle the workspace. If adding it from the app fails, use Control Center's edit screen.
 - **External commands:** copy commands from the **Advanced** page into a gesture, shortcut, automation, or terminal tool; see below.
 - **Exit button:** tap the exit button in the workspace control area to return to fullscreen.
@@ -158,7 +160,7 @@ These switches are on the **Settings** page; appearance and app ordering are des
 
 | Setting | Default | Behavior |
 |---------|---------|----------|
-| Status-bar gesture | On | Enable or disable the top-right horizontal gesture. The Control Center tile remains available. |
+| Bottom-corner gesture | On | Enable or disable diagonal inward/upward swipes from either bottom corner. The Control Center tile remains available. |
 | Swipe slot apps to the background | On | Enable or disable outward swipe dismissal. Dragging a slot to the control area remains available. |
 | Park the previous main app when switching | Off | Move the previous main app into an empty slot when switching from the app strip; switch normally if none is available. |
 | Navigation-button adaptation | Off | Enable for three-button navigation and disable for gesture navigation. Toggle again after changing the system navigation mode. |

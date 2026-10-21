@@ -16,8 +16,8 @@
     <string name="tile_add_manually">빠른 설정 편집 화면에서 NeXtep을 추가하세요.</string>
     <string name="tile_entry_title">빠른 설정 바로가기</string>
     <string name="tile_entry_summary">NeXtep 타일 추가</string>
-    <string name="gesture_title">상태 표시줄 제스처</string>
-    <string name="gesture_summary">오른쪽에서 왼쪽으로 스와이프하여 작업 공간을 열거나 닫습니다.</string>
+    <string name="gesture_title">화면 아래 모서리 제스처</string>
+    <string name="gesture_summary">화면의 왼쪽 또는 오른쪽 아래 모서리에서 중앙을 향해 대각선 위로 스와이프하여 작업 공간을 열거나 닫습니다.</string>
     <string name="background_swipe_title">작은 창을 스와이프하여 백그라운드로 이동</string>
     <string name="background_swipe_summary">왼쪽 작은 창은 왼쪽으로, 오른쪽 작은 창은 오른쪽으로 스와이프합니다.</string>
     <string name="auto_minimize_title">상단 표시줄에서 전환 시 이전 앱 최소화</string>

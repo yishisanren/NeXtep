@@ -180,6 +180,7 @@ object SystemUiRuntime {
                 NeXtepLog.warn("systemui_runtime", "Lifecycle receiver unavailable", error)
             }
             Handler(Looper.getMainLooper()).post {
+                SystemUiBottomCornerGestureMonitor.install(applicationContext)
                 SystemServerWorkspaceBridge.publish(applicationContext, false)
                 WorkspaceStateBridge.requestInactiveFromSystemUi(applicationContext)
                 // OWN_DISPLAY_GROUP virtual screens can keep the device globally interactive

@@ -24,8 +24,8 @@
     <string name="tile_add_manually">Add NeXtep from the Quick Settings editor.</string>
     <string name="tile_entry_title">Quick Settings shortcut</string>
     <string name="tile_entry_summary">Add the NeXtep tile</string>
-    <string name="gesture_title">Status bar gesture</string>
-    <string name="gesture_summary">Swipe left from the right side to open or close the workspace.</string>
+    <string name="gesture_title">Bottom corner gesture</string>
+    <string name="gesture_summary">Swipe diagonally inward and upward from either bottom corner to open or close the workspace.</string>
     <string name="background_swipe_title">Swipe small windows to background</string>
     <string name="background_swipe_summary">Swipe left on left-side windows, or right on right-side windows.</string>
     <string name="auto_minimize_title">Minimize the previous app when switching</string>

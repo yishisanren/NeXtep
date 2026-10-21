@@ -160,7 +160,6 @@ class TopAppStripView(
         })
         updateSideButtons()
         installTouchableStatusBarPassThrough()
-        post { SystemUiStatusBarGestureInstaller.install(this) }
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {

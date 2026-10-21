@@ -40,6 +40,7 @@ class SettingsRepository(private val context: Context) {
         textSizeSp = preferences.getInt("top_text_size", TopTextStyle.DEFAULT_SIZE_SP)
             .coerceIn(TopTextStyle.MIN_SIZE_SP, TopTextStyle.MAX_SIZE_SP),
         textBold = preferences.getBoolean("top_text_bold", false),
+        // Preserve the existing preference so disabling the old gesture also disables its replacement.
         statusBarGestureEnabled = preferences.getBoolean("status_bar_gesture_enabled", true),
         slotBackgroundSwipeEnabled = preferences.getBoolean("slot_background_swipe_enabled", true),
         autoMinimizeMainOnTopAppSwitch = preferences.getBoolean("auto_minimize_main_on_top_app_switch", false),
