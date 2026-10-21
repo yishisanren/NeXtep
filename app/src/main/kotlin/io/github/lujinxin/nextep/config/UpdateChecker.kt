@@ -27,7 +27,8 @@ internal object UpdateChecker {
             return release.takeIf { code > installedCode }
         }
 
-        val current = versionParts(installedName) ?: error("当前版本格式无法比较，请查看下载页面")
+        val current = versionParts(installedName.substringBefore("-corner."))
+            ?: error("当前版本格式无法比较，请查看下载页面")
         val releases = JSONArray(fetch(API_URL))
         val candidates = (0 until releases.length()).mapNotNull { index ->
             val json = releases.getJSONObject(index)

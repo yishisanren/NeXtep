@@ -28,7 +28,7 @@
 
 # NeXtep
 
-This fork's `1.2.3-corner.1` replaces the status-bar gesture with diagonal inward/upward swipes from either bottom corner. This custom build has not been device-tested; the release links and original device compatibility statements below refer to upstream.
+This fork's `1.2.3-corner.1` replaces the status-bar gesture with diagonal inward/upward swipes from either bottom corner. This custom build has not been device-tested; the release links, in-app update checks, and original device compatibility statements below refer to upstream. Installing an upstream build restores the original gesture.
 
 **NeXtep** is an **LSPosed module** that adds a **native side workspace** to ColorOS 16 / 17 while keeping the **stock launcher**. It provides **one main window and three live task slots**, with task switching, drag-and-drop, media controls, and customizable app shortcuts integrated into SystemUI.
 
