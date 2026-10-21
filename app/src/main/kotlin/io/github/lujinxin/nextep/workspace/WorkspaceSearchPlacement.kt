@@ -4,7 +4,7 @@ package io.github.lujinxin.nextep.workspace
 internal object WorkspaceSearchPlacement {
     class NoSpace : IllegalStateException("Not enough empty slots")
     fun plan(packages: List<String>, slots: List<String?>, promotedSlot: Int? = null): List<Int> {
-        require(packages.size in 2..5 && packages.distinct().size == packages.size)
+        require(packages.size in 1..5 && packages.distinct().size == packages.size)
         val available = slots.toMutableList()
         promotedSlot?.let { index ->
             require(index in available.indices && available[index] == packages.first())

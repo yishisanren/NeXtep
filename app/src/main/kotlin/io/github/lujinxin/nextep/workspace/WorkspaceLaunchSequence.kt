@@ -8,8 +8,12 @@ internal class WorkspaceLaunchSequence<T>(
     private val ready: (T) -> Boolean,
     private val commit: (T) -> Unit,
     private val busy: (Boolean) -> Unit,
+    private val prepare: (List<T>) -> Boolean = { true },
 ) {
-    class Failure(val index: Int, val completed: Int, cause: Throwable) : Exception(cause)
+    class PreparationTimeout : java.util.concurrent.TimeoutException("Target windows did not become ready")
+    enum class Stage { START, OBSERVE, PLACE }
+    class Failure(val index: Int, val completed: Int, cause: Throwable,
+        val stage: Stage = Stage.START) : Exception(cause)
     var running = false
         private set
     private var generation = 0
@@ -35,23 +39,32 @@ internal class WorkspaceLaunchSequence<T>(
             fun next(index: Int) {
                 if (generation != token || !running) return
                 val request = pending[index]
-                fun fail(error: Throwable) = finish(Result.failure(Failure(index, index, error)))
+                fun fail(error: Throwable, stage: Stage = Stage.START) =
+                    finish(Result.failure(Failure(index, index, error, stage)))
                 try { start(request) } catch (error: Throwable) { fail(error); return }
                 fun poll(attempt: Int) {
                     if (generation != token || !running) return
                     try {
                         if (ready(request)) {
-                            commit(request)
+                            try { commit(request) } catch (error: Throwable) { fail(error, Stage.PLACE); return }
                             if (index == pending.lastIndex) finish(Result.success(Unit))
                             else schedule(100L) { next(index + 1) }
                         } else if (attempt >= 50) {
-                            fail(java.util.concurrent.TimeoutException("Application did not produce a foreground task"))
+                            fail(java.util.concurrent.TimeoutException("Application task/surface did not become ready"), Stage.OBSERVE)
                         } else schedule(100L) { poll(attempt + 1) }
-                    } catch (error: Throwable) { fail(error) }
+                    } catch (error: Throwable) { fail(error, Stage.OBSERVE) }
                 }
                 schedule(150L) { poll(0) }
             }
-            schedule(0L) { next(0) }
+            fun prepareWindows(attempt: Int) {
+                if (generation != token || !running) return
+                try {
+                    if (prepare(pending)) next(0)
+                    else if (attempt >= 20) finish(Result.failure(PreparationTimeout()))
+                    else schedule(250L) { prepareWindows(attempt + 1) }
+                } catch (error: Throwable) { finish(Result.failure(error)) }
+            }
+            schedule(0L) { prepareWindows(0) }
         }.onFailure {
             running = false
             completion = null

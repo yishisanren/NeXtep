@@ -17,7 +17,7 @@
     <string name="workbench_delivery_apps">JD Instant · Taobao Instant · Meituan Delivery</string>
     <string name="workbench_shopping_apps">Pinduoduo · Douyin Mall · JD · Taobao</string>
     <string name="workbench_compare_failed">Keep enough empty side windows and check the installed app versions.</string>
-    <string name="workbench_compare_missing">At least two supported apps must be installed.</string>
+    <string name="workbench_compare_missing">No installed app supports these search entries.</string>
     <string name="workbench_capture">Allow capture for this session</string>
     <string name="workbench_capture_on">Capture allowed for this session. Protection returns on exit, lock or backgrounding.</string>
     <string name="workbench_capture_off">Capture protection restored.</string>
@@ -38,4 +38,6 @@
     <string name="workbench_compare_space">There are not enough free side windows.</string>
     <string name="workbench_launch_timeout">The app did not appear in the foreground before the timeout.</string>
     <string name="workbench_launch_denied">The system denied this app launch or window move.</string>
+    <string name="workbench_window_timeout">The target window did not become ready. Close and reopen the workspace, then try again.</string>
+    <string name="workbench_place_failed">The app opened, but could not be placed in its window.</string>
 </resources>

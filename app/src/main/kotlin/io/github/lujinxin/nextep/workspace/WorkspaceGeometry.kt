@@ -90,7 +90,8 @@ data class WorkspaceGeometry(
         get() = contentLeft + (contentWidth - availableWidth * contentScale) / 2f - availableLeft * contentScale
 
     val contentTranslationY: Float
-        get() = contentTop + (contentHeight - availableHeight * contentScale) / 2f - availableTop * contentScale
+        // Keep the app flush with the header; spare height belongs below it.
+        get() = contentTop - availableTop * contentScale
 
     companion object {
         const val TOP_HEIGHT_FRACTION = 0.265f

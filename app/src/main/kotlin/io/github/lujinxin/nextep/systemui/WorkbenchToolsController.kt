@@ -126,7 +126,7 @@ internal class WorkbenchToolsController(
             targets.text = requested.joinToString("\n") { target ->
                 (if (target in available) "✓  " else "—  ") + target.name
             }
-            if (available.size < 2) { message(R.string.workbench_compare_missing); return@setOnClickListener }
+            if (available.isEmpty()) { message(R.string.workbench_compare_missing); return@setOnClickListener }
             searching = true
             query.isEnabled = false
             for (index in 0 until buttons.childCount) buttons.getChildAt(index).isEnabled = false
@@ -149,10 +149,12 @@ internal class WorkbenchToolsController(
                     val original = failure?.cause ?: error
                     val cause = if (original is java.lang.reflect.InvocationTargetException) original.targetException else original
                     val reason = when (cause) {
+                        is io.github.lujinxin.nextep.workspace.WorkspaceLaunchSequence.PreparationTimeout -> R.string.workbench_window_timeout
                         is io.github.lujinxin.nextep.workspace.WorkspaceSearchPlacement.NoSpace -> R.string.workbench_compare_space
                         is java.util.concurrent.TimeoutException -> R.string.workbench_launch_timeout
                         is SecurityException -> R.string.workbench_launch_denied
-                        else -> R.string.workbench_launch_failed
+                        else -> if (failure?.stage == io.github.lujinxin.nextep.workspace.WorkspaceLaunchSequence.Stage.PLACE)
+                            R.string.workbench_place_failed else R.string.workbench_launch_failed
                     }
                     val name = available.getOrNull(failure?.index ?: 0)?.name.orEmpty()
                     query.error = string(R.string.workbench_search_failed_detail,

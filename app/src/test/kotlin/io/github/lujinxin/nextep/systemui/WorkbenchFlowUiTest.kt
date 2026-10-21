@@ -137,6 +137,19 @@ class WorkbenchFlowUiTest {
         assertFalse(dialog.isShowing)
     }
 
+    @Test fun oneAvailableSearchAppStillReceivesTheQuery() {
+        val expected = WorkbenchIntents.searches(WorkbenchIntents.Search.DELIVERY, "milk")[1]
+        exported(expected.intent)
+        var submitted = emptyList<Intent>()
+        val tools = tools({ apps, _ -> submitted = apps; Result.success(Unit) })
+        tools.showSearch()
+        val dialog = ShadowAlertDialog.getLatestAlertDialog()
+        descendants(dialog.window!!.decorView).filterIsInstance<EditText>().single().setText("milk")
+        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
+        assertEquals(listOf(expected.intent.data), submitted.map { it.data })
+        tools.dismiss()
+    }
+
     @Test fun partialSearchFailureNamesTheAppAndDoesNotPretendToComplete() {
         val query = "milk"
         val apps = WorkbenchIntents.searches(WorkbenchIntents.Search.DELIVERY, query)
@@ -247,7 +260,94 @@ class WorkbenchFlowUiTest {
         assertFalse(coordinator.selectingDesktopApp)
     }
 
-    @Test fun selectingAnAppAfterItsTargetDisplayChangedCannotOpenItInTheWrongWindow() {
+    @Test fun plusStartsHomeEvenBeforeASurfaceExistsOrAfterDisplayCreationFailed() {
+        exported(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), "test.launcher")
+        val slots = List(4) { io.github.lujinxin.nextep.display.VirtualDisplaySlot(context, it) }
+        val coordinator = io.github.lujinxin.nextep.display.SlotTaskCoordinator(context, slots,
+            io.github.lujinxin.nextep.task.MainTaskPresentationCoordinator(context),
+            { WorkspaceGeometry.forDisplay(360, 800, density = 1f) })
+        coordinator.javaClass.getDeclaredField("active").apply { isAccessible = true }.set(coordinator, true)
+        for (failed in listOf(false, true)) {
+            if (failed) coordinator.onDisplayFailed(0, "test: surface not yet available")
+            slots[0].view.performClick()
+            assertTrue(coordinator.selectingDesktopApp)
+            val home = shadowOf(context).nextStartedActivity
+            assertTrue(home.hasCategory(Intent.CATEGORY_HOME))
+            assertEquals("test.launcher", home.`package`)
+            slots[0].view.performClick()
+            assertFalse(coordinator.selectingDesktopApp)
+        }
+    }
+
+    @Test fun searchWaitsForLateDisplaysThenStartsTheActualResolvedIntent() {
+        val apps = WorkbenchIntents.searches(WorkbenchIntents.Search.DELIVERY, "milk")
+        apps.forEach { exported(it.intent) }
+        val slots = List(4) { io.github.lujinxin.nextep.display.VirtualDisplaySlot(context, it) }
+        val coordinator = io.github.lujinxin.nextep.display.SlotTaskCoordinator(context, slots,
+            io.github.lujinxin.nextep.task.MainTaskPresentationCoordinator(context),
+            { WorkspaceGeometry.forDisplay(360, 800, density = 1f) })
+        coordinator.javaClass.getDeclaredField("active").apply { isAccessible = true }.set(coordinator, true)
+        var complete: Result<Unit>? = null
+        assertTrue(coordinator.openSearches(apps.map { it.intent }) { complete = it }.isSuccess)
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(500))
+        assertNull(complete)
+        assertNull(shadowOf(context).nextStartedActivity)
+        val displays = slots.mapIndexed { index, slot ->
+            val display = context.getSystemService(android.hardware.display.DisplayManager::class.java)
+                .createVirtualDisplay("test-slot-$index", 360, 800, 160, null, 0)!!
+            slot.javaClass.getDeclaredField("virtualDisplay").apply { isAccessible = true }.set(slot, display)
+            coordinator.onDisplayReady(index, display.display.displayId)
+            display
+        }
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(250))
+        val launched = shadowOf(context).nextStartedActivity
+        assertNotNull(launched)
+        assertEquals(apps[0].intent.data, launched.data)
+        assertEquals(apps[0].intent.`package`, launched.component?.packageName)
+        coordinator.cancelApplicationLaunch()
+        assertTrue(complete!!.exceptionOrNull() is java.util.concurrent.CancellationException)
+        displays.forEach { it.release() }
+    }
+
+    @Test fun aReplacedDisplayCannotReceiveThePreviouslySelectedApp() {
+        exported(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), "test.launcher")
+        val slots = List(4) { io.github.lujinxin.nextep.display.VirtualDisplaySlot(context, it) }
+        val coordinator = io.github.lujinxin.nextep.display.SlotTaskCoordinator(context, slots,
+            io.github.lujinxin.nextep.task.MainTaskPresentationCoordinator(context),
+            { WorkspaceGeometry.forDisplay(360, 800, density = 1f) })
+        coordinator.javaClass.getDeclaredField("active").apply { isAccessible = true }.set(coordinator, true)
+        coordinator.onDisplayReady(0, 42)
+        slots[0].view.performClick()
+        shadowOf(context).nextStartedActivity
+        val display = context.getSystemService(android.hardware.display.DisplayManager::class.java)
+            .createVirtualDisplay("replacement", 360, 800, 160, null, 0)!!
+        assertNotEquals(42, display.display.displayId)
+        slots[0].javaClass.getDeclaredField("virtualDisplay").apply { isAccessible = true }.set(slots[0], display)
+        coordinator.onDisplayReady(0, display.display.displayId)
+        assertTrue(coordinator.openFromLauncher(Intent(Intent.ACTION_MAIN).setPackage("test.app")).isFailure)
+        assertFalse(coordinator.selectingDesktopApp)
+        assertNull(shadowOf(context).nextStartedActivity)
+        display.release()
+    }
+
+    @Test fun plusWithARestoreReservationStillOpensHomeWithoutDiscardingThatReservation() {
+        exported(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), "test.launcher")
+        val slots = List(4) { io.github.lujinxin.nextep.display.VirtualDisplaySlot(context, it) }
+        val coordinator = io.github.lujinxin.nextep.display.SlotTaskCoordinator(context, slots,
+            io.github.lujinxin.nextep.task.MainTaskPresentationCoordinator(context),
+            { WorkspaceGeometry.forDisplay(360, 800, density = 1f) })
+        coordinator.javaClass.getDeclaredField("active").apply { isAccessible = true }.set(coordinator, true)
+        coordinator.onDisplayReady(0, 42)
+        val record = (field(coordinator, "slotRecords") as List<*>).first()!!
+        val retained = record.javaClass.getDeclaredField("retainedTaskId").apply { isAccessible = true }
+        retained.set(record, 777)
+        slots[0].view.performClick()
+        assertTrue(coordinator.selectingDesktopApp)
+        assertTrue(shadowOf(context).nextStartedActivity.hasCategory(Intent.CATEGORY_HOME))
+        assertEquals(777, retained.get(record))
+    }
+
+    @Test fun selectingAnAppBeforeItsDisplayExistsQueuesAndCanBeCancelled() {
         exported(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), "test.launcher")
         val slots = List(4) { io.github.lujinxin.nextep.display.VirtualDisplaySlot(context, it) }
         val slot = slots.first()
@@ -258,10 +358,16 @@ class WorkbenchFlowUiTest {
         coordinator.onDisplayReady(0, 42)
         slot.view.performClick()
         shadowOf(context).nextStartedActivity
-        val app = Intent(Intent.ACTION_MAIN).setComponent(ComponentName("test.app", "test.app.Main"))
-        assertTrue(coordinator.openFromLauncher(app).isFailure)
+        val app = Intent(Intent.ACTION_MAIN).setPackage("test.app")
+        val resolved = exported(app)
+        app.component = ComponentName("test.app", resolved.activityInfo.name)
+        assertTrue(coordinator.openFromLauncher(app).isSuccess)
         assertFalse(coordinator.selectingDesktopApp)
+        assertTrue(coordinator.launchingApps)
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(500))
         assertNull(shadowOf(context).nextStartedActivity)
+        coordinator.cancelApplicationLaunch()
+        assertFalse(coordinator.launchingApps)
     }
 
     private fun descendants(view: View): List<View> = listOf(view) +

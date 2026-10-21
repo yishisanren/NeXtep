@@ -17,7 +17,7 @@
     <string name="workbench_delivery_apps">京东秒送 · 淘宝闪购 · 美团外卖</string>
     <string name="workbench_shopping_apps">拼多多 · 抖音商城 · 京东 · 淘宝</string>
     <string name="workbench_compare_failed">请留出足够的空侧窗，并检查已安装应用版本是否支持搜索入口。</string>
-    <string name="workbench_compare_missing">至少需要安装两个支持此入口的应用。</string>
+    <string name="workbench_compare_missing">未找到支持这些搜索入口的已安装应用。</string>
     <string name="workbench_capture">本次允许截图／录屏</string>
     <string name="workbench_capture_on">本次已允许截图与录屏；退出、锁屏或退到后台后恢复保护。</string>
     <string name="workbench_capture_off">已恢复截图保护。</string>
@@ -38,4 +38,6 @@
     <string name="workbench_compare_space">空闲小窗不足，请先腾出位置。</string>
     <string name="workbench_launch_timeout">等待应用出现在前台超时。</string>
     <string name="workbench_launch_denied">系统拒绝启动或移动此应用。</string>
+    <string name="workbench_window_timeout">目标小窗未能就绪，请退出工作台后重新打开再试。</string>
+    <string name="workbench_place_failed">应用已打开，但无法放入目标窗口。</string>
 </resources>

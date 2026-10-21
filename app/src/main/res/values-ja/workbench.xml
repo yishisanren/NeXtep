@@ -17,7 +17,7 @@
     <string name="workbench_delivery_apps">京東秒送 · 淘宝閃購 · 美団デリバリー</string>
     <string name="workbench_shopping_apps">拼多多 · 抖音商城 · 京東 · 淘宝</string>
     <string name="workbench_compare_failed">空きウィンドウを確保し、アプリが検索リンクに対応しているか確認してください。</string>
-    <string name="workbench_compare_missing">対応するアプリが2つ以上必要です。</string>
+    <string name="workbench_compare_missing">この検索に対応するインストール済みアプリがありません。</string>
     <string name="workbench_capture">今回のみ画面キャプチャを許可</string>
     <string name="workbench_capture_on">今回のみキャプチャを許可しました。終了、ロック、バックグラウンド移行で保護を戻します。</string>
     <string name="workbench_capture_off">画面キャプチャの保護を戻しました。</string>
@@ -38,4 +38,6 @@
     <string name="workbench_compare_space">空いている小窓が不足しています。</string>
     <string name="workbench_launch_timeout">アプリの表示を待機中にタイムアウトしました。</string>
     <string name="workbench_launch_denied">システムがアプリの起動または移動を拒否しました。</string>
+    <string name="workbench_window_timeout">対象ウィンドウを準備できませんでした。ワークスペースを開き直してください。</string>
+    <string name="workbench_place_failed">アプリは開きましたが、対象ウィンドウに配置できませんでした。</string>
 </resources>

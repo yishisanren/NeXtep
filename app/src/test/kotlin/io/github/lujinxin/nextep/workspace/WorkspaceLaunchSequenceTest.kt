@@ -13,12 +13,14 @@ class WorkspaceLaunchSequenceTest {
         var result: Result<Unit>? = null
         var startFailure: String? = null
         var moveFailure: String? = null
+        var windowsReady = true
         val flow = WorkspaceLaunchSequence<String>(
             { _, action -> scheduled.addLast(action) },
             { if (it == startFailure) throw SecurityException(); started += it },
             { it in visible },
             { if (it == moveFailure) error("move rejected"); committed += it },
             { busy += it },
+            { windowsReady },
         )
         fun step() { scheduled.removeFirst().invoke() }
         fun drain() { repeat(200) { if (scheduled.isNotEmpty()) step() } }
@@ -44,6 +46,34 @@ class WorkspaceLaunchSequenceTest {
         assertFalse(f.flow.running)
     }
 
+    @Test fun delayedWindowsDoNotRejectOrStartTheSearchPrematurely() {
+        val f = Fixture(); f.windowsReady = false; f.visible += "app"
+        f.begin("app"); repeat(4) { f.step() }
+        assertTrue(f.flow.running)
+        assertTrue(f.started.isEmpty())
+        assertNull(f.result)
+        f.windowsReady = true; f.drain()
+        assertEquals(listOf("app"), f.committed)
+        assertTrue(f.result!!.isSuccess)
+    }
+
+    @Test fun unavailableWindowsTimeOutBeforeLaunchingAnyApp() {
+        val f = Fixture(); f.windowsReady = false
+        f.begin("app"); f.drain()
+        assertTrue(f.result!!.exceptionOrNull() is WorkspaceLaunchSequence.PreparationTimeout)
+        assertTrue(f.started.isEmpty())
+        assertEquals(listOf(true, false), f.busy)
+    }
+
+    @Test fun cancelWhilePreparingCannotLaunchTheOldBatchAfterWindowsAppear() {
+        val f = Fixture(); f.windowsReady = false
+        f.begin("old"); f.step(); f.flow.cancel()
+        f.windowsReady = true; f.visible += "new"
+        f.begin("new"); f.drain()
+        assertEquals(listOf("new"), f.started)
+        assertEquals(listOf("new"), f.committed)
+    }
+
     @Test fun anExistingForegroundAppCanBeCommittedWithoutWaitingForANewTaskId() {
         val f = Fixture(); f.visible += "existing"
         f.begin("existing"); f.drain()
@@ -55,6 +85,7 @@ class WorkspaceLaunchSequenceTest {
         val f = Fixture(); f.startFailure = "denied"
         f.begin("denied", "untouched"); f.drain()
         val error = f.result!!.exceptionOrNull() as WorkspaceLaunchSequence.Failure
+        assertEquals(WorkspaceLaunchSequence.Stage.START, error.stage)
         assertEquals(0, error.index)
         assertEquals(0, error.completed)
         assertTrue(error.cause is SecurityException)
@@ -85,6 +116,7 @@ class WorkspaceLaunchSequenceTest {
         val f = Fixture(); f.visible += "app"; f.moveFailure = "app"
         f.begin("app"); f.drain()
         assertTrue(f.result!!.isFailure)
+        assertEquals(WorkspaceLaunchSequence.Stage.PLACE, (f.result!!.exceptionOrNull() as WorkspaceLaunchSequence.Failure).stage)
         assertTrue(f.committed.isEmpty())
     }
 

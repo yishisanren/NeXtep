@@ -76,7 +76,7 @@ class WorkspaceGeometryTest {
                 assertTrue(left >= g.contentLeft - .6f && right <= g.contentRight + .6f)
                 assertTrue(top >= g.contentTop - .6f && bottom <= g.contentBottom + .6f)
                 assertEquals(left - g.contentLeft, g.contentRight - right, .6f)
-                assertEquals(top - g.contentTop, g.contentBottom - bottom, .6f)
+                assertEquals(g.contentTop.toFloat(), top, .6f)
                 assertEquals(g.availableWidth.toFloat() / g.availableHeight, (right-left)/(bottom-top), .0001f)
                 assertTrue(kotlin.math.abs((right-left)-g.contentWidth) < .6f ||
                     kotlin.math.abs((bottom-top)-g.contentHeight) < .6f)

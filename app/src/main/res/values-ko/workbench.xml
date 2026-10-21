@@ -17,7 +17,7 @@
     <string name="workbench_delivery_apps">JD 즉시 배송 · Taobao 즉시 배송 · Meituan 배달</string>
     <string name="workbench_shopping_apps">Pinduoduo · Douyin Mall · JD · Taobao</string>
     <string name="workbench_compare_failed">빈 보조 창을 확보하고 앱이 검색 링크를 지원하는지 확인해 주세요.</string>
-    <string name="workbench_compare_missing">지원되는 앱이 두 개 이상 필요합니다.</string>
+    <string name="workbench_compare_missing">이 검색을 지원하는 설치된 앱이 없습니다.</string>
     <string name="workbench_capture">이번 세션에서 화면 캡처 허용</string>
     <string name="workbench_capture_on">이번 세션에서 캡처가 허용됩니다. 종료, 잠금 또는 백그라운드 전환 시 보호가 복원됩니다.</string>
     <string name="workbench_capture_off">화면 캡처 보호가 복원되었습니다.</string>
@@ -38,4 +38,6 @@
     <string name="workbench_compare_space">빈 작은 창이 부족합니다.</string>
     <string name="workbench_launch_timeout">앱이 전면에 나타나기를 기다리는 시간이 초과되었습니다.</string>
     <string name="workbench_launch_denied">시스템이 앱 실행 또는 이동을 거부했습니다.</string>
+    <string name="workbench_window_timeout">대상 창을 준비하지 못했습니다. 작업 공간을 닫았다가 다시 여세요.</string>
+    <string name="workbench_place_failed">앱이 열렸지만 대상 창에 배치하지 못했습니다.</string>
 </resources>
