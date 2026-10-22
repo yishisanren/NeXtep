@@ -29,7 +29,7 @@ class SlotTaskCoordinator(
     private val mainTaskPresenter: MainTaskPresentationCoordinator,
     private val geometryProvider: () -> WorkspaceGeometry,
     private val onDragActiveChanged: (Boolean) -> Unit = {},
-    private val onSwapAnimation: (SlotTaskDrag, Int?, () -> Unit) -> Unit = { _, _, move -> move() },
+    private val onSwapAnimation: (SlotTaskDrag, Int?, (() -> Unit) -> Unit) -> Unit = { _, _, move -> move {} },
     private val onInternalSlotDrag: (TaskSwitcherView, SlotTaskDrag) -> Boolean = { _, _ -> false },
     private val onInternalDragTouch: (android.view.View, android.view.MotionEvent) -> Boolean = { _, _ -> false },
     private val onTasksObserved: (List<TaskRepository.TaskSnapshot>, List<SlotState>) -> Unit = { _, _ -> },
@@ -108,7 +108,7 @@ class SlotTaskCoordinator(
         if (same) return
         val target = desktopSelection.toggle(index, displayId)
         try {
-            showHomeOnDefaultDisplay(force = true)
+            showHomeOnDefaultDisplay()
             slots[index].view.showWaiting()
             slots[index].view.setDropHighlighted(true)
             showMessage(AppLanguage.string(applicationContext, R.string.workbench_choose_app, index + 1))
@@ -628,7 +628,8 @@ class SlotTaskCoordinator(
         }
         if (sourceSlot >= 0) {
             val occupied = slotRecords[sourceSlot].state as SlotState.Occupied
-            return runTransition("media swap slot=$sourceSlot task=${occupied.taskId}") {
+            return runTransition("media swap slot=$sourceSlot task=${occupied.taskId}",
+                SlotTaskDrag(sourceSlot, occupied.taskId, occupied.displayId) to null) {
                 swapWithMain(sourceSlot, occupied)
             }
         }
@@ -748,7 +749,9 @@ class SlotTaskCoordinator(
         check(active && !suspended && !transitionInProgress && validActiveSlot(index))
         val current = checkNotNull(taskRepository.foregroundTask())
         check(current.taskId == taskId && isExchangeableMainTask(current))
-        runTransition("landscape task to wide slot=$index") {
+        val occupied = slotRecords[index].state as? SlotState.Occupied
+        runTransition("landscape task to wide slot=$index",
+            occupied?.let { SlotTaskDrag(index, it.taskId, it.displayId) to null }) {
             when (val state = slotRecords[index].state) {
                 is SlotState.Ready -> parkMainTaskInSlot(index, state, current)
                 is SlotState.Occupied -> swapWithMain(index, state)
@@ -862,7 +865,8 @@ class SlotTaskCoordinator(
         when (val state = slotRecords[slotIndex].state) {
             is SlotState.Occupied -> {
                 clearDesktopSelection()
-                runTransition("swap slot=$slotIndex taskId=${state.taskId}") { swapWithMain(slotIndex, state) }
+                runTransition("swap slot=$slotIndex taskId=${state.taskId}",
+                    SlotTaskDrag(slotIndex, state.taskId, state.displayId) to null) { swapWithMain(slotIndex, state) }
             }
             is SlotState.Ready -> {
                 val record = slotRecords[slotIndex]
@@ -1147,7 +1151,8 @@ class SlotTaskCoordinator(
         if (occupied != null) {
             val foreground = taskRepository.foregroundTask()
             if (existing != null && foreground?.taskId == existing.taskId) {
-                return runTransition("drop main into occupied slot=$slotIndex") {
+                return runTransition("drop main into occupied slot=$slotIndex",
+                    SlotTaskDrag(slotIndex, occupied.taskId, occupied.displayId) to null) {
                     swapWithMain(slotIndex, occupied)
                 }
             }
@@ -1341,12 +1346,12 @@ class SlotTaskCoordinator(
         }
     }
 
-    private fun showHomeOnDefaultDisplay(force: Boolean = false) {
+    private fun showHomeOnDefaultDisplay() {
         val homePackage = TriggerBroadcastContract.resolveHomePackage(applicationContext)
             ?: error("No resolved HOME package")
         // Moving the foreground task off display 0 normally resumes HOME already.
         // Starting it again can create a ColorOS whole-display change transition.
-        if (!force && taskRepository.foregroundTask()?.component?.packageName == homePackage) return
+        if (taskRepository.foregroundTask()?.component?.packageName == homePackage) return
         val homeIntent = Intent(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_HOME)
             .setPackage(homePackage)
@@ -1486,7 +1491,7 @@ class SlotTaskCoordinator(
                 NeXtepLog.info("slot_coordinator", "Transition settled $label")
             }, SETTLE_DELAY_MS)
         }
-        fun performMove(): Result<Unit> {
+        fun performMove(reveal: () -> Unit = {}): Result<Unit> {
             val result = runCatching {
                 check(active && !suspended) { "Workspace is no longer interactive" }
                 operation()
@@ -1499,17 +1504,21 @@ class SlotTaskCoordinator(
                         runCatching { pending.rollback() }.onFailure(error::addSuppressed)
                     }
                     finish(settled)
+                    reveal()
                 }
-            } else finish(result)
+            } else {
+                finish(result)
+                reveal()
+            }
             return result
         }
         if (animation == null) return performMove()
         dragTransitionPending = true
         return runCatching {
-            onSwapAnimation(animation.first, animation.second) {
+            onSwapAnimation(animation.first, animation.second) { reveal ->
                 if (dragTransitionPending) {
                     dragTransitionPending = false
-                    performMove()
+                    performMove(reveal)
                 }
             }
         }.onFailure {

@@ -28,14 +28,14 @@ internal class WorkspaceSwapAnimator(private val context: Context) {
         source: Bitmap?, target: Bitmap?,
         start: RectF, sourceBounds: RectF, targetBounds: RectF,
         screenWidth: Int, screenHeight: Int,
-        move: () -> Unit,
+        move: (() -> Unit) -> Unit,
     ) {
         cancel()
         val windowType = SystemUiWindowTypeResolver.resolve()
-        if (windowType == null || source == null) {
+        if (windowType == null) {
             source?.recycle()
             target?.recycle()
-            move()
+            move {}
             return
         }
         val token = ++generation
@@ -45,6 +45,7 @@ internal class WorkspaceSwapAnimator(private val context: Context) {
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_SECURE or
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             android.graphics.PixelFormat.TRANSLUCENT,
         ).apply {
@@ -56,12 +57,12 @@ internal class WorkspaceSwapAnimator(private val context: Context) {
         val added = runCatching { manager.addView(preview, params) }.isSuccess
         if (!added) {
             preview.release()
-            move()
+            move {}
             return
         }
         overlay = preview
         animator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 240L
+            duration = 220L
             interpolator = DecelerateInterpolator(1.6f)
             addUpdateListener {
                 preview.progress = it.animatedValue as Float
@@ -71,18 +72,26 @@ internal class WorkspaceSwapAnimator(private val context: Context) {
                 override fun onAnimationEnd(animation: Animator) {
                     if (generation != token) return
                     animator = null
-                    val moved = runCatching(move).onFailure {
-                        NeXtepLog.warn("slot_drag", "Exchange callback failed", it)
-                        cancel()
-                    }.isSuccess
-                    if (!moved || generation != token) return
                     fun reveal() {
                         if (generation != token) return
-                        preview.animate().alpha(0f).setDuration(160L).withEndAction {
-                            if (generation == token) cancel()
-                        }.start()
+                        animator = ValueAnimator.ofFloat(1f, 0f).apply {
+                            duration = 100L
+                            addUpdateListener { preview.alpha = it.animatedValue as Float }
+                            addListener(object : AnimatorListenerAdapter() {
+                                override fun onAnimationEnd(animation: Animator) {
+                                    if (generation == token) {
+                                        animator = null
+                                        this@WorkspaceSwapAnimator.cancel()
+                                    }
+                                }
+                            })
+                            start()
+                        }
                     }
-                    preview.postDelayed({ reveal() }, 300L)
+                    runCatching { move(::reveal) }.onFailure {
+                        NeXtepLog.warn("slot_drag", "Exchange callback failed", it)
+                        this@WorkspaceSwapAnimator.cancel()
+                    }
                 }
             })
             start()
@@ -105,7 +114,7 @@ internal class WorkspaceSwapAnimator(private val context: Context) {
 
 private class SwapPreviewView(
     context: Context,
-    private val source: Bitmap,
+    private val source: Bitmap?,
     private val target: Bitmap?,
     private val start: RectF,
     private val sourceBounds: RectF,
@@ -113,6 +122,7 @@ private class SwapPreviewView(
 ) : View(context) {
     var progress = 0f
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(30, 42, 55) }
     private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(165, 210, 242, 245)
         style = Paint.Style.STROKE
@@ -126,11 +136,15 @@ private class SwapPreviewView(
 
     override fun onDraw(canvas: Canvas) {
         if (released) return
+        // The live tasks stay put until the compositor move. Cover their old
+        // positions so a shrinking preview cannot expose a second stationary app.
+        canvas.drawRoundRect(sourceBounds, cornerRadius, cornerRadius, backgroundPaint)
+        canvas.drawRoundRect(targetBounds, cornerRadius, cornerRadius, backgroundPaint)
         if (target != null) drawFrame(canvas, target, targetBounds, sourceBounds)
         drawFrame(canvas, source, start, targetBounds)
     }
 
-    private fun drawFrame(canvas: Canvas, bitmap: Bitmap, from: RectF, to: RectF) {
+    private fun drawFrame(canvas: Canvas, bitmap: Bitmap?, from: RectF, to: RectF) {
         fun interpolate(a: Float, b: Float) = a + (b - a) * progress
         destination.set(interpolate(from.left, to.left), interpolate(from.top, to.top),
             interpolate(from.right, to.right), interpolate(from.bottom, to.bottom))
@@ -138,8 +152,16 @@ private class SwapPreviewView(
         clipPath.reset()
         clipPath.addRoundRect(destination, cornerRadius, cornerRadius, android.graphics.Path.Direction.CW)
         canvas.clipPath(clipPath)
-        sourceRect.set(0, 0, bitmap.width, bitmap.height)
-        canvas.drawBitmap(bitmap, sourceRect, destination, bitmapPaint)
+        canvas.drawRoundRect(destination, cornerRadius, cornerRadius, backgroundPaint)
+        if (bitmap != null) {
+            val scale = minOf(destination.width() / bitmap.width, destination.height() / bitmap.height)
+            val imageWidth = bitmap.width * scale
+            val imageHeight = bitmap.height * scale
+            val fitted = RectF(destination.centerX() - imageWidth / 2, destination.centerY() - imageHeight / 2,
+                destination.centerX() + imageWidth / 2, destination.centerY() + imageHeight / 2)
+            sourceRect.set(0, 0, bitmap.width, bitmap.height)
+            canvas.drawBitmap(bitmap, sourceRect, fitted, bitmapPaint)
+        }
         canvas.restoreToCount(save)
         canvas.drawRoundRect(destination, cornerRadius, cornerRadius, borderPaint)
     }
@@ -147,7 +169,7 @@ private class SwapPreviewView(
     fun release() {
         if (released) return
         released = true
-        source.recycle()
+        source?.recycle()
         target?.recycle()
     }
 }

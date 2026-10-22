@@ -54,6 +54,26 @@ object ColorOsLauncherHook {
                 }
         }
         if (packageName == "com.android.launcher") {
+            HookGuard.run("launcher_workspace_app_animation") {
+                // ColorOS AppLauncher accepts a null source View: it skips icon
+                // preloading/remote animation but retains its startup and user checks.
+                val method = classLoader.loadClass("com.android.launcher3.BaseDraggingActivity")
+                    .getDeclaredMethod("startActivitySafely", View::class.java, Intent::class.java,
+                        classLoader.loadClass("com.android.launcher3.model.data.ItemInfo"))
+                check(method.returnType == Boolean::class.javaPrimitiveType)
+                method.isAccessible = true
+                module.hook(method).intercept(object : XposedInterface.Hooker {
+                    override fun intercept(chain: XposedInterface.Chain): Any? {
+                        val intent = chain.args.getOrNull(1) as? Intent
+                        if (!WorkspaceLauncherAnimationPolicy.useStaticSource(
+                                LauncherTransformController.isActive(), intent)) return chain.proceed()
+                        val args = chain.args.toTypedArray()
+                        args[0] = null
+                        return chain.proceed(args)
+                    }
+                })
+                NeXtepLog.info("launcher_workspace_app_animation", "Installed static workspace launch source")
+            }
             HookGuard.run("launcher_recent_task_selection") {
                 val recents = classLoader.loadClass("com.android.quickstep.views.RecentsView")
                 listOf(

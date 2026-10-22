@@ -194,7 +194,7 @@ object TaskSurfaceCompat {
     /** Transient exchange preview, using only this task's layers. Secure layers
      * remain excluded by ScreenCapture's defaults; failure just omits the preview. */
     fun capturePreview(taskId: Int): android.graphics.Bitmap? = runCatching {
-        val leash = findTaskLeash(taskId) ?: return@runCatching null
+        val leash = findTaskLeash(taskId, requireMainDisplay = false) ?: return@runCatching null
         val surfaceType = Class.forName("android.view.SurfaceControl")
         val captureType = Class.forName("android.window.ScreenCaptureInternal")
         val builderType = Class.forName("android.window.ScreenCaptureInternal\$LayerCaptureArgs\$Builder")

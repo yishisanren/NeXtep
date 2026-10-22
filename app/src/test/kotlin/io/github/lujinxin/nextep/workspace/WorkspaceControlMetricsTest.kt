@@ -10,8 +10,8 @@ class WorkspaceControlMetricsTest {
         for (insets in listOf(WorkspaceNavigationInsets(), WorkspaceNavigationInsets(bottom = 132))) {
             val profile = WorkspaceLayoutProfile.create(1080, 2354, 480, insets)
             val controlHeight = profile.geometry.topHeight
-            assertEquals(426, controlHeight)
-            assertTrue(profile.geometry.contentTop < 470)
+            assertTrue(controlHeight >= WorkspaceControlMetrics.COMPACT_HEIGHT_DP * 3)
+            assertTrue(controlHeight < profile.geometry.availableHeight / 4)
             val rowHeight = controlHeight - (WorkspaceControlMetrics.STATUS_HEIGHT_DP +
                 WorkspaceControlMetrics.ACTION_HEIGHT_DP + WorkspaceControlMetrics.CONTENT_BOTTOM_PADDING_DP) * 3
             assertTrue(rowHeight >= (WorkspaceControlMetrics.APP_ICON_SIZE_DP +
@@ -23,7 +23,7 @@ class WorkspaceControlMetricsTest {
     fun oppositeLandscapeControlsHaveTheSameCompactThickness() {
         for (rotation in listOf(1, 3)) {
             val g = WorkspaceLayoutProfile.create(2354, 1080, 480, WorkspaceNavigationInsets(), rotation).geometry
-            assertEquals(426, g.topHeight)
+            assertEquals(474, g.topHeight)
         }
     }
 }

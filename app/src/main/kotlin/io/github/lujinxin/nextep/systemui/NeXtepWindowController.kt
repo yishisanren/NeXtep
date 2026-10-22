@@ -584,33 +584,34 @@ class NeXtepWindowController(
         }
     }
 
-    private fun animateDragSwap(drag: SlotTaskDrag, targetIndex: Int?, move: () -> Unit) {
+    private fun animateDragSwap(drag: SlotTaskDrag, targetIndex: Int?, move: (() -> Unit) -> Unit) {
         val geometry = geometry()
         val sourceView = slotWindows.getOrNull(drag.slotIndex)?.view
         val sourceRect = android.graphics.Rect()
         if (sourceView == null || !sourceView.getScreenVisibleRect(sourceRect)) {
-            move()
+            move {}
             return
         }
         val targetRect = android.graphics.Rect()
         if (targetIndex != null) {
             val targetView = slotWindows.getOrNull(targetIndex)?.view
             if (targetView == null || !targetView.getScreenVisibleRect(targetRect)) {
-                move()
+                move {}
                 return
             }
         } else targetRect.set(geometry.contentLeft, geometry.contentTop, geometry.contentRight, geometry.contentBottom)
-        val point = drag.dropPoint ?: android.graphics.PointF(targetRect.exactCenterX(), targetRect.exactCenterY())
+        val point = drag.dropPoint
         val halfWidth = sourceRect.width() * 0.45f
         val halfHeight = sourceRect.height() * 0.45f
-        val startRect = android.graphics.RectF(point.x - halfWidth, point.y - halfHeight,
-            point.x + halfWidth, point.y + halfHeight)
-        val sourcePreview = if (capturePolicy.captureAllowed) sourceView.capturePreview() else null
+        val startRect = if (point == null) android.graphics.RectF(sourceRect) else
+            android.graphics.RectF(point.x - halfWidth, point.y - halfHeight,
+                point.x + halfWidth, point.y + halfHeight)
+        val sourcePreview = sourceView.captureProtectedPreview()
         val targetPreview = if (targetIndex != null) {
             if (slotCoordinator?.slotStates()?.getOrNull(targetIndex) is SlotState.Occupied) {
-                slotWindows[targetIndex].view.capturePreview()
+                slotWindows[targetIndex].view.captureProtectedPreview()
             } else null
-        } else mainTaskPresenter.currentTaskId()?.takeIf { capturePolicy.captureAllowed }?.let {
+        } else mainTaskPresenter.currentTaskId()?.let {
             io.github.lujinxin.nextep.framework.TaskSurfaceCompat.capturePreview(it)
         }
         swapAnimator.animate(sourcePreview, targetPreview, startRect,
@@ -637,8 +638,9 @@ class NeXtepWindowController(
                 bounds[index].height,
                 Gravity.TOP,
             ).apply {
-                marginStart = if (logicalSidebarSide(geometry) == SidebarSide.RIGHT) profile.gapPixels else 0
-                marginEnd = if (logicalSidebarSide(geometry) == SidebarSide.LEFT) profile.gapPixels else 0
+                val slack = (geometry.sidebarWidth - profile.gapPixels - bounds[index].width).coerceAtLeast(0) / 2
+                marginStart = slack + if (logicalSidebarSide(geometry) == SidebarSide.RIGHT) profile.gapPixels else 0
+                marginEnd = slack + if (logicalSidebarSide(geometry) == SidebarSide.LEFT) profile.gapPixels else 0
                 topMargin = bounds[index].top
             }
         }

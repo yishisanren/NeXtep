@@ -204,8 +204,11 @@ class TaskSwitcherView(
             MeasureSpec.makeMeasureSpec((outputHeight * scale).toInt().coerceAtLeast(1), MeasureSpec.EXACTLY))
     }
 
-    fun capturePreview(): Bitmap? = runCatching {
-        if (!captureAllowed) return@runCatching null
+    fun capturePreview(): Bitmap? = if (captureAllowed) captureProtectedPreview() else null
+
+    // Internal transitions use a secure overlay and immediately dispose the frame.
+    // ScreenCapture still excludes any secure layers belonging to the source app.
+    internal fun captureProtectedPreview(): Bitmap? = runCatching {
         val task = currentState as? SlotState.Occupied ?: return@runCatching null
         val bitmap = io.github.lujinxin.nextep.framework.TaskSurfaceCompat.capturePreview(task.taskId)
             ?: return@runCatching null

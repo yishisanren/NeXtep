@@ -24,8 +24,7 @@ class WorkspaceLayoutProfileTest {
 
     @Test fun previousVideoRecordMigratesWithoutKeepingTheToolbarReserve() {
         val old = WorkspaceLayoutProfile(WorkspaceGeometry(1216, 2640, 1106, 237, SidebarSide.RIGHT), 476, 2, 1)
-            .encode().split(',').toMutableList()
-        old[0] = "9"
+            .let { legacyFourSlotRecord(it, "9") }
         old[24] = (1106 - (WorkspaceControlMetrics.COMPACT_HEIGHT_DP * 476 / 160f).toInt()).toString()
         val migrated = checkNotNull(WorkspaceLayoutProfile.decode(old.joinToString(",")))
         assertEquals(684, migrated.geometry.topHeight)
@@ -58,10 +57,14 @@ class WorkspaceLayoutProfileTest {
                         assertEquals(message, slot.width / positioned.canvas.width.toFloat() * transform.scaleX,
                             slot.height / positioned.canvas.height.toFloat() * transform.scaleY, .000001f)
                     }
-                    assertEquals(positioned.geometry.sidebarLogicalHeight,
-                        positioned.slots.last().top + positioned.slots.last().height)
-                    assertEquals(positioned.geometry.sidebarWidth,
-                        positioned.slots.first().width + positioned.gapPixels)
+                    assertTrue(positioned.slots.last().top + positioned.slots.last().height <=
+                        positioned.geometry.sidebarLogicalHeight)
+                    assertTrue(positioned.slots.first().width + positioned.gapPixels <=
+                        positioned.geometry.sidebarWidth)
+                    positioned.slots.forEach { slot ->
+                        val drawnHeight = slot.width.toFloat() * positioned.canvas.height / positioned.canvas.width
+                        assertEquals("Card and app must share an aspect ratio", slot.height.toFloat(), drawnHeight, 3f)
+                    }
                 }
             }
         }
@@ -137,7 +140,7 @@ class WorkspaceLayoutProfileTest {
         val migrated = checkNotNull(WorkspaceLayoutProfile.decode(old.joinToString(",")))
         assertEquals(buttons, migrated)
         assertEquals(2222, migrated.canvas.height)
-        assertEquals("10", migrated.encode().substringBefore(','))
+        assertEquals("12", migrated.encode().substringBefore(','))
     }
 
     @Test
@@ -201,7 +204,7 @@ class WorkspaceLayoutProfileTest {
                     assertEquals(wide, WorkspaceLayoutProfile.decode(wide.encode()))
                     val rail = wide.slots.filterIndexed { i, _ -> i != index }
                     assertEquals(3, rail.size)
-                    assertEquals(wide.geometry.sidebarLogicalHeight, rail.last().top + rail.last().height)
+                    assertTrue(rail.last().top + rail.last().height <= wide.geometry.sidebarLogicalHeight)
                     for (slot in rail) assertTrue(slot.width > 0 && slot.height > 0)
                     val g = wide.geometry
                     assertTrue(g.availableLeft * g.contentScale + g.contentTranslationX >= g.contentLeft - 1f)
@@ -214,9 +217,9 @@ class WorkspaceLayoutProfileTest {
 
     @Test fun previousWorkbenchProfilesLoseThePlayerReserveButKeepTheirRecordedMetrics() {
         val geometry = WorkspaceGeometry(1080, 2354, 474, 218, SidebarSide.RIGHT)
-        val old = WorkspaceLayoutProfile(geometry, 480, 3).encode().replaceFirst("10,", "6,")
+        val old = legacyFourSlotRecord(WorkspaceLayoutProfile(geometry, 480, 3), "6").joinToString(",")
         val migrated = checkNotNull(WorkspaceLayoutProfile.decode(old))
-        assertEquals(426, migrated.geometry.topHeight)
+        assertEquals(474, migrated.geometry.topHeight)
         assertEquals(1080, migrated.geometry.screenWidth)
         assertEquals(2354, migrated.geometry.screenHeight)
         assertEquals(480, migrated.densityDpi)
@@ -227,8 +230,7 @@ class WorkspaceLayoutProfileTest {
     @Test fun oldWideProfilesValidateTheirOldPlayerHeightBeforeMigrating() {
         val geometry = WorkspaceGeometry(1080, 2354, 1009, 207, SidebarSide.RIGHT)
         for (index in 0..3) {
-            val parts = WorkspaceLayoutProfile(geometry, 480, 3, index).encode().split(',').toMutableList()
-            parts[0] = "7"
+            val parts = legacyFourSlotRecord(WorkspaceLayoutProfile(geometry, 480, 3, index), "7")
             parts[21 + index * 3] = "607" // Previous 134dp header plus 16:9 wide window.
             val migrated = checkNotNull(WorkspaceLayoutProfile.decode(parts.joinToString(",")))
             assertEquals(index, migrated.wideSlotIndex)
@@ -236,6 +238,48 @@ class WorkspaceLayoutProfileTest {
             parts[21 + index * 3] = "606"
             assertNull(WorkspaceLayoutProfile.decode(parts.joinToString(",")))
         }
+    }
+
+    @Test fun workbenchSixRecordsMigrateAndRejectCorruptedSlotSizes() {
+        for (index in listOf(null, 0, 3)) {
+            val profile = WorkspaceLayoutProfile(WorkspaceGeometry(1216, 2640, 422, 194, SidebarSide.RIGHT), 476, 2, index)
+            val old = legacyFourSlotRecord(profile, if (index == null) "10" else "11")
+            val migrated = checkNotNull(WorkspaceLayoutProfile.decode(old.joinToString(",")))
+            assertEquals(WorkspaceLayoutProfile.create(1216, 2640, 476, WorkspaceNavigationInsets()).withWideSlot(index), migrated)
+            old[20] = "1"
+            assertNull(WorkspaceLayoutProfile.decode(old.joinToString(",")))
+        }
+    }
+
+    @Test fun fourCardsFillTheRailWithoutTallInternalLetterboxes() {
+        val profile = WorkspaceLayoutProfile.create(1216, 2640, 476, WorkspaceNavigationInsets())
+        assertEquals(530, profile.geometry.topHeight)
+        assertEquals(244, profile.geometry.sidebarWidth)
+        profile.slots.forEachIndexed { i, slot ->
+            assertTrue(slot.top >= 0)
+            if (i > 0) assertTrue(slot.top >= profile.slots[i - 1].let { it.top + it.height } + profile.gapPixels)
+            assertTrue(kotlin.math.abs(slot.width * profile.canvas.height.toDouble() / profile.canvas.width - slot.height) < 3)
+            assertTrue(slot.height > 520)
+        }
+    }
+
+    private fun legacyFourSlotRecord(profile: WorkspaceLayoutProfile, version: String): MutableList<String> {
+        val parts = profile.encode().split(',').toMutableList()
+        parts[0] = version
+        val count = if (profile.wideSlotIndex == null) 4 else 3
+        val usable = profile.geometry.sidebarLogicalHeight - profile.gapPixels * (count - 1)
+        val base = usable / count
+        val extra = usable % count
+        var rail = 0
+        repeat(4) { index ->
+            if (index != profile.wideSlotIndex) {
+                parts[20 + index * 3] = (profile.geometry.sidebarWidth - profile.gapPixels).toString()
+                parts[21 + index * 3] = (base + if (rail < extra) 1 else 0).toString()
+                parts[22 + index * 3] = (rail * (base + profile.gapPixels) + minOf(rail, extra)).toString()
+                rail++
+            }
+        }
+        return parts
     }
 
     private fun legacyRecord(profile: WorkspaceLayoutProfile, version: String): MutableList<String> {
