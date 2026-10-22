@@ -51,6 +51,7 @@ class NeXtepWindowController(
     private var contentTarget: SlotTaskCoordinator.ContentExchange? = null
     private var contentOriginSide = SidebarSide.RIGHT
     private var contentLayoutChanging = false
+    private var appliedGeometry: WorkspaceGeometry? = null
     private val contentDrag = io.github.lujinxin.nextep.workspace.WorkspaceContentDragSession(
         ::expandContentTarget, ::restoreContentTarget, { contentTarget = null },
     )
@@ -538,7 +539,10 @@ class NeXtepWindowController(
     }
 
     private fun applyWindowGeometry(geometry: WorkspaceGeometry) {
-        if (!contentLayoutChanging) cancelDragVisuals()
+        // A re-application of the same geometry (the viewport callback after a wide
+        // layout change) must not abort the slot exchange that change just started.
+        if (!contentLayoutChanging && geometry != appliedGeometry) cancelDragVisuals()
+        appliedGeometry = geometry
         records.forEach { record ->
             val params = record.view.layoutParams as? WindowManager.LayoutParams ?: return@forEach
             configureWindow(record, params, geometry)
@@ -1014,8 +1018,12 @@ class NeXtepWindowController(
         val index = wideSlotIndex ?: return
         val task = wideTaskId
         setWideLayout(null, null)
-        if ((slotCoordinator?.slotStates()?.getOrNull(index) as? SlotState.Occupied)?.taskId == task)
-            slotCoordinator?.onSlotClicked(index)
+        // The slot view is back in the rail but laid out only on the next traversal; swap
+        // once its output layer is bound so the exchange animates from the rail card.
+        slotWindows[index].whenOutputBound {
+            if ((slotCoordinator?.slotStates()?.getOrNull(index) as? SlotState.Occupied)?.taskId == task)
+                slotCoordinator?.onSlotClicked(index)
+        }
     }
 
     private fun pinTask(taskId: Int): Boolean {
