@@ -1,0 +1,147 @@
+package io.github.lujinxin.nextep.config
+
+import android.os.Bundle
+import android.view.View
+import android.widget.LinearLayout
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.button.MaterialButtonToggleGroup
+import com.google.android.material.switchmaterial.SwitchMaterial
+import io.github.lujinxin.nextep.R
+import io.github.lujinxin.nextep.trigger.TriggerBroadcastContract
+import io.github.lujinxin.nextep.trigger.TriggerCoordinator
+import io.github.lujinxin.nextep.trigger.TriggerSource
+
+/** SystemUI keeps the workbench preferences; this card only mirrors its reply and sends commands. */
+internal class WorkbenchSettingsCard(
+    private val activity: AppCompatActivity,
+    private val query: ((TriggerCoordinator.RequestResult) -> Unit) -> Unit = { TriggerCoordinator.queryWorkbench(activity, it) },
+    private val send: (String, String, (TriggerCoordinator.RequestResult) -> Unit) -> Unit = { key, value, done ->
+        TriggerCoordinator.workbenchCommand(activity, key, value, done)
+    },
+) {
+    private val content = SettingsScreen.sectionContent(activity)
+    private val status = SettingsScreen.sectionDescription(activity, activity.getString(R.string.workbench_state_loading))
+    private val controls = mutableListOf<View>()
+    private var syncing = false
+    val appearance: MaterialButtonToggleGroup
+    val side: MaterialButtonToggleGroup
+    val position: MaterialButtonToggleGroup
+    val recents: SwitchMaterial
+    val capture: SwitchMaterial
+    val view: View
+
+    init {
+        content.addView(SettingsScreen.sectionTitle(activity, activity.getString(R.string.workbench_settings_title)), SettingsScreen.matchWidth())
+        content.addView(status, SettingsScreen.matchWidth())
+        appearance = choice(activity.getString(R.string.workbench_appearance), TriggerBroadcastContract.COMMAND_APPEARANCE,
+            listOf("LIGHT" to activity.getString(R.string.appearance_light), "DARK" to activity.getString(R.string.appearance_dark)))
+        side = choice(activity.getString(R.string.workbench_side), TriggerBroadcastContract.COMMAND_SIDEBAR_SIDE,
+            listOf("LEFT" to activity.getString(R.string.window_side_left), "RIGHT" to activity.getString(R.string.window_side_right)))
+        position = choice(activity.getString(R.string.control_position), TriggerBroadcastContract.COMMAND_CONTROL_BOTTOM,
+            listOf("false" to activity.getString(R.string.control_top), "true" to activity.getString(R.string.control_bottom)))
+        recents = toggle(activity.getString(R.string.workbench_hide_recents),
+            activity.getString(R.string.workbench_hide_recents_summary), TriggerBroadcastContract.COMMAND_HIDE_RECENTS)
+        capture = toggle(activity.getString(R.string.workbench_capture),
+            activity.getString(R.string.workbench_capture_summary), TriggerBroadcastContract.COMMAND_CAPTURE)
+        val export = SettingsRowButton.create(activity).apply {
+            text = activity.getString(R.string.workbench_export_action)
+            setOnClickListener { command(TriggerBroadcastContract.COMMAND_EXPORT_DIAGNOSTICS, "true") }
+        }
+        content.addView(row(activity.getString(R.string.workbench_export), activity.getString(R.string.workbench_export_summary), export),
+            SettingsScreen.matchWidth())
+        controls += export
+        val exit = SettingsRowButton.create(activity).apply {
+            text = activity.getString(R.string.workbench_exit_action)
+            setOnClickListener {
+                isEnabled = false
+                TriggerCoordinator.requestSet(activity, false, TriggerSource.SYSTEM_RECOVERY) { isEnabled = true; refresh() }
+            }
+        }
+        content.addView(row(activity.getString(R.string.window_exit), activity.getString(R.string.workbench_exit_summary), exit),
+            SettingsScreen.matchWidth())
+        view = SettingsScreen.sectionCard(activity).apply { addView(content) }
+        apply(null)
+        status.text = activity.getString(R.string.workbench_state_loading)
+        refresh()
+    }
+
+    fun refresh() = query { result ->
+        if (activity.isDestroyed || activity.isFinishing) return@query
+        apply((result as? TriggerCoordinator.RequestResult.Ready)?.extras
+            ?.takeIf { it.containsKey(TriggerBroadcastContract.EXTRA_APPEARANCE) })
+    }
+
+    /** Mirror SystemUI's reply; null means it did not answer. */
+    fun apply(state: Bundle?) {
+        syncing = true
+        if (state == null) {
+            status.text = activity.getString(R.string.workbench_state_unavailable)
+            controls.forEach { it.isEnabled = false }
+        } else {
+            status.text = activity.getString(R.string.workbench_settings_summary)
+            // MaterialButton ignores setChecked while disabled, so enable before selecting.
+            controls.forEach { it.isEnabled = true }
+            appearance.select(state.getString(TriggerBroadcastContract.EXTRA_APPEARANCE).orEmpty())
+            side.select(state.getString(TriggerBroadcastContract.EXTRA_SIDEBAR_SIDE).orEmpty())
+            position.select(state.getBoolean(TriggerBroadcastContract.EXTRA_CONTROL_BOTTOM).toString())
+            recents.isChecked = state.getBoolean(TriggerBroadcastContract.EXTRA_HIDE_RECENTS)
+            capture.isChecked = state.getBoolean(TriggerBroadcastContract.EXTRA_CAPTURE_ALLOWED)
+            // Capture is a session grant; it needs a visible workspace to take effect.
+            capture.isEnabled = state.getBoolean(TriggerBroadcastContract.EXTRA_ACTIVE)
+        }
+        syncing = false
+    }
+
+    private fun command(key: String, value: String) {
+        if (syncing) return
+        controls.forEach { it.isEnabled = false }
+        send(key, value) { result ->
+            if (activity.isDestroyed || activity.isFinishing) return@send
+            if (result !is TriggerCoordinator.RequestResult.Ready) {
+                Toast.makeText(activity, R.string.workbench_command_failed, Toast.LENGTH_SHORT).show()
+            }
+            refresh()
+        }
+    }
+
+    private fun MaterialButtonToggleGroup.select(value: String) {
+        for (index in 0 until childCount) {
+            val button = getChildAt(index) as MaterialButton
+            if (button.tag == value) check(button.id)
+        }
+    }
+
+    private fun choice(title: String, key: String, options: List<Pair<String, String>>): MaterialButtonToggleGroup {
+        content.addView(SettingsScreen.subsectionTitle(activity, title), SettingsScreen.matchWidth())
+        val buttons = options.map { (value, label) -> SettingsScreen.modeButton(activity, label).apply { tag = value } }
+        return MaterialButtonToggleGroup(activity).apply {
+            isSingleSelection = true
+            isSelectionRequired = true
+            buttons.forEach { addView(it, LinearLayout.LayoutParams(0, SettingsScreen.dp(activity, 44), 1f)) }
+            addOnButtonCheckedListener { group, checkedId, isChecked ->
+                if (isChecked) command(key, group.findViewById<View>(checkedId).tag as String)
+            }
+            content.addView(this, SettingsScreen.matchWidth())
+            controls += this
+        }
+    }
+
+    private fun toggle(title: String, summary: String, key: String): SwitchMaterial {
+        val switch = SwitchMaterial(activity).apply {
+            contentDescription = activity.getString(R.string.setting_description, title, summary)
+            minimumWidth = SettingsScreen.dp(activity, 72)
+            minimumHeight = SettingsScreen.dp(activity, 48)
+            setOnCheckedChangeListener { _, enabled -> command(key, enabled.toString()) }
+        }
+        content.addView(row(title, summary, switch).apply { setOnClickListener { switch.performClick() } }, SettingsScreen.matchWidth())
+        controls += switch
+        return switch
+    }
+
+    private fun row(title: String, summary: String, control: View) =
+        SettingsScreen.settingRow(activity, title, summary, control).apply {
+            setPadding(0, SettingsScreen.dp(activity, 6), 0, SettingsScreen.dp(activity, 6))
+        }
+}

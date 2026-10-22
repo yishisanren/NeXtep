@@ -19,7 +19,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
@@ -28,9 +27,6 @@ import io.github.lujinxin.nextep.R
 import io.github.lujinxin.nextep.apps.LauncherAppCatalogContract
 import io.github.lujinxin.nextep.apps.LauncherAppRepository
 import io.github.lujinxin.nextep.trigger.NeXtepTileService
-import io.github.lujinxin.nextep.trigger.TriggerBroadcastContract
-import io.github.lujinxin.nextep.trigger.TriggerCoordinator
-import io.github.lujinxin.nextep.trigger.TriggerSource
 
 object SettingsScreen {
     private data class AppOption(
@@ -167,7 +163,7 @@ object SettingsScreen {
                 }, matchWidth())
             }, matchWidth().apply { bottomMargin = dp(activity, 16) })
 
-            addView(workbenchSection(activity), matchWidth().apply { bottomMargin = dp(activity, 16) })
+            addView(WorkbenchSettingsCard(activity).view, matchWidth().apply { bottomMargin = dp(activity, 16) })
 
             val frostSection = sectionCard(activity).apply {
                 addView(sectionContent(activity).apply {
@@ -435,112 +431,6 @@ object SettingsScreen {
         }
     }
 
-    /** SystemUI keeps these preferences; this card only mirrors its reply and sends commands. */
-    private fun workbenchSection(activity: AppCompatActivity): View {
-        val content = sectionContent(activity)
-        val status = sectionDescription(activity, activity.getString(R.string.workbench_state_loading))
-        val controls = mutableListOf<View>()
-        var syncing = false
-        lateinit var apply: (android.os.Bundle?) -> Unit
-        fun refresh() = TriggerCoordinator.queryWorkbench(activity) { result ->
-            if (activity.isDestroyed || activity.isFinishing) return@queryWorkbench
-            apply((result as? TriggerCoordinator.RequestResult.Ready)?.extras
-                ?.takeIf { it.containsKey(TriggerBroadcastContract.EXTRA_APPEARANCE) })
-        }
-        fun command(key: String, value: String) {
-            if (syncing) return
-            controls.forEach { it.isEnabled = false }
-            TriggerCoordinator.workbenchCommand(activity, key, value) { result ->
-                if (activity.isDestroyed || activity.isFinishing) return@workbenchCommand
-                if (result !is TriggerCoordinator.RequestResult.Ready) {
-                    Toast.makeText(activity, R.string.workbench_command_failed, Toast.LENGTH_SHORT).show()
-                }
-                refresh()
-            }
-        }
-        fun choice(title: String, key: String, options: List<Pair<String, String>>): MaterialButtonToggleGroup {
-            content.addView(subsectionTitle(activity, title), matchWidth())
-            val buttons = options.map { (value, label) -> modeButton(activity, label).apply { tag = value } }
-            return MaterialButtonToggleGroup(activity).apply {
-                isSingleSelection = true
-                isSelectionRequired = true
-                buttons.forEach { addView(it, LinearLayout.LayoutParams(0, dp(activity, 44), 1f)) }
-                addOnButtonCheckedListener { group, checkedId, isChecked ->
-                    if (isChecked) command(key, group.findViewById<View>(checkedId).tag as String)
-                }
-                content.addView(this, matchWidth())
-                controls += this
-            }
-        }
-        fun toggle(title: String, summary: String, key: String): SwitchMaterial {
-            val switch = SwitchMaterial(activity).apply {
-                contentDescription = activity.getString(R.string.setting_description, title, summary)
-                minimumWidth = dp(activity, 72)
-                minimumHeight = dp(activity, 48)
-                setOnCheckedChangeListener { _, enabled -> command(key, enabled.toString()) }
-            }
-            content.addView(settingRow(activity, title, summary, switch).apply {
-                setPadding(0, dp(activity, 6), 0, dp(activity, 6))
-                setOnClickListener { switch.performClick() }
-            }, matchWidth())
-            controls += switch
-            return switch
-        }
-        content.addView(sectionTitle(activity, activity.getString(R.string.workbench_settings_title)), matchWidth())
-        content.addView(status, matchWidth())
-        val appearance = choice(activity.getString(R.string.workbench_appearance), TriggerBroadcastContract.COMMAND_APPEARANCE,
-            listOf("LIGHT" to activity.getString(R.string.appearance_light), "DARK" to activity.getString(R.string.appearance_dark)))
-        val side = choice(activity.getString(R.string.workbench_side), TriggerBroadcastContract.COMMAND_SIDEBAR_SIDE,
-            listOf("LEFT" to activity.getString(R.string.window_side_left), "RIGHT" to activity.getString(R.string.window_side_right)))
-        val position = choice(activity.getString(R.string.control_position), TriggerBroadcastContract.COMMAND_CONTROL_BOTTOM,
-            listOf("false" to activity.getString(R.string.control_top), "true" to activity.getString(R.string.control_bottom)))
-        val recents = toggle(activity.getString(R.string.workbench_hide_recents),
-            activity.getString(R.string.workbench_hide_recents_summary), TriggerBroadcastContract.COMMAND_HIDE_RECENTS)
-        val capture = toggle(activity.getString(R.string.workbench_capture),
-            activity.getString(R.string.workbench_capture_summary), TriggerBroadcastContract.COMMAND_CAPTURE)
-        val export = SettingsRowButton.create(activity).apply {
-            text = activity.getString(R.string.workbench_export_action)
-            setOnClickListener { command(TriggerBroadcastContract.COMMAND_EXPORT_DIAGNOSTICS, "true") }
-        }
-        content.addView(settingRow(activity, activity.getString(R.string.workbench_export),
-            activity.getString(R.string.workbench_export_summary), export).apply { setPadding(0, dp(activity, 6), 0, dp(activity, 6)) }, matchWidth())
-        controls += export
-        val exit = SettingsRowButton.create(activity).apply {
-            text = activity.getString(R.string.workbench_exit_action)
-            setOnClickListener {
-                isEnabled = false
-                TriggerCoordinator.requestSet(activity, false, TriggerSource.SYSTEM_RECOVERY) { isEnabled = true; refresh() }
-            }
-        }
-        content.addView(settingRow(activity, activity.getString(R.string.window_exit),
-            activity.getString(R.string.workbench_exit_summary), exit).apply { setPadding(0, dp(activity, 6), 0, dp(activity, 6)) }, matchWidth())
-        apply = { state ->
-            syncing = true
-            fun MaterialButtonToggleGroup.select(value: String) {
-                for (index in 0 until childCount) { val button = getChildAt(index) as MaterialButton; if (button.tag == value) check(button.id) }
-            }
-            if (state == null) {
-                status.text = activity.getString(R.string.workbench_state_unavailable)
-                controls.forEach { it.isEnabled = false }
-            } else {
-                status.text = activity.getString(R.string.workbench_settings_summary)
-                appearance.select(state.getString(TriggerBroadcastContract.EXTRA_APPEARANCE).orEmpty())
-                side.select(state.getString(TriggerBroadcastContract.EXTRA_SIDEBAR_SIDE).orEmpty())
-                position.select(state.getBoolean(TriggerBroadcastContract.EXTRA_CONTROL_BOTTOM).toString())
-                recents.isChecked = state.getBoolean(TriggerBroadcastContract.EXTRA_HIDE_RECENTS)
-                capture.isChecked = state.getBoolean(TriggerBroadcastContract.EXTRA_CAPTURE_ALLOWED)
-                controls.forEach { it.isEnabled = true }
-                // Capture is a session grant; it needs a visible workspace to take effect.
-                capture.isEnabled = state.getBoolean(TriggerBroadcastContract.EXTRA_ACTIVE)
-            }
-            syncing = false
-        }
-        apply(null)
-        status.text = activity.getString(R.string.workbench_state_loading)
-        refresh()
-        return sectionCard(activity).apply { addView(content) }
-    }
-
     private fun draggableSelectedRow(
         activity: AppCompatActivity,
         option: AppOption,
@@ -620,7 +510,7 @@ object SettingsScreen {
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         }
 
-    private fun sectionCard(activity: AppCompatActivity) = MaterialCardView(activity).apply {
+    internal fun sectionCard(activity: AppCompatActivity) = MaterialCardView(activity).apply {
         radius = dp(activity, 16).toFloat()
         cardElevation = 0f
         setCardBackgroundColor(SettingsPalette.surface(activity))
@@ -628,7 +518,7 @@ object SettingsScreen {
         strokeWidth = 0
     }
 
-    private fun settingRow(
+    internal fun settingRow(
         activity: AppCompatActivity,
         title: String,
         summary: String,
@@ -688,7 +578,7 @@ object SettingsScreen {
         }
     }
 
-    private fun modeButton(activity: AppCompatActivity, value: String) =
+    internal fun modeButton(activity: AppCompatActivity, value: String) =
         MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             id = View.generateViewId()
             text = value
@@ -699,26 +589,26 @@ object SettingsScreen {
             setTextColor(SettingsPalette.text(activity))
         }
 
-    private fun sectionContent(activity: AppCompatActivity) = LinearLayout(activity).apply {
+    internal fun sectionContent(activity: AppCompatActivity) = LinearLayout(activity).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(activity, 18), dp(activity, 18), dp(activity, 18), dp(activity, 18))
     }
 
-    private fun sectionTitle(activity: AppCompatActivity, value: String) = TextView(activity).apply {
+    internal fun sectionTitle(activity: AppCompatActivity, value: String) = TextView(activity).apply {
         text = value
         textSize = 18f
         setTextColor(SettingsPalette.text(activity))
         typeface = android.graphics.Typeface.DEFAULT_BOLD
     }
 
-    private fun sectionDescription(activity: AppCompatActivity, value: String) = TextView(activity).apply {
+    internal fun sectionDescription(activity: AppCompatActivity, value: String) = TextView(activity).apply {
         text = value
         textSize = 13f
         setTextColor(SettingsPalette.secondary(activity))
         setPadding(0, dp(activity, 4), 0, 0)
     }
 
-    private fun subsectionTitle(activity: AppCompatActivity, value: String) = TextView(activity).apply {
+    internal fun subsectionTitle(activity: AppCompatActivity, value: String) = TextView(activity).apply {
         text = value
         textSize = 14f
         setTextColor(SettingsPalette.secondary(activity))
@@ -748,10 +638,10 @@ object SettingsScreen {
         cornerRadius = radius
     }
 
-    private fun dp(activity: AppCompatActivity, value: Int): Int =
+    internal fun dp(activity: AppCompatActivity, value: Int): Int =
         (value * activity.resources.displayMetrics.density).toInt()
 
-    private fun matchWidth() = LinearLayout.LayoutParams(
+    internal fun matchWidth() = LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT,
         LinearLayout.LayoutParams.WRAP_CONTENT,
     )
