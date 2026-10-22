@@ -1,6 +1,5 @@
 package io.github.lujinxin.nextep.workspace
 
-import io.github.lujinxin.nextep.display.WORKSPACE_SLOT_COUNT
 import kotlin.math.roundToInt
 
 data class WorkspaceNavigationInsets(
@@ -90,7 +89,7 @@ data class WorkspaceGeometry(
         get() = contentLeft + (contentWidth - availableWidth * contentScale) / 2f - availableLeft * contentScale
 
     val contentTranslationY: Float
-        // Keep the app flush with the header; spare height belongs below it.
+        // The control and rail proportions preserve the source aspect ratio.
         get() = contentTop - availableTop * contentScale
 
     companion object {
@@ -119,13 +118,9 @@ data class WorkspaceGeometry(
             val landscape = screenWidth > screenHeight
             val longSide = if (landscape) availableWidth else availableHeight
             val shortSide = if (landscape) availableHeight else availableWidth
-            val gap = density.toInt().coerceAtLeast(1)
-            val count = WORKSPACE_SLOT_COUNT
-            // Remove the player reserve; keep portrait previews proportional.
             val controlThickness = (WorkspaceControlMetrics.COMPACT_HEIGHT_DP * density)
                 .roundToInt().coerceIn(1, (longSide / 2).coerceAtLeast(1))
-            val railWidth = (gap + (longSide - controlThickness - (count - 1) * gap).toDouble() *
-                shortSide / longSide / count).roundToInt().coerceIn(1, shortSide - 1)
+            val railWidth = proportionalRail(shortSide, longSide, controlThickness)
             return WorkspaceGeometry(
                 screenWidth = screenWidth,
                 screenHeight = screenHeight,
@@ -136,5 +131,10 @@ data class WorkspaceGeometry(
                 displayRotation = displayRotation,
             )
         }
+
+        // Round down so portrait fitting is height-limited: no top/bottom
+        // letterbox, no crop or stretch, and less than one pixel of side slack.
+        internal fun proportionalRail(shortSide: Int, longSide: Int, top: Int): Int =
+            (shortSide.toLong() * top / longSide).toInt().coerceIn(1, shortSide - 1)
     }
 }

@@ -33,7 +33,8 @@ internal object WorkbenchIntents {
         fun jd(instant: Boolean): Intent {
             val params = if (instant) JSONObject().put("category", "jump").put("des", "m")
                 .put("url", "https://daojia.jd.com/#/IndexSearch?keyword=$encoded&real_keyword=$encoded")
-            else JSONObject().put("category", "jump").put("des", "productList").put("keyWord", query)
+            else JSONObject().put("category", "jump").put("des", "productList")
+                .put("from", "search").put("keyWord", encoded)
             return view("openapp.jdmobile://virtual?params=${Uri.encode(params.toString())}", "com.jingdong.app.mall")
         }
         return if (mode == Search.DELIVERY) listOf(
@@ -42,7 +43,7 @@ internal object WorkbenchIntents {
             Target("美团外卖", view("imeituan://www.meituan.com/takeout/poi/search?query=$encoded", "com.sankuai.meituan")),
         ) else listOf(
             Target("拼多多", view("pinduoduo://com.xunmeng.pinduoduo/search_result.html?search_key=$encoded", "com.xunmeng.pinduoduo")),
-            Target("抖音商城", view("snssdk1128://search?keyword=$encoded&search_type=commodity", "com.ss.android.ugc.aweme")),
+            Target("抖音商城", view("snssdk1128://search?keyword=$encoded&search_style=commodity_center&hideMiddlePage=1", "com.ss.android.ugc.aweme")),
             Target("京东", jd(false)),
             Target("淘宝", view("taobao://s.taobao.com/search?q=$encoded", "com.taobao.taobao")),
         )

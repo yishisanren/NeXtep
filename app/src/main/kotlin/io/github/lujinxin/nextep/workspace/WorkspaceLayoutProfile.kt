@@ -37,9 +37,7 @@ data class WorkspaceLayoutProfile(
         }
     }
 
-    private fun wideHeight(): Int = (geometry.topHeight -
-        ((WorkspaceControlMetrics.COMPACT_HEIGHT_DP) *
-            densityDpi / 160f).toInt()).coerceAtLeast(1)
+    private fun wideHeight(): Int = geometry.topHeight
 
     fun canvas(index: Int): SlotGeometry = if (index == wideSlotIndex) {
         SlotGeometry(canvas.width, (canvas.width.toDouble() * wideHeight() /
@@ -56,11 +54,8 @@ data class WorkspaceLayoutProfile(
         val g = normal.geometry
         val short = minOf(g.availableWidth, g.availableHeight)
         val long = maxOf(g.availableWidth, g.availableHeight)
-        val fixed = ((WorkspaceControlMetrics.COMPACT_HEIGHT_DP) *
-            densityDpi / 160f).toInt()
-        val top = (fixed + short * 9 / 16).coerceIn(g.topHeight, (long * .70).toInt().coerceAtLeast(g.topHeight))
-        val rail = (gapPixels + ((long - top - gapPixels * 2).coerceAtLeast(3).toDouble() *
-            short / long / (WORKSPACE_SLOT_COUNT - 1))).toInt().coerceIn(gapPixels + 1, short - 1)
+        val top = (short * 9 / 16).coerceIn(1, (long * .70).toInt())
+        val rail = WorkspaceGeometry.proportionalRail(short, long, top).coerceAtLeast(gapPixels + 1)
         return normal.copy(geometry = g.copy(topHeight = top, sidebarWidth = rail), wideSlotIndex = index)
     }
 
@@ -86,7 +81,7 @@ data class WorkspaceLayoutProfile(
             (height - source.height * scale) / 2f - source.top * scale)
     }
 
-    fun encode(): String = (listOf(if (wideSlotIndex == null) "8" else "9", geometry.screenWidth, geometry.screenHeight,
+    fun encode(): String = (listOf(if (wideSlotIndex == null) "10" else "11", geometry.screenWidth, geometry.screenHeight,
         geometry.topHeight, geometry.sidebarWidth, densityDpi, gapPixels,
         geometry.navigationInsets.left, geometry.navigationInsets.top,
         geometry.navigationInsets.right, geometry.navigationInsets.bottom,
@@ -106,24 +101,25 @@ data class WorkspaceLayoutProfile(
         fun decode(encoded: String?): WorkspaceLayoutProfile? = runCatching {
             val p = encoded?.split(',') ?: return@runCatching null
             val version = p.firstOrNull() ?: return@runCatching null
-            if (version !in setOf("2", "3", "4", "5", "6", "7", "8", "9") ||
-                p.size != when (version) { "7", "9" -> 34; "6", "8" -> 33; "5" -> 30; else -> 29 }) return@runCatching null
+            if (version !in setOf("2", "3", "4", "5", "6", "7", "8", "9", "10", "11") ||
+                p.size != when (version) { "7", "9", "11" -> 34; "6", "8", "10" -> 33; "5" -> 30; else -> 29 }) return@runCatching null
             val profile = WorkspaceLayoutProfile(WorkspaceGeometry(p[1].toInt(), p[2].toInt(),
                 p[3].toInt(), p[4].toInt(), SidebarSide.RIGHT,
                 WorkspaceNavigationInsets(p[7].toInt(), p[8].toInt(), p[9].toInt(), p[10].toInt()),
-                displayRotation = when (version) { "6", "7", "8", "9" -> p[32].toInt(); "5" -> p[29].toInt(); else -> 0 }),
-                p[5].toInt(), p[6].toInt(), if (version == "7" || version == "9") p[33].toInt() else null)
-            val expected = if (version in setOf("6", "7", "8", "9")) profile.encode().split(',').toMutableList() else {
+                displayRotation = when (version) { "6", "7", "8", "9", "10", "11" -> p[32].toInt(); "5" -> p[29].toInt(); else -> 0 }),
+                p[5].toInt(), p[6].toInt(), if (version in setOf("7", "9", "11")) p[33].toInt() else null)
+            val expected = if (version in setOf("6", "7", "8", "9", "10", "11")) profile.encode().split(',').toMutableList() else {
                 // Validate the old three-slot record before recalculating four slots.
                 (profile.encode().split(',').take(20) +
                     profile.slotBounds(3).flatMap { listOf(it.width, it.height, it.top).map(Int::toString) } +
                     if (version == "5") listOf(profile.geometry.displayRotation.toString()) else emptyList()).toMutableList()
             }
             expected[0] = p[0]
-            if (version == "7") {
+            if (version == "7" || version == "9") {
                 val index = checkNotNull(profile.wideSlotIndex)
                 expected[21 + index * 3] = (profile.geometry.topHeight -
-                    (134 * profile.densityDpi / 160f).toInt()).coerceAtLeast(1).toString()
+                    ((if (version == "7") 134 else WorkspaceControlMetrics.COMPACT_HEIGHT_DP) *
+                        profile.densityDpi / 160f).toInt()).coerceAtLeast(1).toString()
             }
             if (p[0] == "2") {
                 // Migrate the old full-screen canvas using its recorded insets.
@@ -136,11 +132,12 @@ data class WorkspaceLayoutProfile(
                 expected[19] = oldCanvas.height.toString()
             }
             if (expected.joinToString(",") != encoded) return@runCatching null
-            if (version == "8" || version == "9") profile else {
+            if (version == "10" || version == "11") profile else {
                 // Recalculate the old slot proportions once using the already
                 // recorded display and navigation mode; never resample metrics.
                 create(profile.geometry.screenWidth, profile.geometry.screenHeight,
                     profile.densityDpi, profile.geometry.navigationInsets, profile.geometry.displayRotation)
+                    .withWideSlot(profile.wideSlotIndex)
             }
         }.getOrNull()
 

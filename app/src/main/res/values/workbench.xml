@@ -35,7 +35,7 @@
     <string name="workbench_launch_failed">Could not open the app or place it in the side window. Try again or export diagnostics.</string>
     <string name="workbench_search_running">Opening apps…</string>
     <string name="workbench_search_failed_detail">%1$s: completed %2$d/%3$d. %4$s</string>
-    <string name="workbench_compare_space">There are not enough free side windows.</string>
+    <string name="workbench_compare_space">Some side windows are not ready. Please try again shortly.</string>
     <string name="workbench_launch_timeout">The app did not appear in the foreground before the timeout.</string>
     <string name="workbench_launch_denied">The system denied this app launch or window move.</string>
     <string name="workbench_window_timeout">The target window did not become ready. Close and reopen the workspace, then try again.</string>

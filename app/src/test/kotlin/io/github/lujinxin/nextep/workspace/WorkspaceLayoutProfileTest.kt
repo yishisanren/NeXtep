@@ -4,8 +4,38 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WorkspaceLayoutProfileTest {
+    @Test fun mainHasNoVerticalLetterboxAndVideoUsesTheEntireTopRegion() {
+        for ((width, height) in listOf(1216 to 2640, 2640 to 1216, 1600 to 2560)) {
+            for (rotation in if (width > height) listOf(1, 3) else listOf(0)) {
+                for (insets in listOf(WorkspaceNavigationInsets(), WorkspaceNavigationInsets(bottom = 80))) {
+                    val normal = WorkspaceLayoutProfile.create(width, height, 476, insets, rotation)
+                    for (wideIndex in listOf(null, 0, 3)) {
+                        val profile = normal.withWideSlot(wideIndex)
+                        val g = profile.geometry
+                        assertEquals(g.contentHeight.toFloat(), g.availableHeight * g.contentScale, 1f)
+                        assertEquals(g.contentWidth.toFloat(), g.availableWidth * g.contentScale, 1f)
+                        if (wideIndex != null) assertEquals(g.topHeight, profile.slots[wideIndex].height)
+                        assertEquals(normal, profile.withWideSlot(null))
+                    }
+                }
+            }
+        }
+    }
+
+    @Test fun previousVideoRecordMigratesWithoutKeepingTheToolbarReserve() {
+        val old = WorkspaceLayoutProfile(WorkspaceGeometry(1216, 2640, 1106, 237, SidebarSide.RIGHT), 476, 2, 1)
+            .encode().split(',').toMutableList()
+        old[0] = "9"
+        old[24] = (1106 - (WorkspaceControlMetrics.COMPACT_HEIGHT_DP * 476 / 160f).toInt()).toString()
+        val migrated = checkNotNull(WorkspaceLayoutProfile.decode(old.joinToString(",")))
+        assertEquals(684, migrated.geometry.topHeight)
+        assertEquals(684, migrated.slots[1].height)
+        assertEquals(migrated, WorkspaceLayoutProfile.decode(migrated.encode()))
+        old[24] = "1"
+        assertNull(WorkspaceLayoutProfile.decode(old.joinToString(",")))
+    }
     @Test
-    fun everySlotFillsItsRecordedBoundsInBothNavigationModesAndRotations() {
+    fun everySlotFitsItsWholeCanvasInBothNavigationModesAndRotations() {
         for ((width, height, densityDpi) in listOf(
             Triple(1080, 2354, 480), Triple(2354, 1080, 480),
             Triple(1600, 2560, 320), Triple(2560, 1600, 320),
@@ -21,11 +51,10 @@ class WorkspaceLayoutProfileTest {
                         val drawnWidth = slot.width * transform.scaleX
                         val drawnHeight = slot.height * transform.scaleY
                         val message = "$width x $height navigation=$insets side=$side slot=$index"
-                        // One rounded rail-width pixel can expand to an aspect-ratio
-                        // worth of height; the live Surface is fitted uniformly too.
-                        assertEquals(message, slot.width.toFloat(), drawnWidth, 1.5f)
-                        assertEquals(message, slot.height.toFloat(), drawnHeight,
-                            positioned.canvas.height.toFloat() / positioned.canvas.width + 1f)
+                        assertTrue(message, drawnWidth <= slot.width + .01f)
+                        assertTrue(message, drawnHeight <= slot.height + .01f)
+                        assertTrue(message, kotlin.math.abs(slot.width - drawnWidth) < .01f ||
+                            kotlin.math.abs(slot.height - drawnHeight) < .01f)
                         assertEquals(message, slot.width / positioned.canvas.width.toFloat() * transform.scaleX,
                             slot.height / positioned.canvas.height.toFloat() * transform.scaleY, .000001f)
                     }
@@ -108,7 +137,7 @@ class WorkspaceLayoutProfileTest {
         val migrated = checkNotNull(WorkspaceLayoutProfile.decode(old.joinToString(",")))
         assertEquals(buttons, migrated)
         assertEquals(2222, migrated.canvas.height)
-        assertEquals("8", migrated.encode().substringBefore(','))
+        assertEquals("10", migrated.encode().substringBefore(','))
     }
 
     @Test
@@ -185,7 +214,7 @@ class WorkspaceLayoutProfileTest {
 
     @Test fun previousWorkbenchProfilesLoseThePlayerReserveButKeepTheirRecordedMetrics() {
         val geometry = WorkspaceGeometry(1080, 2354, 474, 218, SidebarSide.RIGHT)
-        val old = WorkspaceLayoutProfile(geometry, 480, 3).encode().replaceFirst("8,", "6,")
+        val old = WorkspaceLayoutProfile(geometry, 480, 3).encode().replaceFirst("10,", "6,")
         val migrated = checkNotNull(WorkspaceLayoutProfile.decode(old))
         assertEquals(426, migrated.geometry.topHeight)
         assertEquals(1080, migrated.geometry.screenWidth)
@@ -202,8 +231,8 @@ class WorkspaceLayoutProfileTest {
             parts[0] = "7"
             parts[21 + index * 3] = "607" // Previous 134dp header plus 16:9 wide window.
             val migrated = checkNotNull(WorkspaceLayoutProfile.decode(parts.joinToString(",")))
-            assertNull(migrated.wideSlotIndex)
-            assertEquals(426, migrated.geometry.topHeight)
+            assertEquals(index, migrated.wideSlotIndex)
+            assertEquals(607, migrated.geometry.topHeight)
             parts[21 + index * 3] = "606"
             assertNull(WorkspaceLayoutProfile.decode(parts.joinToString(",")))
         }

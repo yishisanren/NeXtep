@@ -212,8 +212,8 @@ object TaskSurfaceCompat {
     }.onFailure { NeXtepLog.warn("task_preview", "Task preview unavailable taskId=$taskId", it) }.getOrNull()
 
     /** Task-list delivery can precede Shell's surface callback on a cold launch. */
-    fun hasPresentableSurface(taskId: Int): Boolean =
-        findTaskLeash(taskId)?.let(::isValid) == true
+    fun hasPresentableSurface(taskId: Int, requireMainDisplay: Boolean = true): Boolean =
+        findTaskLeash(taskId, requireMainDisplay)?.let(::isValid) == true
 
     fun present(taskId: Int, geometry: WorkspaceGeometry): Result<Unit> = runCatching {
         require(taskId > 0) { "Invalid taskId=$taskId" }

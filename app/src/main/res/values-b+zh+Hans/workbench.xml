@@ -35,7 +35,7 @@
     <string name="workbench_launch_failed">应用启动或移入小窗失败，请重试或导出诊断。</string>
     <string name="workbench_search_running">正在打开应用…</string>
     <string name="workbench_search_failed_detail">%1$s：已完成%2$d/%3$d。%4$s</string>
-    <string name="workbench_compare_space">空闲小窗不足，请先腾出位置。</string>
+    <string name="workbench_compare_space">部分小窗尚未就绪，请稍后重试。</string>
     <string name="workbench_launch_timeout">等待应用出现在前台超时。</string>
     <string name="workbench_launch_denied">系统拒绝启动或移动此应用。</string>
     <string name="workbench_window_timeout">目标小窗未能就绪，请退出工作台后重新打开再试。</string>

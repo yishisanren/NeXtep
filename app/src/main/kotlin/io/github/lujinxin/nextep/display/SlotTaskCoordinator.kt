@@ -59,12 +59,22 @@ class SlotTaskCoordinator(
     private val packageManager = applicationContext.packageManager
     private val taskRepository = TaskRepository(applicationContext)
     private val handler = Handler(Looper.getMainLooper())
+    private val settlement = io.github.lujinxin.nextep.workspace.WorkspaceSettlement(
+        schedule = { delay, action -> handler.postDelayed({ action() }, delay) },
+        now = SystemClock::uptimeMillis,
+    )
+    private data class DeferredMove(val ready: () -> Boolean, val rollback: () -> Unit)
+    private var deferredMove: DeferredMove? = null
     private val slotRecords = MutableList(slots.size) { SlotRecord() }
     private data class LaunchRequest(
         val intent: Intent, var slot: Int?, var displayId: Int?,
         val search: Boolean = false, val emptyOnly: Boolean = false,
     ) {
         var observed: TaskRepository.TaskSnapshot? = null
+        val searchReadiness = io.github.lujinxin.nextep.workspace.WorkspaceSearchReadiness()
+        var existingTasks: Set<Int> = emptySet()
+        val routedTasks = mutableSetOf<Int>()
+        var redirectedTask: Int? = null
     }
     private val desktopSelection = io.github.lujinxin.nextep.workspace.WorkspaceSlotSelection()
     val selectingDesktopApp: Boolean get() = desktopSelection.target != null
@@ -74,7 +84,7 @@ class SlotTaskCoordinator(
         start = ::startAppRequest, ready = ::observeAppRequest, commit = ::commitAppRequest,
         prepare = ::prepareAppRequests,
         busy = { busy ->
-            slots.forEach { it.view.setBusy(busy || suspended || recentSelectionPending) }
+            slots.forEach { it.view.setBusy(busy || suspended || recentSelectionPending || transitionInProgress) }
             if (!busy && active && !suspended) {
                 reconcile("application launch finished")
                 dispatchPendingSelection()
@@ -113,9 +123,11 @@ class SlotTaskCoordinator(
     private fun startAppRequest(request: LaunchRequest) {
         check(active && !suspended)
         mainSelectionGeneration++
+        if (request.search) request.existingTasks = taskRepository.runningTasks().map { it.taskId }.toSet()
         val index = request.slot
         if (index != null) {
             check(slots[index].displayId() == request.displayId) { "Slot display changed" }
+            if (request.search) replaceSearchDestination(index, request.intent)
             // Reuse the original direct-to-display path. A new side-window app
             // must never depend on first becoming a presentable main-screen task.
             assignIntent(index, request.intent, external = request.search).getOrThrow()
@@ -132,27 +144,74 @@ class SlotTaskCoordinator(
 
     private fun observeAppRequest(request: LaunchRequest): Boolean {
         check(active && !suspended)
+        fun searchReady(task: TaskRepository.TaskSnapshot?): Boolean {
+            if (!request.search) return true
+            return request.searchReadiness.observe(task?.taskId, task?.component?.className,
+                task != null && TaskSurfaceCompat.hasPresentableSurface(task.taskId, requireMainDisplay = request.slot == null),
+                SystemClock.uptimeMillis(), request.intent.data?.host == "s.taobao.com")
+        }
         val index = request.slot
         if (index != null) {
             check(slots[index].displayId() == request.displayId) { "Slot display changed" }
-            val task = taskRepository.runningTasks().firstOrNull { it.displayId == request.displayId }
-                ?: return false
             val user = io.github.lujinxin.nextep.framework.TaskInfoCompat.userIdentifier(
                 request.intent.targetUser() ?: android.os.Process.myUserHandle())
+            val tasks = taskRepository.runningTasks()
+            val task = tasks.firstOrNull { it.displayId == request.displayId }
+            if (request.search) {
+                task?.takeIf { it.component.packageName == request.intent.component?.packageName && it.userId == user }
+                    ?.let { request.routedTasks.add(it.taskId) }
+                // ActivityOptions only targets the entry Activity. A router may
+                // create its result as a new default-display task. Adopt only this
+                // request's new/observed task, never an unrelated existing app.
+                val redirected = tasks.firstOrNull {
+                    it.displayId == Display.DEFAULT_DISPLAY && it.userId == user && !it.vendorWindowed &&
+                        it.component.packageName == request.intent.component?.packageName &&
+                        request.searchReadiness.belongsToRequest(it.taskId, request.existingTasks, request.routedTasks)
+                }
+                if (redirected != null && request.redirectedTask != redirected.taskId) {
+                    val canvas = checkNotNull(slots[index].geometry())
+                    val display = checkNotNull(request.displayId)
+                    mainTaskPresenter.restoreForMove(redirected.taskId).getOrThrow()
+                    ActivityTaskManagerCompat.setTaskResizeable(redirected.taskId, TASK_RESIZE_MODE_RESIZEABLE).getOrThrow()
+                    TaskSurfaceCompat.markDisplayExchange(redirected.taskId, display)
+                    WindowContainerTransactionCompat.moveTasks(listOf(WindowContainerTransactionCompat.TaskMove(
+                        checkNotNull(redirected.token), display, Rect(), canvas.densityDpi, fullscreenWindowingMode(),
+                    ))).getOrThrow()
+                    if (slotRecords[index].originalLayout == null) slotRecords[index].originalLayout = redirected.toLayout()
+                    slotRecords[index].retainedTaskId = redirected.taskId
+                    request.redirectedTask = redirected.taskId
+                    request.routedTasks.add(redirected.taskId)
+                    searchReady(null)
+                    NeXtepLog.info("app_launch", "Adopted routed result task=${redirected.taskId} slot=$index")
+                    return false
+                }
+            }
+            if (task == null) { searchReady(null); return false }
             if (task.displayId != request.displayId || task.userId != user ||
-                task.component.packageName != request.intent.component?.packageName) return false
+                task.component.packageName != request.intent.component?.packageName) {
+                searchReady(null)
+                return false
+            }
+            if (!searchReady(task)) return false
             reconcile("observe direct slot launch")
             val occupied = slotRecords[index].state as? SlotState.Occupied ?: return false
             if (occupied.taskId != task.taskId) return false
             request.observed = task
             return true
         }
-        val foreground = taskRepository.foregroundTask() ?: return false
+        val foreground = taskRepository.foregroundTask() ?: run { searchReady(null); return false }
         val user = io.github.lujinxin.nextep.framework.TaskInfoCompat.userIdentifier(
             request.intent.targetUser() ?: android.os.Process.myUserHandle())
         if (foreground.component.packageName != request.intent.component?.packageName ||
-            foreground.userId != user || !isExchangeableMainTask(foreground)) return false
-        if (!TaskSurfaceCompat.hasPresentableSurface(foreground.taskId)) return false
+            foreground.userId != user || !isExchangeableMainTask(foreground)) {
+            searchReady(null)
+            return false
+        }
+        if (!TaskSurfaceCompat.hasPresentableSurface(foreground.taskId)) {
+            searchReady(null)
+            return false
+        }
+        if (!searchReady(foreground)) return false
         request.observed = foreground
         return true
     }
@@ -215,7 +274,12 @@ class SlotTaskCoordinator(
                                 record.retainedTaskId == null) null else "reserved"
                             else -> "unavailable"
                         }
-                    }, promoted,
+                    }, promoted, slotRecords.indices.filter { index ->
+                        val record = slotRecords[index]
+                        record.pendingComponent != null ||
+                            record.state !is SlotState.Occupied && record.state !is SlotState.Ready ||
+                            record.state is SlotState.Ready && record.retainedTaskId != null
+                    }.toSet(),
                 )
             } catch (error: io.github.lujinxin.nextep.workspace.WorkspaceSearchPlacement.NoSpace) {
                 if (slotRecords.any { it.state !is SlotState.Occupied &&
@@ -239,6 +303,28 @@ class SlotTaskCoordinator(
             request.displayId = display
             true
         }
+    }
+
+    /** Preserve the old task in recents, below the main app. Never force-stop
+     * or remove it just to make room for an explicitly requested search. */
+    private fun replaceSearchDestination(index: Int, intent: Intent) {
+        val display = checkNotNull(slots[index].displayId())
+        val targetUser = io.github.lujinxin.nextep.framework.TaskInfoCompat.userIdentifier(
+            intent.targetUser() ?: android.os.Process.myUserHandle())
+        val tasks = taskRepository.runningTasks().filter { it.displayId == display }
+        if (tasks.any { it.component.packageName == intent.component?.packageName && it.userId == targetUser }) return
+        tasks.forEach { task ->
+            val record = slotRecords[index]
+            val layout = if (record.retainedTaskId == task.taskId) record.originalLayout else null
+            val original = layout ?: defaultMainLayout(task.resizeMode)
+            WindowContainerTransactionCompat.parkInDefaultDisplay(checkNotNull(task.token),
+                original.defaultDisplayBounds(), original.densityDpi, original.windowingMode).getOrThrow()
+            original.resizeMode?.let { ActivityTaskManagerCompat.setTaskResizeable(task.taskId, it).getOrThrow() }
+        }
+        check(taskRepository.runningTasks().none { it.displayId == display }) { "Previous slot task is still attached" }
+        clearSlotAssignment(index)
+        slotRecords[index].exitTask = null
+        setState(index, SlotState.Ready(display), "search replaced previous window")
     }
 
     private var active = false
@@ -309,6 +395,8 @@ class SlotTaskCoordinator(
             }
             throw error
         }
+        settlement.cancel()
+        deferredMove = null
         active = false
         cancelPendingDragExchange()
         onSlotDragEnded()
@@ -398,6 +486,8 @@ class SlotTaskCoordinator(
         ensureMainThread()
         if (!active || suspended == value) return
         if (value) {
+            settlement.cancel()
+            deferredMove = null
             suspended = true
             clearDesktopSelection()
             appLaunch.cancel()
@@ -1277,121 +1367,97 @@ class SlotTaskCoordinator(
     }
 
     private fun swapWithMain(slotIndex: Int, occupied: SlotState.Occupied) {
-        val slotTask = taskRepository.findTask(occupied.taskId)
+        val tasks = taskRepository.runningTasks()
+        val slotTask = tasks.firstOrNull { it.taskId == occupied.taskId }
             ?: error("Slot task ${occupied.taskId} exited")
-        val mainTask = taskRepository.foregroundTask()
+        val mainTask = tasks.firstOrNull { it.displayId == Display.DEFAULT_DISPLAY }
+            ?.takeIf { isExchangeableMainTask(it) && it.taskId != slotTask.taskId }
         val record = slotRecords[slotIndex]
-        val slotOriginalLayout = record.originalLayout
-            ?: defaultMainLayout(slotTask.resizeMode)
-        val mainIsExchangeable = mainTask != null &&
-            isExchangeableMainTask(mainTask) &&
-            mainTask.taskId != slotTask.taskId
-
-        var slotMovedToMain = false
-        var mainMovedToSlot = false
-        var restoredMainTask: TaskRepository.TaskSnapshot? = null
-        var mainOriginalLayout: TaskLayout? = null
-        try {
-            promotedRecoveryComponent = slotTask.component
-            promotedRecoveryDeadline =
-                SystemClock.uptimeMillis() + MIGRATION_RECOVERY_WINDOW_MS
-            promotedRecoveryAttempts = 0
-            if (mainIsExchangeable) {
-                restoredMainTask = taskRepository.findTask(mainTask.taskId) ?: mainTask
-                mainOriginalLayout = restoredMainTask.toLayout()
-                if (restoredMainTask.resizeMode != TASK_RESIZE_MODE_RESIZEABLE) {
-                    ActivityTaskManagerCompat.setTaskResizeable(
-                        mainTask.taskId,
-                        TASK_RESIZE_MODE_RESIZEABLE,
-                    ).getOrThrow()
-                }
-            }
-
-            if (slotTask.resizeMode != TASK_RESIZE_MODE_RESIZEABLE) {
-                ActivityTaskManagerCompat.setTaskResizeable(
-                    slotTask.taskId,
-                    TASK_RESIZE_MODE_RESIZEABLE,
-                ).getOrThrow()
-            }
-            moveTaskToDisplayAndWait(slotTask.taskId, Display.DEFAULT_DISPLAY)
-            slotMovedToMain = true
-            restoreTaskLayout(slotTask, slotOriginalLayout, restoreResizeMode = false)
-            taskRepository.bringTaskToFront(slotTask.taskId).getOrThrow()
-
-            if (mainIsExchangeable) {
-                record.migrationRecoveryComponent = mainTask.component
-                record.migrationRecoveryDeadline =
-                    SystemClock.uptimeMillis() + MIGRATION_RECOVERY_WINDOW_MS
-                record.migrationRecoveryAttempts = 0
-                moveTaskToDisplayAndWait(mainTask.taskId, occupied.displayId)
-                mainMovedToSlot = true
-                mainTaskPresenter.restoreForMove(mainTask.taskId).getOrThrow()
-                record.originalLayout = mainOriginalLayout
-                ensureSlotLayout(slotIndex, checkNotNull(restoredMainTask), mainOriginalLayout)
-                record.retainedTaskId = mainTask.taskId
-                setState(
-                    slotIndex,
-                    SlotState.Occupied(
-                        occupied.displayId,
-                        mainTask.taskId,
-                        mainTask.component,
-                    ),
-                    "main and slot exchanged",
-                )
-            } else {
-                // Promotion intentionally emptied the slot. An old migration
-                // recovery would otherwise relaunch this live task back into it,
-                // leaving the visible '+' blocked by pendingComponent.
-                clearSlotAssignment(slotIndex)
-                setState(slotIndex, SlotState.Ready(occupied.displayId), "slot promoted to main")
-            }
-            val presentation = mainTaskPresenter.presentTask(slotTask.taskId, geometryProvider())
-            if (presentation.isFailure && taskRepository.findTask(slotTask.taskId) != null) {
-                presentation.getOrThrow()
-            }
-            schedulePromotedTaskRecovery()
-        } catch (error: Throwable) {
+        val slotOriginal = record.originalLayout ?: defaultMainLayout(slotTask.resizeMode)
+        val mainOriginal = mainTask?.toLayout()
+        val canvas = checkNotNull(slots[slotIndex].geometry())
+        val slotBounds = Rect(0, 0, canvas.width, canvas.height)
+        val mainBounds = geometryProvider().let { Rect(0, 0, it.screenWidth, it.screenHeight) }
+        fun move(task: TaskRepository.TaskSnapshot, display: Int, layout: TaskLayout) =
+            WindowContainerTransactionCompat.TaskMove(checkNotNull(task.token), display,
+                if (layout.windowingMode == fullscreenWindowingMode()) Rect() else layout.bounds,
+                layout.densityDpi, layout.windowingMode)
+        val sideLayout = TaskLayout(slotBounds, canvas.densityDpi, fullscreenWindowingMode(),
+            TASK_RESIZE_MODE_RESIZEABLE)
+        var submitted = false
+        fun rollback() {
             clearPromotedTaskRecovery()
-            val rollbackErrors = mutableListOf<Throwable>()
-            if (slotMovedToMain) {
-                mainTaskPresenter.restoreForMove(slotTask.taskId)
-                    .onFailure(rollbackErrors::add)
-                runCatching {
-                    moveTaskToDisplayAndWait(slotTask.taskId, occupied.displayId)
-                    record.originalLayout = slotOriginalLayout
-                    ensureSlotLayout(slotIndex, slotTask, slotOriginalLayout)
-                }.onFailure(rollbackErrors::add)
+            TaskSurfaceCompat.cancelDisplayExchange(slotTask.taskId)
+            mainTask?.let { TaskSurfaceCompat.cancelDisplayExchange(it.taskId) }
+            if (submitted) {
+                mainTaskPresenter.restoreForMove(slotTask.taskId).getOrThrow()
+                WindowContainerTransactionCompat.moveTasks(buildList {
+                    add(move(slotTask, occupied.displayId, sideLayout))
+                    mainTask?.let { add(move(it, Display.DEFAULT_DISPLAY, checkNotNull(mainOriginal))) }
+                }).getOrThrow()
             }
-            val rollbackMainTask = restoredMainTask
-            if (mainMovedToSlot && mainTask != null && rollbackMainTask != null) {
-                runCatching {
-                    moveTaskToDisplayAndWait(
-                        mainTask.taskId,
-                        Display.DEFAULT_DISPLAY,
-                    )
-                    restoreTaskLayout(
-                        rollbackMainTask,
-                        checkNotNull(mainOriginalLayout),
-                    )
-                }.onFailure(rollbackErrors::add)
+            listOfNotNull(slotTask, mainTask).forEach { task ->
+                task.resizeMode?.let { ActivityTaskManagerCompat.setTaskResizeable(task.taskId, it).getOrThrow() }
             }
-            if (mainTask != null && rollbackMainTask != null) {
-                mainTaskPresenter.presentTask(mainTask.taskId, geometryProvider())
-                    .onFailure(rollbackErrors::add)
-            }
-            record.retainedTaskId = occupied.taskId
-            record.originalLayout = slotOriginalLayout
+            record.originalLayout = slotOriginal
+            record.retainedTaskId = slotTask.taskId
             record.migrationRecoveryComponent = null
             record.migrationRecoveryDeadline = 0L
-            record.migrationRecoveryAttempts = 0
-            if (rollbackErrors.isEmpty()) {
-                setState(slotIndex, occupied, "swap rolled back")
-            } else {
-                slotRecords[slotIndex].retainedTaskId = null
-                slotRecords[slotIndex].originalLayout = null
-                setState(slotIndex, SlotState.Failed("rollback failed"), "swap rollback incomplete")
-                rollbackErrors.forEach(error::addSuppressed)
+            setState(slotIndex, occupied, "exchange rolled back")
+            mainTask?.let { mainTaskPresenter.presentTask(it.taskId, geometryProvider()) }
+        }
+        try {
+            listOfNotNull(slotTask, mainTask).forEach { task ->
+                if (task.resizeMode != TASK_RESIZE_MODE_RESIZEABLE) {
+                    ActivityTaskManagerCompat.setTaskResizeable(task.taskId, TASK_RESIZE_MODE_RESIZEABLE).getOrThrow()
+                }
             }
+            TaskSurfaceCompat.markDisplayExchange(slotTask.taskId, Display.DEFAULT_DISPLAY)
+            TaskSurfaceCompat.preparePromotion(slotTask.taskId, geometryProvider()).onFailure {
+                NeXtepLog.warn("task_surface", "Early exchange fitting pending", it)
+            }
+            mainTask?.let {
+                TaskSurfaceCompat.markDisplayExchange(it.taskId, occupied.displayId)
+                mainTaskPresenter.restoreForMove(it.taskId).getOrThrow()
+            }
+            WindowContainerTransactionCompat.moveTasks(buildList {
+                mainTask?.let { add(move(it, occupied.displayId, sideLayout)) }
+                add(move(slotTask, Display.DEFAULT_DISPLAY, slotOriginal))
+            }).getOrThrow()
+            submitted = true
+            // The server transaction changes ownership atomically. Keep the saved
+            // originals valid even if the user closes/locks before surfaces arrive.
+            clearSlotAssignment(slotIndex)
+            if (mainTask != null) {
+                record.originalLayout = mainOriginal
+                record.retainedTaskId = mainTask.taskId
+                setState(slotIndex, SlotState.Occupied(occupied.displayId, mainTask.taskId,
+                    mainTask.component), "exchange submitted")
+            } else setState(slotIndex, SlotState.Ready(occupied.displayId), "promotion submitted")
+            deferredMove = DeferredMove(ready = {
+                val current = taskRepository.runningTasks()
+                val promoted = current.firstOrNull { it.taskId == slotTask.taskId }
+                val demoted = mainTask?.let { old -> current.firstOrNull { it.taskId == old.taskId } }
+                val mainReady = promoted?.displayId == Display.DEFAULT_DISPLAY &&
+                    promoted.bounds == mainBounds && promoted.densityDpi == slotOriginal.densityDpi &&
+                    promoted.windowingMode == slotOriginal.windowingMode
+                val sideReady = mainTask == null || demoted?.let {
+                    it.displayId == occupied.displayId && it.bounds == slotBounds &&
+                        it.densityDpi == canvas.densityDpi && it.windowingMode == fullscreenWindowingMode()
+                } == true
+                if (!mainReady || !sideReady || !TaskSurfaceCompat.hasPresentableSurface(slotTask.taskId)) false
+                else {
+                    if (mainTask != null) {
+                        val source = slots[slotIndex].sourceBounds()
+                        TaskSurfaceCompat.fitSlotSurface(mainTask.taskId, occupied.displayId,
+                            Rect(source.left, source.top, source.right, source.bottom)).getOrThrow()
+                    }
+                    mainTaskPresenter.presentTask(slotTask.taskId, geometryProvider()).getOrThrow()
+                    true
+                }
+            }, rollback = ::rollback)
+        } catch (error: Throwable) {
+            runCatching { rollback() }.onFailure(error::addSuppressed)
             throw error
         }
     }
@@ -1407,24 +1473,34 @@ class SlotTaskCoordinator(
         clearPromotedTaskRecovery()
         slots.forEach { it.view.setBusy(true) }
         NeXtepLog.info("slot_coordinator", "Transition started $label")
-        fun performMove(): Result<Unit> {
-            val result = runCatching {
-                check(active && !suspended) { "Workspace is no longer interactive" }
-                operation()
-            }.onFailure { error ->
+        fun finish(result: Result<Unit>) {
+            result.onFailure { error ->
                 NeXtepLog.error("slot_coordinator", "Transition failed $label", error)
-                if (animation != null) showMessage(AppLanguage.string(applicationContext, R.string.window_swap_incomplete))
+                showMessage(AppLanguage.string(applicationContext, R.string.window_swap_incomplete))
             }
-            // As in 1.1.1, serialize logical moves only. Shell's later animation
-            // must not turn the visual reconciliation delay into an input lock.
             transitionInProgress = false
             slots.forEach { it.view.setBusy(suspended || recentSelectionPending || appLaunch.running) }
-            NeXtepLog.info("slot_coordinator", "Transition move completed $label")
             dispatchPendingSelection()
             handler.postDelayed({
                 reconcile("settled $label")
                 NeXtepLog.info("slot_coordinator", "Transition settled $label")
             }, SETTLE_DELAY_MS)
+        }
+        fun performMove(): Result<Unit> {
+            val result = runCatching {
+                check(active && !suspended) { "Workspace is no longer interactive" }
+                operation()
+            }
+            val pending = deferredMove
+            deferredMove = null
+            if (result.isSuccess && pending != null) {
+                settlement.begin(pending.ready) { settled ->
+                    settled.onFailure { error ->
+                        runCatching { pending.rollback() }.onFailure(error::addSuppressed)
+                    }
+                    finish(settled)
+                }
+            } else finish(result)
             return result
         }
         if (animation == null) return performMove()

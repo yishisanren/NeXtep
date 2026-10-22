@@ -90,7 +90,7 @@ class WorkbenchUiTest {
     }
 
     @Test fun everySearchKeepsUnicodeAndSeparatorsInsideOneQuery() {
-        val query = "牛奶 & #/ 500ml 😀"
+        val query = "牛奶 & #/ 500ml + 50% 😀"
         val targets = WorkbenchIntents.searches(WorkbenchIntents.Search.SHOPPING, query)
         assertEquals(4, targets.size)
         val pdd = targets[0].intent.data!!
@@ -99,7 +99,11 @@ class WorkbenchUiTest {
         val tb = targets[3].intent.data!!
         assertEquals(query, pdd.getQueryParameter("search_key"))
         assertEquals(query, dy.getQueryParameter("keyword"))
-        assertEquals(query, jd.getString("keyWord"))
+        assertEquals("search", jd.getString("from"))
+        assertEquals(query, java.net.URLDecoder.decode(jd.getString("keyWord"), "UTF-8"))
+        assertEquals("commodity_center", dy.getQueryParameter("search_style"))
+        assertEquals("1", dy.getQueryParameter("hideMiddlePage"))
+        assertNull(dy.getQueryParameter("search_type"))
         assertEquals(query, tb.getQueryParameter("q"))
         assertEquals(query, WorkbenchIntents.searches(WorkbenchIntents.Search.DELIVERY, query)[2]
             .intent.data!!.getQueryParameter("query"))

@@ -72,12 +72,40 @@ class WorkbenchFlowUiTest {
             assertTrue((field(strip, "heading") as TextView).text.isNotBlank())
             val player = field(strip, "mediaHost") as View
             assertEquals(View.GONE, player.visibility)
-            assertEquals(0, player.layoutParams.height)
+            assertEquals(View.VISIBLE, (field(strip, "controls") as View).visibility)
             compare.performClick(); pay.performClick(); more.performClick()
         }
         assertEquals(listOf("compare", "pay", "more", "compare", "pay", "more"), tapped)
         for (theme in WorkbenchAppearance.entries) {
             assertTrue(Color.blue(theme.accent) > Color.red(theme.accent))
+        }
+    }
+
+    @Test fun wideVideoHidesEveryTopControlAndRestoresThemWithoutReservingSpace() {
+        val strip = TopAppStripView(context, {}, {}, { _, _ -> false }, { _, _ -> false })
+        val video = View(context)
+        val controls = field(strip, "controls") as View
+        val media = field(strip, "mediaHost") as FrameLayout
+        for (landscape in listOf(false, true)) {
+            strip.setLandscape(landscape, landscape)
+            strip.setWideSlot(video)
+            layout(strip, 1080, 607)
+            assertEquals(View.GONE, controls.visibility)
+            assertEquals(View.VISIBLE, media.visibility)
+            assertEquals(0, media.top)
+            assertEquals(0, media.left)
+            assertEquals(strip.width, video.width)
+            assertEquals(strip.height, video.height)
+            assertEquals(0, video.top)
+            assertSame(media, video.parent)
+            strip.setWideSlot(null)
+            layout(strip, 1080, 426)
+            assertEquals(View.VISIBLE, controls.visibility)
+            assertEquals(View.GONE, media.visibility)
+            assertNull(video.parent)
+            for (name in listOf("heading", "titleView", "compareButton", "paymentButton", "toolsButton", "appScroll")) {
+                assertEquals(View.VISIBLE, (field(strip, name) as View).visibility)
+            }
         }
     }
 

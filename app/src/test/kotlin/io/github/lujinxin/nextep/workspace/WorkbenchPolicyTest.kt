@@ -23,9 +23,16 @@ class WorkbenchPolicyTest {
             listOf("jd", "taobao", "mt"), listOf("jd", null, null, "video")))
     }
 
-    @Test fun aFullSidebarIsRejectedBeforeAnySearchCanStart() {
+    @Test fun aFullSidebarReplacesOldAppsButReservesLaterMatchesFirst() {
+        assertEquals(listOf(3, 0), WorkspaceSearchPlacement.plan(
+            listOf("a", "b", "c"), listOf("video", "other", "reserved", null)))
+        assertEquals(listOf(1, 0, 3), WorkspaceSearchPlacement.plan(
+            listOf("pdd", "dy", "jd", "tb"), listOf("jd", "old", "video", "tb")))
+        assertEquals(listOf(0, 1, 2), WorkspaceSearchPlacement.plan(
+            listOf("main", "a", "b", "c"), listOf("old0", "old1", "old2", "old3")))
         assertThrows(IllegalStateException::class.java) {
-            WorkspaceSearchPlacement.plan(listOf("a", "b", "c"), listOf("video", "other", "reserved", null))
+            WorkspaceSearchPlacement.plan(listOf("a", "b", "c"), listOf("video", "other", "reserved", null),
+                unavailable = setOf(0, 1, 2))
         }
         assertThrows(IllegalArgumentException::class.java) {
             WorkspaceSearchPlacement.plan(listOf("a", "a"), listOf(null, null, null, null))

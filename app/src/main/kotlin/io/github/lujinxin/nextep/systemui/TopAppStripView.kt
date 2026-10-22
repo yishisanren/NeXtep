@@ -44,11 +44,13 @@ class TopAppStripView(
     private val repository = TopAppRepository(context)
     private val mediaHost = FrameLayout(context).apply { visibility = GONE }
     private var wideSlot: View? = null
+    private lateinit var controls: LinearLayout
 
     internal fun setWideSlot(view: View?) {
         if (wideSlot === view) return
         wideSlot?.let { mediaHost.removeView(it) }
         wideSlot = view
+        controls.visibility = if (view == null) VISIBLE else GONE
         mediaHost.visibility = if (view == null) GONE else VISIBLE
         view?.let {
             (it.parent as? android.view.ViewGroup)?.removeView(it)
@@ -118,15 +120,12 @@ class TopAppStripView(
         setBackgroundColor(Color.TRANSPARENT)
         addView(
             LinearLayout(context).apply {
+                controls = this
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(7), 0, dp(7), dp(WorkspaceControlMetrics.CONTENT_BOTTOM_PADDING_DP))
                 addView(
                     actionRow(),
                     LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(WorkspaceControlMetrics.ACTION_HEIGHT_DP)),
-                )
-                addView(
-                    mediaHost,
-                    LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0),
                 )
                 addView(
                     appScroll,
@@ -137,20 +136,13 @@ class TopAppStripView(
                 topMargin = dp(WorkspaceControlMetrics.STATUS_HEIGHT_DP)
             },
         )
+        // Video owns the complete top region; toolbar padding/status reserve
+        // belongs only to controls, never to the video container.
+        addView(mediaHost, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(dismissHint, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
             topMargin = dp(WorkspaceControlMetrics.STATUS_HEIGHT_DP)
         })
         installTouchableStatusBarPassThrough()
-    }
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        if (MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED) {
-            mediaHost.layoutParams.height = if (wideSlot == null) 0 else {
-                val fixed = WorkspaceControlMetrics.COMPACT_HEIGHT_DP
-                (MeasureSpec.getSize(heightMeasureSpec) - dp(fixed)).coerceAtLeast(1)
-            }
-        }
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
 
     private val configChangedReceiver = object : android.content.BroadcastReceiver() {
@@ -427,11 +419,11 @@ class TopAppStripView(
                     val region = info.javaClass.getField("touchableRegion").get(info) as Region
                     if (landscape) {
                         // Exclude the physical-top status band in window-local axes.
-                        val status = dp(WorkspaceControlMetrics.STATUS_HEIGHT_DP).coerceIn(0, height)
+                        val status = if (wideSlot != null) 0 else dp(WorkspaceControlMetrics.STATUS_HEIGHT_DP).coerceIn(0, height)
                         if (controlOnLeft) region.set(status, 0, height, width)
                         else region.set(0, 0, height - status, width)
                     } else {
-                        region.set(0, dp(WorkspaceControlMetrics.STATUS_HEIGHT_DP), width, height)
+                        region.set(0, if (wideSlot != null) 0 else dp(WorkspaceControlMetrics.STATUS_HEIGHT_DP), width, height)
                     }
                 }
                 null

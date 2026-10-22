@@ -6,6 +6,8 @@ import java.lang.reflect.Method
 import java.util.concurrent.ConcurrentHashMap
 
 object WindowContainerTransactionCompat {
+    data class TaskMove(val token: Any, val displayId: Int, val bounds: Rect,
+        val densityDpi: Int, val windowingMode: Int)
     @Volatile private var defaultTaskDisplayArea: Any? = null
     private val taskDisplayAreas = ConcurrentHashMap<Int, Any>()
 
@@ -26,6 +28,24 @@ object WindowContainerTransactionCompat {
         val token = type.getField("token").get(info) ?: return
         taskDisplayAreas.remove(id, token)
         if (id == 0 && defaultTaskDisplayArea == token) defaultTaskDisplayArea = null
+    }
+
+    /** One server transaction changes parents and final configurations together.
+     * No intermediate fullscreen/density relayout between the two moves. */
+    fun moveTasks(moves: List<TaskMove>): Result<Unit> = runCatching {
+        require(moves.isNotEmpty())
+        val parents = moves.map { checkNotNull(taskDisplayAreas[it.displayId]) {
+            "Task display area unavailable: ${it.displayId}"
+        } }
+        val transaction = Class.forName("android.window.WindowContainerTransaction")
+            .getDeclaredConstructor().newInstance()
+        moves.forEachIndexed { index, move ->
+            invoke(transaction, "setWindowingMode", move.token, move.windowingMode)
+            invoke(transaction, "setBounds", move.token, Rect(move.bounds))
+            invoke(transaction, "setDensityDpi", move.token, move.densityDpi)
+            invoke(transaction, "reparent", move.token, parents[index], true)
+        }
+        applyTransaction(transaction)
     }
 
     /** Reparent below existing default-display tasks, without briefly foregrounding each app. */

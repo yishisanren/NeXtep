@@ -28,7 +28,7 @@
 
 # NeXtep
 
-本 Fork 的 `1.3.0-workbench.2` 提供一个主窗和四个实时侧窗、深浅主题、横向应用置顶、右上角付款工具、同词多平台比价，以及标准内容拖放分享。保留现有应用选择方式、左右底角斜滑和 corner.3 的性能优化。[定制版 APK](https://github.com/yishisanren/NeXtep/releases/tag/v1.3.0-workbench.2) · [功能、使用与验证边界](docs/WORKBENCH.md) · [既有性能优化](docs/PERFORMANCE.md)。这是待用户真机验证的预发布版；付款／搜索入口、五应用并行、受保护显示和实际流畅性均未宣称真机验收通过。内置更新仍查询上游，安装上游包会替换本 Fork 的功能。
+本 Fork 的 `1.3.0-workbench.6` 提供一个主窗和四个实时侧窗、深浅主题、横向应用置顶、右上角付款工具、同词多平台比价，以及标准内容拖放分享。保留现有应用选择方式、左右底角斜滑和 corner.3 的性能优化。[定制版 APK](https://github.com/yishisanren/NeXtep/releases/tag/v1.3.0-workbench.6) · [功能、使用与验证边界](docs/WORKBENCH.md) · [既有性能优化](docs/PERFORMANCE.md)。这是待用户真机验证的预发布版；付款／搜索入口、五应用并行、受保护显示和实际流畅性均未宣称真机验收通过。内置更新仍查询上游，安装上游包会替换本 Fork 的功能。
 
 **NeXtep** 是一个 **LSPosed 模块**。它在保留 **ColorOS 16 / 17 原生桌面**的同时，为系统加入**原生侧边工作区**，提供**一个主窗口和四个实时小窗**，并将任务切换、拖动操作、媒体控制和自定义应用快捷方式集成到 SystemUI 中。
 
