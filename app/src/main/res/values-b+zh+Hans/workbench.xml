@@ -55,4 +55,5 @@
     <string name="workbench_exit_action">退出</string>
     <string name="favorite_apps_edit">编辑</string>
     <string name="favorite_apps_summary">已选 %1$d 个，最多 %2$d 个</string>
+    <string name="workbench_compare_hint">同一件商品，同时在几个应用里搜，各开一个小窗。</string>
 </resources>

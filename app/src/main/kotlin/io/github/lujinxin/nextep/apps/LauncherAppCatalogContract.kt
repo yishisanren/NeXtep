@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /** SystemUI has cross-user access that the ordinary settings APK does not. */
 object LauncherAppCatalogContract {
-    private const val ACTION_QUERY = "io.github.lujinxin.nextep.action.QUERY_PROFILE_APPS"
+    private const val ACTION_QUERY = "io.github.yishisanren.panes.action.QUERY_PROFILE_APPS"
     private const val RESULT_CATALOG = 35_201
     private const val EXTRA_APPS = "profile_apps"
     private const val EXTRA_LANGUAGE_TAG = "language_tag"

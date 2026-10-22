@@ -11,11 +11,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "io.github.lujinxin.nextep"
+        applicationId = "io.github.yishisanren.panes"
         minSdk = 35
         targetSdk = 36
-        versionCode = 44
-        versionName = "1.3.0-workbench.30"
+        versionCode = 50
+        versionName = "2.0.0"
 
     }
 

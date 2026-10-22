@@ -20,7 +20,7 @@ sealed interface RecentTaskSelection {
 }
 
 object RecentTaskSelectionContract {
-    const val ACTION_QUERY = "io.github.lujinxin.nextep.action.QUERY_CENTER_RECENT_TASK"
+    const val ACTION_QUERY = "io.github.yishisanren.panes.action.QUERY_CENTER_RECENT_TASK"
     const val EXTRA_IDENTITY = "systemui_identity"
     const val EXTRA_TASK_ID = "task_id"
     const val EXTRA_USER_ID = "user_id"

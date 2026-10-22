@@ -33,26 +33,26 @@ data class WorkspaceTopConfig(
 )
 
 object WorkspaceConfigContract {
-    const val ACTION_CHANGED = "io.github.lujinxin.nextep.action.WORKSPACE_CONFIG_CHANGED"
-    const val ACTION_QUERY = "io.github.lujinxin.nextep.action.QUERY_WORKSPACE_CONFIG"
-    const val EXTRA_TITLE = "io.github.lujinxin.nextep.extra.TOP_TITLE"
-    const val EXTRA_CONTENT_MODE = "io.github.lujinxin.nextep.extra.TOP_CONTENT_MODE"
-    const val EXTRA_SHOW_SECONDS = "io.github.lujinxin.nextep.extra.TOP_SHOW_SECONDS"
-    const val EXTRA_FROST_STRENGTH = "io.github.lujinxin.nextep.extra.FROST_STRENGTH"
-    const val EXTRA_APPS = "io.github.lujinxin.nextep.extra.TOP_APPS"
-    const val EXTRA_MANUAL_APP_ORDER = "io.github.lujinxin.nextep.extra.MANUAL_APP_ORDER"
-    const val EXTRA_TEXT_SCROLL = "io.github.lujinxin.nextep.extra.TOP_TEXT_SCROLL"
-    const val EXTRA_TEXT_FONT = "io.github.lujinxin.nextep.extra.TOP_TEXT_FONT"
-    const val EXTRA_TEXT_SIZE = "io.github.lujinxin.nextep.extra.TOP_TEXT_SIZE"
-    const val EXTRA_TEXT_BOLD = "io.github.lujinxin.nextep.extra.TOP_TEXT_BOLD"
-    const val EXTRA_STATUS_BAR_GESTURE_ENABLED = "io.github.lujinxin.nextep.extra.STATUS_BAR_GESTURE_ENABLED"
-    const val EXTRA_SLOT_BACKGROUND_SWIPE_ENABLED = "io.github.lujinxin.nextep.extra.SLOT_BACKGROUND_SWIPE_ENABLED"
-    const val EXTRA_AUTO_MINIMIZE_MAIN = "io.github.lujinxin.nextep.extra.AUTO_MINIMIZE_MAIN_ON_TOP_APP_SWITCH"
-    const val EXTRA_NAVIGATION_BUTTONS_ENABLED = "io.github.lujinxin.nextep.extra.NAVIGATION_BUTTONS_ENABLED"
-    const val EXTRA_LANGUAGE_TAG = "io.github.lujinxin.nextep.extra.LANGUAGE_TAG"
+    const val ACTION_CHANGED = "io.github.yishisanren.panes.action.WORKSPACE_CONFIG_CHANGED"
+    const val ACTION_QUERY = "io.github.yishisanren.panes.action.QUERY_WORKSPACE_CONFIG"
+    const val EXTRA_TITLE = "io.github.yishisanren.panes.extra.TOP_TITLE"
+    const val EXTRA_CONTENT_MODE = "io.github.yishisanren.panes.extra.TOP_CONTENT_MODE"
+    const val EXTRA_SHOW_SECONDS = "io.github.yishisanren.panes.extra.TOP_SHOW_SECONDS"
+    const val EXTRA_FROST_STRENGTH = "io.github.yishisanren.panes.extra.FROST_STRENGTH"
+    const val EXTRA_APPS = "io.github.yishisanren.panes.extra.TOP_APPS"
+    const val EXTRA_MANUAL_APP_ORDER = "io.github.yishisanren.panes.extra.MANUAL_APP_ORDER"
+    const val EXTRA_TEXT_SCROLL = "io.github.yishisanren.panes.extra.TOP_TEXT_SCROLL"
+    const val EXTRA_TEXT_FONT = "io.github.yishisanren.panes.extra.TOP_TEXT_FONT"
+    const val EXTRA_TEXT_SIZE = "io.github.yishisanren.panes.extra.TOP_TEXT_SIZE"
+    const val EXTRA_TEXT_BOLD = "io.github.yishisanren.panes.extra.TOP_TEXT_BOLD"
+    const val EXTRA_STATUS_BAR_GESTURE_ENABLED = "io.github.yishisanren.panes.extra.STATUS_BAR_GESTURE_ENABLED"
+    const val EXTRA_SLOT_BACKGROUND_SWIPE_ENABLED = "io.github.yishisanren.panes.extra.SLOT_BACKGROUND_SWIPE_ENABLED"
+    const val EXTRA_AUTO_MINIMIZE_MAIN = "io.github.yishisanren.panes.extra.AUTO_MINIMIZE_MAIN_ON_TOP_APP_SWITCH"
+    const val EXTRA_NAVIGATION_BUTTONS_ENABLED = "io.github.yishisanren.panes.extra.NAVIGATION_BUTTONS_ENABLED"
+    const val EXTRA_LANGUAGE_TAG = "io.github.yishisanren.panes.extra.LANGUAGE_TAG"
     const val RESULT_CONFIG = 35_001
-    private const val MODULE_PACKAGE = "io.github.lujinxin.nextep"
-    private const val RECEIVER_CLASS = "io.github.lujinxin.nextep.config.WorkspaceConfigReceiver"
+    private const val MODULE_PACKAGE = "io.github.yishisanren.panes"
+    private val RECEIVER_CLASS = WorkspaceConfigReceiver::class.java.name
 
     fun queryIntent(): Intent = Intent(ACTION_QUERY)
         .addFlags(Intent.FLAG_RECEIVER_FOREGROUND or Intent.FLAG_INCLUDE_STOPPED_PACKAGES).setComponent(
@@ -148,7 +148,7 @@ object WorkspaceConfigClient {
         runCatching {
             val json = JSONObject()
             for (key in extras.keySet()) {
-                if (!key.startsWith("io.github.lujinxin.nextep.extra.")) continue
+                if (!key.startsWith("io.github.yishisanren.panes.extra.")) continue
                 @Suppress("DEPRECATION")
                 when (val value = extras.get(key)) {
                     is String, is Boolean, is Int -> json.put(key, value)

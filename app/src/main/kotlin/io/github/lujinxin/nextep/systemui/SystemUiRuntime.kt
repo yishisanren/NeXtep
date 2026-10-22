@@ -361,10 +361,13 @@ object SystemUiRuntime {
             }
         }
         TriggerBroadcastContract.ACTION_QUERY_WORKSPACE -> true
-        TriggerBroadcastContract.ACTION_WORKBENCH_COMMAND -> windowController.applyWorkbenchCommand(
-            intent.getStringExtra(TriggerBroadcastContract.EXTRA_COMMAND_KEY).orEmpty(),
-            intent.getStringExtra(TriggerBroadcastContract.EXTRA_COMMAND_VALUE),
-        )
+        TriggerBroadcastContract.ACTION_WORKBENCH_COMMAND -> {
+            val key = intent.getStringExtra(TriggerBroadcastContract.EXTRA_COMMAND_KEY).orEmpty()
+            val value = intent.getStringExtra(TriggerBroadcastContract.EXTRA_COMMAND_VALUE)
+            windowController.applyWorkbenchCommand(key, value).also {
+                NeXtepLog.info("systemui_runtime", "Workbench command key=$key value=$value handled=$it")
+            }
+        }
         TriggerBroadcastContract.ACTION_LAUNCH_SLOT_TEST -> {
             val active = workspaceController.isActive() || workspaceController.setActive(true)
             active && workspaceController.launchInSlot(

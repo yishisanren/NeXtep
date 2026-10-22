@@ -86,63 +86,140 @@ internal class WorkbenchToolsController(
 
     fun showSearch() {
         dismiss()
+        val a = appearance()
         var mode = WorkbenchIntents.Search.DELIVERY
-        val panel = column()
-        val targets = TextView(panel.context).apply {
-            text = string(R.string.workbench_delivery_apps)
-            setPadding(0, dp(12), 0, dp(12))
+        val panel = LinearLayout(themedContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(22), dp(24), dp(20))
         }
-        val buttons = android.widget.RadioGroup(panel.context).apply { orientation = LinearLayout.HORIZONTAL }
-        WorkbenchIntents.Search.entries.forEach { choice ->
-            buttons.addView(android.widget.RadioButton(panel.context).apply {
-                id = View.generateViewId()
-                text = string(if (choice == WorkbenchIntents.Search.DELIVERY) R.string.workbench_delivery else R.string.workbench_shopping)
-                isChecked = choice == mode
-                setOnClickListener {
-                    mode = choice
-                    targets.text = string(if (mode == WorkbenchIntents.Search.DELIVERY)
-                        R.string.workbench_delivery_apps else R.string.workbench_shopping_apps)
+        fun label(text: CharSequence, size: Float, color: Int, bold: Boolean = false) = TextView(panel.context).apply {
+            this.text = text
+            textSize = size
+            setTextColor(color)
+            if (bold) typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+        fun rounded(fill: Int, radius: Int, stroke: Int = 0) = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = dp(radius).toFloat()
+            setColor(fill)
+            if (stroke > 0) setStroke(stroke, a.outline)
+        }
+        val onAccent = if (a == WorkbenchAppearance.DARK) 0xFF0C131F.toInt() else android.graphics.Color.WHITE
+        val fill = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        panel.addView(label(string(R.string.workbench_compare), 20f, a.text, bold = true), fill)
+        panel.addView(label(string(R.string.workbench_compare_hint), 13f, a.secondary), fill.apply { topMargin = dp(4) })
+
+        // Segmented choice: a card-coloured track with an accent pill on the selected half.
+        val choices = mutableListOf<Pair<WorkbenchIntents.Search, TextView>>()
+        val apps = LinearLayout(panel.context).apply { orientation = LinearLayout.HORIZONTAL }
+        fun renderApps() {
+            apps.removeAllViews()
+            runCatching { WorkbenchIntents.searches(mode, "x") }.getOrDefault(emptyList()).forEach { target ->
+                val installed = canOpen(target.intent)
+                val icon = target.intent.`package`?.let { pkg -> runCatching { context.packageManager.getApplicationIcon(pkg) }.getOrNull() }
+                    ?: WorkbenchIcon(WorkbenchIcon.Kind.COMPARE, a.secondary)
+                apps.addView(LinearLayout(panel.context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = android.view.Gravity.CENTER_HORIZONTAL
+                    alpha = if (installed) 1f else .35f
+                    addView(android.widget.ImageView(panel.context).apply {
+                        setImageDrawable(icon)
+                        contentDescription = target.name
+                    }, LinearLayout.LayoutParams(dp(40), dp(40)))
+                    addView(label(target.name, 11f, a.secondary).apply {
+                        gravity = android.view.Gravity.CENTER
+                        maxLines = 1
+                        ellipsize = android.text.TextUtils.TruncateAt.END
+                    }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                        topMargin = dp(6)
+                    })
+                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            }
+        }
+        fun renderChoices() {
+            choices.forEach { (choice, view) ->
+                val selected = choice == mode
+                view.background = if (selected) rounded(a.accent, 10) else null
+                view.setTextColor(if (selected) onAccent else a.secondary)
+                view.typeface = if (selected) android.graphics.Typeface.DEFAULT_BOLD else android.graphics.Typeface.DEFAULT
+            }
+            renderApps()
+        }
+        val segments = LinearLayout(panel.context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = rounded(a.card, 13, dp(1))
+            setPadding(dp(3), dp(3), dp(3), dp(3))
+            WorkbenchIntents.Search.entries.forEach { choice ->
+                val view = label(string(if (choice == WorkbenchIntents.Search.DELIVERY) R.string.workbench_delivery
+                    else R.string.workbench_shopping), 15f, a.secondary).apply {
+                    gravity = android.view.Gravity.CENTER
+                    setOnClickListener { if (mode != choice) { mode = choice; renderChoices() } }
                 }
-            }, android.widget.RadioGroup.LayoutParams(0, dp(48), 1f))
+                choices += choice to view
+                addView(view, LinearLayout.LayoutParams(0, dp(40), 1f))
+            }
         }
+        panel.addView(segments, fill.apply { topMargin = dp(18) })
+        panel.addView(apps, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(18) })
+
         val query = EditText(panel.context).apply {
             hint = string(R.string.workbench_query)
             contentDescription = hint
             setSingleLine(true)
             filters = arrayOf(InputFilter.LengthFilter(200))
+            textSize = 16f
+            setTextColor(a.text)
+            setHintTextColor(a.secondary)
+            background = rounded(a.card, 14, dp(1))
+            setPadding(dp(16), 0, dp(16), 0)
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            val glyph = WorkbenchIcon(WorkbenchIcon.Kind.COMPARE, a.secondary).apply { setBounds(0, 0, dp(20), dp(20)) }
+            setCompoundDrawablesRelative(glyph, null, null, null)
+            compoundDrawablePadding = dp(12)
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
         }
-        panel.addView(buttons)
-        panel.addView(targets)
-        panel.addView(query)
-        val window = builder().setTitle(string(R.string.workbench_compare)).setView(panel)
-            .setNegativeButton(string(R.string.workbench_cancel), null)
-            .setPositiveButton(string(R.string.workbench_search), null).create()
+        panel.addView(query, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(18) })
+        val status = label("", 12f, a.secondary).apply { visibility = View.GONE }
+        panel.addView(status, fill.apply { topMargin = dp(8) })
+
+        val cancel = label(string(R.string.workbench_cancel), 15f, a.secondary).apply {
+            gravity = android.view.Gravity.CENTER
+            background = rounded(a.card, 12, dp(1))
+            setOnClickListener { dismiss() }
+        }
+        val go = label(string(R.string.workbench_search), 15f, onAccent, bold = true).apply {
+            gravity = android.view.Gravity.CENTER
+            background = rounded(a.accent, 12)
+        }
+        panel.addView(LinearLayout(panel.context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(cancel, LinearLayout.LayoutParams(0, dp(46), 1f))
+            addView(go, LinearLayout.LayoutParams(0, dp(46), 1.5f).apply { marginStart = dp(12) })
+        }, fill.apply { topMargin = dp(18) })
+        renderChoices()
+
+        val window = builder().setView(panel).create()
         if (!show(window)) return
-        window.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+        fun setBusy(busy: Boolean) {
+            searching = busy
+            query.isEnabled = !busy
+            choices.forEach { it.second.isEnabled = !busy }
+            go.isEnabled = !busy
+            go.alpha = if (busy) .6f else 1f
+            go.text = string(if (busy) R.string.workbench_search_running else R.string.workbench_search)
+        }
+        fun submit() {
+            if (searching) return
             val term = query.text.toString().trim()
             val requested = runCatching { WorkbenchIntents.searches(mode, term) }.getOrNull()
-            if (requested == null) { query.error = string(R.string.workbench_query_empty); return@setOnClickListener }
+            if (requested == null) { query.error = string(R.string.workbench_query_empty); return }
             val available = requested.filter { canOpen(it.intent) }
-            targets.text = requested.joinToString("\n") { target ->
-                (if (target in available) "✓  " else "—  ") + target.name
-            }
-            if (available.isEmpty()) { message(R.string.workbench_compare_missing); return@setOnClickListener }
-            searching = true
-            query.isEnabled = false
-            for (index in 0 until buttons.childCount) buttons.getChildAt(index).isEnabled = false
-            window.getButton(AlertDialog.BUTTON_POSITIVE).apply {
-                isEnabled = false
-                text = string(R.string.workbench_search_running)
-            }
+            if (available.isEmpty()) { message(R.string.workbench_compare_missing); return }
+            status.visibility = View.GONE
+            setBusy(true)
             fun finished(result: Result<Unit>) {
                 if (dialog !== window) return
-                searching = false
-                query.isEnabled = true
-                for (index in 0 until buttons.childCount) buttons.getChildAt(index).isEnabled = true
-                window.getButton(AlertDialog.BUTTON_POSITIVE).apply {
-                    isEnabled = true
-                    text = string(R.string.workbench_search)
-                }
+                setBusy(false)
                 result.onSuccess { dismiss() }.onFailure { error ->
                     if (error is java.util.concurrent.CancellationException) return@onFailure
                     val failure = error as? io.github.lujinxin.nextep.workspace.WorkspaceLaunchSequence.Failure
@@ -157,13 +234,16 @@ internal class WorkbenchToolsController(
                             R.string.workbench_place_failed else R.string.workbench_launch_failed
                     }
                     val name = available.getOrNull(failure?.index ?: 0)?.name.orEmpty()
-                    query.error = string(R.string.workbench_search_failed_detail,
+                    status.text = string(R.string.workbench_search_failed_detail,
                         name, failure?.completed ?: 0, available.size, string(reason))
+                    status.visibility = View.VISIBLE
                     NeXtepLog.warn("compare_launch", "Search sequence failed index=" + failure?.index, error)
                 }
             }
             search(available.map { it.intent }, ::finished).onFailure { finished(Result.failure(it)) }
         }
+        go.setOnClickListener { submit() }
+        query.setOnEditorActionListener { _, _, _ -> submit(); true }
     }
 
     private fun startPaymentShortcut(action: WorkbenchIntents.Payment): Boolean = runCatching {
@@ -218,6 +298,13 @@ internal class WorkbenchToolsController(
             value.window?.apply {
                 setType(checkNotNull(SystemUiWindowTypeResolver.resolve()))
                 if (!captureAllowed()) addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                // The frame follows the workbench panels (same tone, 28dp corners) in both appearances.
+                setBackgroundDrawable(android.graphics.drawable.InsetDrawable(
+                    android.graphics.drawable.GradientDrawable().apply {
+                        cornerRadius = dp(28).toFloat()
+                        setColor(appearance().opaquePanel)
+                        setStroke(dp(1), appearance().outline)
+                    }, dp(16), 0, dp(16), 0))
             }
             value.setOnDismissListener {
                 if (dialog === value) {

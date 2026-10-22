@@ -36,8 +36,8 @@ class BottomCornerGestureDetectorTest {
     @Test fun exactDistanceThresholdConfirms() {
         val t = Trace()
         t.event(0, 20f, 880f)
-        assertEquals(OBSERVING, t.event(2, 51f, 849f))
-        assertEquals(CONFIRMED, t.event(2, 52f, 848f))
+        assertEquals(OBSERVING, t.event(2, 43f, 857f))
+        assertEquals(CONFIRMED, t.event(2, 44f, 856f))
     }
 
     @Test fun shortSwipeAndTapDoNotConfirm() {
@@ -59,11 +59,11 @@ class BottomCornerGestureDetectorTest {
 
     @Test fun cornerStartBoundaryIsInclusiveAndCannotBeEnteredMidSwipe() {
         val t = Trace()
-        assertEquals(OBSERVING, t.event(0, 72f, 828f))
-        assertEquals(CONFIRMED, t.event(2, 104f, 796f))
-        assertEquals(IGNORED, t.event(0, 73f, 828f))
+        assertEquals(OBSERVING, t.event(0, 96f, 804f))
+        assertEquals(CONFIRMED, t.event(2, 128f, 772f))
+        assertEquals(IGNORED, t.event(0, 97f, 804f))
         assertEquals(IGNORED, t.event(2, 50f, 850f))
-        assertEquals(IGNORED, t.event(0, 20f, 827f))
+        assertEquals(IGNORED, t.event(0, 20f, 803f))
     }
 
     @Test fun straightHorizontalAndHomeSwipesAreAbandoned() {
@@ -86,7 +86,7 @@ class BottomCornerGestureDetectorTest {
     }
 
     @Test fun diagonalSlopeLimitsAreAcceptedButFlatPathsAreNot() {
-        for ((dx, dy) in listOf(32f to 64f, 64f to 32f)) {
+        for ((dx, dy) in listOf(24f to 60f, 60f to 24f)) {
             val t = Trace()
             t.event(0, 20f, 880f)
             assertEquals(CONFIRMED, t.event(2, 20f + dx, 880f - dy))

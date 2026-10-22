@@ -158,6 +158,12 @@ class WorkbenchFlowUiTest {
         assertNull(WorkspaceIntentResolver.resolve(context.packageManager, Intent(Intent.ACTION_VIEW)))
     }
 
+    // The redesigned compare dialog draws its own buttons; the primary one carries the search label.
+    private fun searchButton(dialog: android.app.AlertDialog) = descendants(dialog.window!!.decorView)
+        .filterIsInstance<android.widget.TextView>().first {
+            it.text == context.getString(R.string.workbench_search) || it.text == context.getString(R.string.workbench_search_running)
+        }
+
     private fun tools(search: (List<Intent>, (Result<Unit>) -> Unit) -> Result<Unit>,
         cancel: () -> Unit = {}, open: (Intent) -> Result<Unit> = { Result.success(Unit) }) = WorkbenchToolsController(
         context, { WorkbenchAppearance.DARK }, { false }, open, search, cancel,
@@ -174,7 +180,7 @@ class WorkbenchFlowUiTest {
         val dialog = ShadowAlertDialog.getLatestAlertDialog()
         val input = descendants(dialog.window!!.decorView).filterIsInstance<EditText>().single()
         input.setText(query)
-        val button = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
+        val button = searchButton(dialog)
         button.performClick()
         assertEquals(expected.map { it.intent.data }, submitted.map { it.data })
         assertTrue(dialog.isShowing)
@@ -192,7 +198,7 @@ class WorkbenchFlowUiTest {
         tools.showSearch()
         val dialog = ShadowAlertDialog.getLatestAlertDialog()
         descendants(dialog.window!!.decorView).filterIsInstance<EditText>().single().setText("milk")
-        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
+        searchButton(dialog).performClick()
         assertEquals(listOf(expected.intent.data), submitted.map { it.data })
         tools.dismiss()
     }
@@ -207,13 +213,15 @@ class WorkbenchFlowUiTest {
         val dialog = ShadowAlertDialog.getLatestAlertDialog()
         val input = descendants(dialog.window!!.decorView).filterIsInstance<EditText>().single()
         input.setText(query)
-        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
+        searchButton(dialog).performClick()
         complete!!.invoke(Result.failure(WorkspaceLaunchSequence.Failure(1, 1,
             java.util.concurrent.TimeoutException())))
         assertTrue(dialog.isShowing)
-        assertTrue(input.error.toString().contains(apps[1].name))
-        assertTrue(input.error.toString().contains("1/3"))
-        assertTrue(dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).isEnabled)
+        val status = descendants(dialog.window!!.decorView).filterIsInstance<android.widget.TextView>()
+            .first { it.text.contains("1/3") }
+        assertTrue(status.text.toString().contains(apps[1].name))
+        assertEquals(android.view.View.VISIBLE, status.visibility)
+        assertTrue(searchButton(dialog).isEnabled)
         assertTrue(input.isEnabled)
         tools.dismiss()
     }
@@ -225,7 +233,7 @@ class WorkbenchFlowUiTest {
         tools.showSearch()
         val dialog = ShadowAlertDialog.getLatestAlertDialog()
         descendants(dialog.window!!.decorView).filterIsInstance<EditText>().single().setText("milk")
-        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
+        searchButton(dialog).performClick()
         tools.dismiss()
         assertEquals(1, cancelled)
     }

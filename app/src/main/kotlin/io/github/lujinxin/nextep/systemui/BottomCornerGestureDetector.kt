@@ -6,8 +6,11 @@ class BottomCornerGestureDetector(
 ) {
     enum class Result { IGNORED, OBSERVING, ABANDONED, CONFIRMED }
 
-    private val startSize = 72f * density
-    private val minimumDistance = 32f * density
+    // A thumb swipe from the corner is short and rarely a clean 45°: accept 24dp on each axis
+    // within a 96dp corner. The system home swipe is near-vertical and the back swipe near-
+    // horizontal, so both still fail the 2.5:1 diagonal check below.
+    private val startSize = 96f * density
+    private val minimumDistance = 24f * density
     private val directionSlop = 12f * density
     private var observing = false
     private var fromLeft = false
@@ -65,10 +68,10 @@ class BottomCornerGestureDetector(
                 return finish(Result.ABANDONED)
             }
             if (inward >= minimumDistance && upward >= minimumDistance &&
-                inward <= upward * 2f && upward <= inward * 2f
+                inward <= upward * 2.5f && upward <= inward * 2.5f
             ) return finish(if (canActivate()) Result.CONFIRMED else Result.ABANDONED)
             if (maxOf(inward, upward) >= minimumDistance &&
-                minOf(inward, upward) < maxOf(inward, upward) / 3f
+                minOf(inward, upward) < maxOf(inward, upward) / 4f
             ) return finish(Result.ABANDONED)
         }
         return if (action == ACTION_MOVE) Result.OBSERVING else finish(Result.ABANDONED)

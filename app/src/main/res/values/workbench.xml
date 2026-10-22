@@ -55,4 +55,5 @@
     <string name="workbench_exit_action">Exit</string>
     <string name="favorite_apps_edit">Edit</string>
     <string name="favorite_apps_summary">Selected %1$d of up to %2$d apps</string>
+    <string name="workbench_compare_hint">Search one product in several apps at once, each in its own pane.</string>
 </resources>

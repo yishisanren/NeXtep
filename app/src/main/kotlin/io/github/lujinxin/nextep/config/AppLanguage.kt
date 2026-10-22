@@ -10,7 +10,7 @@ import java.util.Locale
 
 /** Uses Android's persisted app language; host resources are never changed. */
 object AppLanguage {
-    private const val MODULE_PACKAGE = "io.github.lujinxin.nextep"
+    private const val MODULE_PACKAGE = "io.github.yishisanren.panes"
     val languageTags = listOf("", "zh-Hans", "zh-Hant", "en", "ja", "ko")
 
     @Volatile private var hostLanguageTag = ""

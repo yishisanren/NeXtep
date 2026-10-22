@@ -1,6 +1,6 @@
 # 工作台定制版
 
-版本：`1.3.0-workbench.30`，versionCode `44`，运行协议 51。一步工作台提供设置中选择的最多十个常用应用、原生系统弹窗、统一的浅深色面板、顶部或底部控制区、侧窗原位扩展、横屏全屏视频收放，以及添加应用时保留原主窗任务。实际效果由用户真机验收。
+版本：`2.0.0`，versionCode `50`，运行协议 51。一步工作台提供设置中选择的最多十个常用应用、原生系统弹窗、统一的浅深色面板、顶部或底部控制区、侧窗原位扩展、横屏全屏视频收放，以及添加应用时保留原主窗任务。实际效果由用户真机验收。
 
 ## 窗口和外观
 
@@ -86,6 +86,6 @@
 
 原「高级」页的三条命令。以 Root 身份在手机解锁状态下执行，不加 `adb shell` 前缀；LSPosed 中需已启用本模块并重启。
 
-- 进入：`am broadcast -n io.github.lujinxin.nextep/.trigger.WorkspaceControlBrokerReceiver -a io.github.lujinxin.nextep.action.HOST_SET_REQUEST --ez io.github.lujinxin.nextep.extra.REQUESTED_ACTIVE true`
-- 退出：`am broadcast -n io.github.lujinxin.nextep/.trigger.WorkspaceControlBrokerReceiver -a io.github.lujinxin.nextep.action.HOST_SET_REQUEST --ez io.github.lujinxin.nextep.extra.REQUESTED_ACTIVE false`
+- 进入：`am broadcast -n io.github.yishisanren.panes/io.github.lujinxin.nextep.trigger.WorkspaceControlBrokerReceiver -a io.github.yishisanren.panes.action.HOST_SET_REQUEST --ez io.github.yishisanren.panes.extra.REQUESTED_ACTIVE true`
+- 退出：`am broadcast -n io.github.yishisanren.panes/io.github.lujinxin.nextep.trigger.WorkspaceControlBrokerReceiver -a io.github.yishisanren.panes.action.HOST_SET_REQUEST --ez io.github.yishisanren.panes.extra.REQUESTED_ACTIVE false`
 - 查询：`settings get global nextep_workspace_active_v1`（1 小窗模式，0 普通模式，null 尚无记录）

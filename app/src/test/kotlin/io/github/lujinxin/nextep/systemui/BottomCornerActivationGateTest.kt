@@ -19,7 +19,7 @@ class BottomCornerActivationGateTest {
         var checks = 0
         val detector = BottomCornerGestureDetector(1f) { checks++; true }
         detector.observe(0, 20f, 2380f, 1, 0, 1080, 2400)
-        repeat(25) { detector.observe(2, 20f + it, 2380f - it, 1, it + 1L, 1080, 2400) }
+        repeat(20) { detector.observe(2, 20f + it, 2380f - it, 1, it + 1L, 1080, 2400) }
         assertEquals(1, checks)
         assertEquals(BottomCornerGestureDetector.Result.CONFIRMED,
             detector.observe(2, 80f, 2320f, 1, 100, 1080, 2400))

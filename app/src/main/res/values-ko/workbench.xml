@@ -54,4 +54,5 @@
     <string name="workbench_exit_action">종료</string>
     <string name="favorite_apps_edit">편집</string>
     <string name="favorite_apps_summary">%2$d개 중 %1$d개 선택됨</string>
+    <string name="workbench_compare_hint">같은 상품을 여러 앱에서 동시에 검색하고 각각 작은 창으로 엽니다.</string>
 </resources>

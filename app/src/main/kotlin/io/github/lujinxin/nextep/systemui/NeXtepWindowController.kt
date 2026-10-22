@@ -238,6 +238,7 @@ class NeXtepWindowController(
     }
 
     private var pendingDeactivate: Runnable? = null
+    private var panelGeneration = 0
 
     private fun runPendingDeactivate() {
         pendingDeactivate?.let { backdropHandler.removeCallbacks(it); it.run() }
@@ -284,11 +285,29 @@ class NeXtepWindowController(
         if (FeatureGate.VIRTUAL_DISPLAY_SLOTS.defaultEnabled) {
             slotCoordinator?.activate()
         }
+        // Rapid exit/enter cycles have left the main task scaled with every panel hidden. Whatever
+        // cancels the entry animation, the panels must end visible while the workspace is active.
+        val generation = ++panelGeneration
+        backdropHandler.postDelayed({
+            if (generation != panelGeneration || !workspaceVisible || suspended) return@postDelayed
+            records.forEach { record ->
+                val view = record.view
+                if (view.visibility != View.VISIBLE || view.alpha < 1f || view.translationX != 0f || view.translationY != 0f) {
+                    NeXtepLog.warn("workspace", "Panel recovered ${record.title} visibility=${view.visibility} alpha=${view.alpha}")
+                    view.animate().cancel()
+                    view.visibility = View.VISIBLE
+                    view.alpha = 1f
+                    view.translationX = 0f
+                    view.translationY = 0f
+                }
+            }
+        }, WORKSPACE_ENTER_DURATION_MS + 80)
         return geometry()
     }
 
     fun hide() {
         workspaceVisible = false
+        panelGeneration++
         tools.dismiss()
         setCaptureAllowed(false)
         publishPrivacy()

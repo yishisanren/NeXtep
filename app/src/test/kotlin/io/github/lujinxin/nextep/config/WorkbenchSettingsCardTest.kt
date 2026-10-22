@@ -32,6 +32,9 @@ class WorkbenchSettingsCardTest {
         activity.setTheme(com.google.android.material.R.style.Theme_MaterialComponents_DayNight_NoActionBar)
         var reply = state("LIGHT", "LEFT", true, true, false, true)
         val sent = mutableListOf<Pair<String, String>>()
+        // SystemUI answers on a later message, never inside the tap that sent the command.
+        val replies = mutableListOf<() -> Unit>()
+        fun drain() { replies.toList().forEach { replies.remove(it); it() } }
         val card = WorkbenchSettingsCard(activity, { done -> done(ready(reply)) }) { key, value, done ->
             sent += key to value
             reply = when (key) {
@@ -39,7 +42,7 @@ class WorkbenchSettingsCardTest {
                 TriggerBroadcastContract.COMMAND_CONTROL_BOTTOM -> state("DARK", "LEFT", value.toBoolean(), true, false, true)
                 else -> reply
             }
-            done(ready(reply))
+            replies += { done(ready(reply)) }
         }
         fun checkedTag(group: com.google.android.material.button.MaterialButtonToggleGroup) =
             group.checkedButtonId.takeIf { it != -1 }?.let { group.findViewById<MaterialButton>(it).tag }
@@ -53,10 +56,19 @@ class WorkbenchSettingsCardTest {
         assertTrue(card.appearance.isEnabled && card.capture.isEnabled)
         (card.appearance.getChildAt(1) as MaterialButton).performClick()
         assertEquals(listOf(TriggerBroadcastContract.COMMAND_APPEARANCE to "DARK"), sent)
+        drain()
         assertEquals("DARK", checkedTag(card.appearance))
+        // Tapping the first button while the second is checked: only one may stay highlighted.
         (card.position.getChildAt(0) as MaterialButton).performClick()
         assertEquals(TriggerBroadcastContract.COMMAND_CONTROL_BOTTOM to "false", sent.last())
+        assertTrue((card.position.getChildAt(0) as MaterialButton).isChecked)
+        assertFalse((card.position.getChildAt(1) as MaterialButton).isChecked)
+        // A second tap before the reply is ignored, not queued.
+        (card.position.getChildAt(1) as MaterialButton).performClick()
+        assertEquals(2, sent.size)
+        drain()
         assertEquals("false", checkedTag(card.position))
+        assertFalse((card.position.getChildAt(1) as MaterialButton).isChecked)
         assertEquals(2, sent.size)
         // No reply: controls are disabled and the capture grant cannot be requested.
         card.apply(null)

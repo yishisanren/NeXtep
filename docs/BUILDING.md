@@ -1,4 +1,4 @@
-# Building NeXtep
+# Building Panes
 
 ## Toolchain
 

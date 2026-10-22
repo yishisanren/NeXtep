@@ -27,7 +27,7 @@ The coordinator resolves the current HOME package and uses explicit ordered broa
 
 The bottom-corner gesture is observed on the default display inside SystemUI through a gesture input monitor, including touches delivered to app and launcher windows. A confirmed inward/upward diagonal pilfers the pointer stream before toggling the local workspace controller. The receiver uses the Android 15+ framework callback API via reflection and fails open if unavailable. Exit/recovery paths also notify HOME and the assistant panel, with the broker available for reconciliation. The control area's gear opens NeXtep Settings through task coordination while retaining workspace mode. Settings → Workspace reads the SystemUI-owned appearance, side, control-edge, Recents-hiding and session-capture state from the protected query reply and changes it with `ACTION_WORKBENCH_COMMAND` on the same signature-protected receiver; nothing is persisted in the APK process.
 
-Control broadcasts use `io.github.lujinxin.nextep.permission.CONTROL_WORKSPACE`, a signature permission. The exported broker is protected by `android.permission.STATUS_BAR_SERVICE`. Host-to-host paths authenticate the expected package or immutable `PendingIntent` identity; these are separate checks rather than one generic broadcast trust rule.
+Control broadcasts use `io.github.yishisanren.panes.permission.CONTROL_WORKSPACE`, a signature permission. The exported broker is protected by `android.permission.STATUS_BAR_SERVICE`. Host-to-host paths authenticate the expected package or immutable `PendingIntent` identity; these are separate checks rather than one generic broadcast trust rule.
 
 ## Configuration, language and app catalogue
 

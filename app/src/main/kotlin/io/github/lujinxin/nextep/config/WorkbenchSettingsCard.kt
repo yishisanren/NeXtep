@@ -24,6 +24,7 @@ internal class WorkbenchSettingsCard(
     private val status = SettingsScreen.sectionDescription(activity, activity.getString(R.string.workbench_state_loading))
     private val controls = mutableListOf<View>()
     private var syncing = false
+    private var pending = false
     val appearance: MaterialButtonToggleGroup
     val side: MaterialButtonToggleGroup
     val position: MaterialButtonToggleGroup
@@ -107,9 +108,13 @@ internal class WorkbenchSettingsCard(
     }
 
     private fun command(key: String, value: String) {
-        if (syncing) return
-        controls.forEach { it.isEnabled = false }
+        if (syncing || pending) return
+        // Disabling the group here would run inside MaterialButtonToggleGroup's own checked-state
+        // loop: a disabled MaterialButton ignores setChecked(false), so the previous choice stayed
+        // highlighted next to the new one. Ignore further taps until SystemUI has answered instead.
+        pending = true
         send(key, value) { result ->
+            pending = false
             if (activity.isDestroyed || activity.isFinishing) return@send
             if (result !is TriggerCoordinator.RequestResult.Ready) {
                 Toast.makeText(activity, R.string.workbench_command_failed, Toast.LENGTH_SHORT).show()
@@ -121,7 +126,7 @@ internal class WorkbenchSettingsCard(
     private fun MaterialButtonToggleGroup.select(value: String) {
         for (index in 0 until childCount) {
             val button = getChildAt(index) as MaterialButton
-            if (button.tag == value) check(button.id)
+            if (button.tag == value) check(button.id) else if (button.isChecked) uncheck(button.id)
         }
     }
 

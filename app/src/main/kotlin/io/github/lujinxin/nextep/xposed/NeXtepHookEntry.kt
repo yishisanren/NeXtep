@@ -50,7 +50,7 @@ class NeXtepHookEntry : XposedModule() {
             return
         }
 
-        if (packageName == "io.github.lujinxin.nextep") {
+        if (packageName == "io.github.yishisanren.panes") {
             return
         }
 
