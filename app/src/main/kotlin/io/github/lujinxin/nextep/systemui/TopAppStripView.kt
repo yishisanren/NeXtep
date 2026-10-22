@@ -43,7 +43,7 @@ class TopAppStripView(
         this.controlOnLeft = controlOnLeft
         if (this.controlAtBottom != controlAtBottom) {
             this.controlAtBottom = controlAtBottom
-            listOf(controls, dismissHint).forEach { view ->
+            listOf(controls, dismissHint, mediaHost).forEach { view ->
                 (view.layoutParams as LayoutParams).apply {
                     topMargin = if (controlAtBottom) 0 else dp(WorkspaceControlMetrics.STATUS_HEIGHT_DP)
                     bottomMargin = if (controlAtBottom) dp(WorkspaceControlMetrics.STATUS_HEIGHT_DP) else 0
@@ -145,9 +145,11 @@ class TopAppStripView(
                 topMargin = dp(WorkspaceControlMetrics.STATUS_HEIGHT_DP)
             },
         )
-        // Video owns the complete top region; toolbar padding/status reserve
-        // belongs only to controls, never to the video container.
-        addView(mediaHost, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        // Video keeps the status/camera strip free like the controls; its player chrome
+        // (back button, title) must stay tappable under the system bar.
+        addView(mediaHost, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
+            topMargin = dp(WorkspaceControlMetrics.STATUS_HEIGHT_DP)
+        })
         addView(dismissHint, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
             topMargin = dp(WorkspaceControlMetrics.STATUS_HEIGHT_DP)
         })

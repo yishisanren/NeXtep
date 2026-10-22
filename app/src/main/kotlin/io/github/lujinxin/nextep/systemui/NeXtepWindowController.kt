@@ -70,6 +70,7 @@ class NeXtepWindowController(
     private var workspaceVisible = false
     private var wideSlotIndex: Int? = null
     private var wideTaskId: Int? = null
+    private var pinPending = false
     private var seenSceneTime = -1L
     private var observedTasks: List<io.github.lujinxin.nextep.task.TaskRepository.TaskSnapshot> = emptyList()
     private var observedStates: List<SlotState> = emptyList()
@@ -961,8 +962,11 @@ class NeXtepWindowController(
         }
         wideSlotIndex?.let { index ->
             val current = states.getOrNull(index)
-            if (current is SlotState.Occupied && current.taskId != wideTaskId ||
-                wideTaskId != null && tasks.none { it.taskId == wideTaskId }) {
+            // A task pulled back to the main display (or gone) leaves the wide slot empty;
+            // keeping the wide layout then shows a black top with the app squeezed below it.
+            val lost = current !is SlotState.Occupied || current.taskId != wideTaskId
+            if (!pinPending && lost || wideTaskId != null && tasks.none { it.taskId == wideTaskId }) {
+                NeXtepLog.info("wide_layout", "Wide slot lost task=$wideTaskId state=$current pending=$pinPending")
                 setWideLayout(null, null)
             }
         }
@@ -1022,10 +1026,12 @@ class NeXtepWindowController(
         val previousIndex = wideSlotIndex
         val previousTask = wideTaskId
         setWideLayout(index, taskId)
+        pinPending = true
         // The slot's output layer moves into the top bar and is recreated there on the next
         // traversal. Park the task once the display feeds that layer, so the move never lands
         // on a sleeping display that still has the rail canvas.
         slotWindows[index].whenOutputBound {
+            pinPending = false
             if (wideSlotIndex != index || wideTaskId != taskId) return@whenOutputBound
             val result = coordinator.parkMainForWide(taskId, index)
             result.onFailure {
@@ -1039,6 +1045,7 @@ class NeXtepWindowController(
     private fun setWideLayout(index: Int?, taskId: Int?) {
         if (wideSlotIndex == index && wideTaskId == taskId) return
         NeXtepLog.info("wide_layout", "Wide layout index=$index task=$taskId display=${index?.let { slotWindows.getOrNull(it)?.displayId() }}")
+        if (index == null) pinPending = false
         wideSlotIndex = index
         wideTaskId = taskId
         viewport.setWideSlot(index)

@@ -21,7 +21,7 @@ object NeXtepLog {
 
     private fun write(priority: Int, feature: String, message: String, error: Throwable?) {
         synchronized(events) {
-            if (events.size == 128) events.removeFirst()
+            if (events.size == 512) events.removeFirst()
             // Deliberately exclude message/Intent/ClipData: they may contain a
             // search phrase, URI, account label or text dragged from another app.
             val detail = if (feature in MESSAGE_FEATURES) " message=$message" else ""

@@ -21,6 +21,7 @@ import io.github.lujinxin.nextep.display.TaskSwitcherView
 import io.github.lujinxin.nextep.framework.WorkspaceIntentResolver
 import io.github.lujinxin.nextep.trigger.TriggerBroadcastContract
 import io.github.lujinxin.nextep.workspace.SidebarSide
+import io.github.lujinxin.nextep.workspace.WorkspaceControlMetrics
 import io.github.lujinxin.nextep.workspace.WorkspaceGeometry
 import io.github.lujinxin.nextep.workspace.WorkspaceLaunchSequence
 import org.junit.Assert.*
@@ -104,16 +105,18 @@ class WorkbenchFlowUiTest {
         val video = View(context)
         val controls = field(strip, "controls") as View
         val media = field(strip, "mediaHost") as FrameLayout
+        val status = (WorkspaceControlMetrics.STATUS_HEIGHT_DP * context.resources.displayMetrics.density).toInt()
         for (landscape in listOf(false, true)) {
             strip.setLandscape(landscape, landscape)
             strip.setWideSlot(video)
             layout(strip, 1080, 607)
             assertEquals(View.GONE, controls.visibility)
             assertEquals(View.VISIBLE, media.visibility)
-            assertEquals(0, media.top)
+            // The status/camera strip stays free so the player's own back button is reachable.
+            assertEquals(status, media.top)
             assertEquals(0, media.left)
             assertEquals(strip.width, video.width)
-            assertEquals(strip.height, video.height)
+            assertEquals(strip.height - status, video.height)
             assertEquals(0, video.top)
             assertSame(media, video.parent)
             strip.setWideSlot(null)

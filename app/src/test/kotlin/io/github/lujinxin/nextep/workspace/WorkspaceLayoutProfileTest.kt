@@ -14,7 +14,12 @@ class WorkspaceLayoutProfileTest {
                         val g = profile.geometry
                         assertEquals(g.contentHeight.toFloat(), g.availableHeight * g.contentScale, 1f)
                         assertEquals(g.contentWidth.toFloat(), g.availableWidth * g.contentScale, 1f)
-                        if (wideIndex != null) assertEquals(g.topHeight, profile.slots[wideIndex].height)
+                        if (wideIndex != null) {
+                            val inset = (WorkspaceControlMetrics.STATUS_HEIGHT_DP * 476 / 160f).toInt()
+                            assertEquals(g.topHeight - inset, profile.slots[wideIndex].height)
+                            assertEquals(minOf(g.availableWidth, g.availableHeight) * 9 / 16, profile.slots[wideIndex].height)
+                            assertEquals(profile.slots[wideIndex].height, profile.canvas(wideIndex).height)
+                        }
                         assertEquals(normal, profile.withWideSlot(null))
                     }
                 }
@@ -27,7 +32,7 @@ class WorkspaceLayoutProfileTest {
             .let { legacyFourSlotRecord(it, "9") }
         old[24] = (1106 - (WorkspaceControlMetrics.COMPACT_HEIGHT_DP * 476 / 160f).toInt()).toString()
         val migrated = checkNotNull(WorkspaceLayoutProfile.decode(old.joinToString(",")))
-        assertEquals(684, migrated.geometry.topHeight)
+        assertEquals(684 + (WorkspaceControlMetrics.STATUS_HEIGHT_DP * 476 / 160f).toInt(), migrated.geometry.topHeight)
         assertEquals(684, migrated.slots[1].height)
         assertEquals(migrated, WorkspaceLayoutProfile.decode(migrated.encode()))
         old[24] = "1"
@@ -256,7 +261,9 @@ class WorkspaceLayoutProfileTest {
             parts[21 + index * 3] = "607" // Previous 134dp header plus 16:9 wide window.
             val migrated = checkNotNull(WorkspaceLayoutProfile.decode(parts.joinToString(",")))
             assertEquals(index, migrated.wideSlotIndex)
-            assertEquals(607, migrated.geometry.topHeight)
+            // The migrated player keeps 16:9 below the status reserve.
+            assertEquals(607 + (WorkspaceControlMetrics.STATUS_HEIGHT_DP * 480 / 160f).toInt(), migrated.geometry.topHeight)
+            assertEquals(607, migrated.slots[index].height)
             parts[21 + index * 3] = "606"
             assertNull(WorkspaceLayoutProfile.decode(parts.joinToString(",")))
         }

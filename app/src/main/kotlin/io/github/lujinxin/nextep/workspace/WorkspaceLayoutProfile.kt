@@ -37,7 +37,10 @@ data class WorkspaceLayoutProfile(
         }
     }
 
-    private fun wideHeight(): Int = geometry.topHeight
+    // The status bar/camera strip stays free; the video lives below it like the controls.
+    private val statusInset: Int get() = (WorkspaceControlMetrics.STATUS_HEIGHT_DP * densityDpi / 160f).toInt()
+
+    private fun wideHeight(): Int = (geometry.topHeight - statusInset).coerceAtLeast(1)
 
     fun canvas(index: Int): SlotGeometry = if (index == wideSlotIndex) {
         SlotGeometry(canvas.width, (canvas.width.toDouble() * wideHeight() /
@@ -54,7 +57,7 @@ data class WorkspaceLayoutProfile(
         val g = normal.geometry
         val short = minOf(g.availableWidth, g.availableHeight)
         val long = maxOf(g.availableWidth, g.availableHeight)
-        val top = (short * 9 / 16).coerceIn(1, (long * .70).toInt())
+        val top = (short * 9 / 16 + statusInset).coerceIn(1, (long * .70).toInt())
         val rail = WorkspaceGeometry.proportionalRail(short, long, top).coerceAtLeast(gapPixels + 1)
         return normal.copy(geometry = g.copy(topHeight = top, sidebarWidth = rail), wideSlotIndex = index)
     }
@@ -79,8 +82,7 @@ data class WorkspaceLayoutProfile(
     /** The recorded profile is position-neutral; side and control edge are session choices. */
     fun geometry(side: SidebarSide, controlAtBottom: Boolean = false): WorkspaceGeometry =
         (if (side == SidebarSide.LEFT) leftGeometry else rightGeometry).let {
-            if (controlAtBottom) it.copy(controlAtBottom = true,
-                railTopInset = (WorkspaceControlMetrics.STATUS_HEIGHT_DP * densityDpi / 160f).toInt()) else it
+            if (controlAtBottom) it.copy(controlAtBottom = true, railTopInset = statusInset) else it
         }
 
     /** Undo TextureView's default stretching and fit the complete recorded canvas.
