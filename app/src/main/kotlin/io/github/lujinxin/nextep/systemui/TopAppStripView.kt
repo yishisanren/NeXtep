@@ -319,6 +319,7 @@ class TopAppStripView(
         addView(
             LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
+                setPadding(0, dp(8), 0, 0)
                 addView(heading, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(24)))
                 addView(FrameLayout(context).apply {
                     addView(titleView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))

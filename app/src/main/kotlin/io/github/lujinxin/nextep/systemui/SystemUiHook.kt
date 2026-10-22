@@ -68,7 +68,7 @@ object SystemUiHook {
                 })
             }
             NeXtepLog.info("task_surface_transaction_guard", "Installed atomic task fitting at native commit")
-            module.log(android.util.Log.INFO, "NeXtep", "Installed slot exchange settlement guard; protocol=46")
+            module.log(android.util.Log.INFO, "NeXtep", "Installed slot exchange settlement guard; protocol=${io.github.lujinxin.nextep.trigger.TriggerBroadcastContract.RUNTIME_PROTOCOL_VERSION}")
         }
         HookGuard.run("slot_retention_display_area") {
             classLoader.loadClass("com.android.wm.shell.RootTaskDisplayAreaOrganizer")
