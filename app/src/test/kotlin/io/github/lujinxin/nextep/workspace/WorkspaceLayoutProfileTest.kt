@@ -76,9 +76,20 @@ class WorkspaceLayoutProfileTest {
         val bottom = profile.geometry(SidebarSide.LEFT, controlAtBottom = true)
         assertTrue(bottom.controlAtBottom)
         assertEquals(SidebarSide.LEFT, bottom.sidebarSide)
+        // The rail leaves the status-bar band free; the main region and its scale do not change.
+        val top = profile.geometry(SidebarSide.LEFT)
+        val reserve = (WorkspaceControlMetrics.STATUS_HEIGHT_DP * 476 / 160f).toInt()
+        assertEquals(reserve, bottom.sidebarTop - bottom.contentTop)
+        assertEquals(top.sidebarPhysicalHeight - reserve, bottom.sidebarPhysicalHeight)
+        assertEquals(top.contentHeight, bottom.contentHeight)
+        assertEquals(top.contentScale, bottom.contentScale, 0f)
+        val bottomSlots = profile.copy(geometry = bottom).slots
+        assertTrue(bottomSlots.last().top + bottomSlots.last().height <= bottom.sidebarLogicalHeight)
+        assertTrue(bottomSlots.first().height < profile.slots.first().height)
+        assertEquals(profile.slots.first().width.toFloat() / profile.slots.first().height,
+            bottomSlots.first().width.toFloat() / bottomSlots.first().height, .02f)
         assertFalse(profile.geometry(SidebarSide.LEFT).controlAtBottom)
         assertFalse(checkNotNull(WorkspaceLayoutProfile.decode(profile.encode())).geometry.controlAtBottom)
-        assertEquals(profile.slots, profile.copy(geometry = bottom).slots)
     }
 
     @Test

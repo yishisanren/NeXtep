@@ -1905,7 +1905,9 @@ class SlotTaskCoordinator(
             ?: return null
         val info = runCatching { packageManager.getActivityInfo(component, 0) }.getOrNull()
             ?: return null
-        if (!info.exported || !info.enabled) return null
+        // getActivityInfo already hides disabled components; ActivityInfo.enabled is only the
+        // manifest default, which is false for seasonal launcher aliases enabled at runtime.
+        if (!info.exported) return null
         return Intent(source)
             .setComponent(component)
             .addCategory(Intent.CATEGORY_LAUNCHER)

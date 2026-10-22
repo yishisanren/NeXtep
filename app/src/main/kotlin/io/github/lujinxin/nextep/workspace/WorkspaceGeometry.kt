@@ -19,6 +19,8 @@ data class WorkspaceGeometry(
     val displayRotation: Int = 0,
     /** Control strip at the phone's physical bottom instead of its top; the rail and main region shift to fill. */
     val controlAtBottom: Boolean = false,
+    /** Portrait-bottom only: the status bar no longer sits over the control strip, so the rail starts below it. */
+    val railTopInset: Int = 0,
 ) {
     val isLandscape: Boolean get() = screenWidth > screenHeight
     // Surface rotations are quarter turns from the phone's natural portrait axes.
@@ -53,6 +55,7 @@ data class WorkspaceGeometry(
             navigationInsets.bottom <= screenHeight - navigationInsets.top - 2)
         require(availableWidth > 1 && availableHeight > 1)
         require(topHeight in 1 until (if (isLandscape) availableWidth else availableHeight))
+        require(railTopInset >= 0)
         require(sidebarWidth in 1 until (if (isLandscape) availableHeight else availableWidth))
     }
 
@@ -62,11 +65,12 @@ data class WorkspaceGeometry(
     val controlLeft: Int get() = if (isLandscape && !isControlOnLeft) availableRight - topHeight else availableLeft
     val controlTop: Int get() = if (!isLandscape && controlAtBottom) availableBottom - topHeight else availableTop
     val sidebarLeft: Int get() = if (isLandscape) contentLeft else if (sidebarSide == SidebarSide.LEFT) availableLeft else contentRight
-    val sidebarTop: Int get() = if (!isLandscape) contentTop else
+    private val railInset: Int get() = if (!isLandscape && controlAtBottom) railTopInset.coerceIn(0, contentHeight - 2) else 0
+    val sidebarTop: Int get() = if (!isLandscape) contentTop + railInset else
         if (isSidebarAtTop) availableTop else availableBottom - sidebarWidth
     val sidebarPhysicalWidth: Int get() = if (isLandscape) contentWidth else sidebarWidth
-    val sidebarPhysicalHeight: Int get() = if (isLandscape) sidebarWidth else contentHeight
-    val sidebarLogicalHeight: Int get() = if (isLandscape) contentWidth else contentHeight
+    val sidebarPhysicalHeight: Int get() = if (isLandscape) sidebarWidth else contentHeight - railInset
+    val sidebarLogicalHeight: Int get() = if (isLandscape) contentWidth else contentHeight - railInset
 
     val contentTop: Int get() = availableTop + if (!isLandscape) (if (controlAtBottom) 0 else topHeight) else
         if (isSidebarAtTop) sidebarWidth else 0

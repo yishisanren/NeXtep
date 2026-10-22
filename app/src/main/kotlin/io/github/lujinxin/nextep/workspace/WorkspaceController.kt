@@ -86,7 +86,9 @@ class WorkspaceController(
 
     fun openFromLauncher(intent: Intent): Boolean {
         if (state !is WorkspaceState.Active) return false
-        return windowController.openFromLauncher(intent).isSuccess
+        return windowController.openFromLauncher(intent)
+            .onFailure { NeXtepLog.warn("launcher_redirect", "Open in workspace failed component=${intent.component}", it) }
+            .isSuccess
     }
 
     fun setSidebarSide(side: SidebarSide): Boolean {
