@@ -62,22 +62,21 @@ class WorkbenchPolicyTest {
         assertNull(WorkspaceSceneRequest.decode("42,999,10000,1"))
     }
 
-    @Test fun onlyFreshLandscapeFullscreenMediaCanEnterTheTopPlayer() {
+    @Test fun onlyFreshLandscapeRequestsEnterTheTopPlayerAndAnyOtherOrientationLeavesIt() {
         val request = WorkspaceSceneRequest(42, 0, 10_000, true, fullscreen = true)
-        assertTrue(request.shouldPin(10_500, playingMedia = true))
-        // A landscape request pins on its own; a portrait fullscreen only while media is heard.
-        assertTrue(request.shouldPin(10_500, playingMedia = false))
-        assertTrue(request.copy(fullscreen = false).shouldPin(10_500, false))
-        assertTrue(request.copy(orientation = 1).shouldPin(10_500, true))
-        assertFalse(request.copy(orientation = 1).shouldPin(10_500, false))
-        assertFalse(request.copy(orientation = 1, fullscreen = false).shouldPin(10_500, true))
-        assertFalse(request.shouldPin(13_001, playingMedia = true))
+        assertTrue(request.shouldPin(10_500))
+        assertTrue(request.copy(fullscreen = false).shouldPin(10_500))
+        // A portrait page, bars hidden or not, would only be letterboxed into a thin column up there.
+        assertFalse(request.copy(orientation = 1).shouldPin(10_500))
+        assertFalse(request.copy(orientation = 1, fullscreen = false).shouldPin(10_500))
+        assertFalse(request.shouldPin(13_001))
         // The display is held portrait for any landscape request, so the pin wins over rotation.
         assertTrue(request.copy(fullscreen = false).holdRotation(10_500))
-        assertTrue(WorkspaceSceneRequest.decode("42,0,10000,1")!!.shouldPin(10_500, true))
-        // Only a portrait request that shows its bars again releases the wide slot.
+        assertTrue(WorkspaceSceneRequest.decode("42,0,10000,1")!!.shouldPin(10_500))
+        // Leaving landscape releases the wide slot even while the player still hides its bars.
         assertTrue(request.copy(orientation = 1, fullscreen = false).releasesWide())
-        assertFalse(request.copy(orientation = 1).releasesWide())
+        assertTrue(request.copy(orientation = 1).releasesWide())
+        assertTrue(request.copy(orientation = -1).releasesWide())
         assertFalse(request.copy(fullscreen = false).releasesWide())
         assertNull(WorkspaceSceneRequest.decode("42,0,10000,1,2"))
     }

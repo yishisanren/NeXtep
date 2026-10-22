@@ -977,8 +977,7 @@ class NeXtepWindowController(
         val main = tasks.firstOrNull { it.displayId == android.view.Display.DEFAULT_DISPLAY } ?: return
         if (scene != null && scene.time > seenSceneTime && scene.taskId == main.taskId &&
             wideSlotIndex == null && scene.fresh(android.os.SystemClock.uptimeMillis())) {
-            val landscape = io.github.lujinxin.nextep.workspace.WorkspaceSceneRequest.landscape(scene.orientation)
-            val pin = scene.shouldPin(android.os.SystemClock.uptimeMillis(), !landscape && playingMedia(main))
+            val pin = scene.shouldPin(android.os.SystemClock.uptimeMillis())
             NeXtepLog.info("workbench_scene", "Scene task=${main.taskId} orientation=${scene.orientation} " +
                 "fullscreen=${scene.fullscreen} pin=$pin")
             if (pin && pinTask(main.taskId)) seenSceneTime = scene.time
@@ -987,30 +986,11 @@ class NeXtepWindowController(
         }
     }
 
-    private fun playingMedia(task: io.github.lujinxin.nextep.task.TaskRepository.TaskSnapshot): Boolean {
-        // shortcut: silent players without a MediaSession cannot be identified
-        // as media safely; add an app-specific signal only with device evidence.
-        return runCatching {
-            context.getSystemService(android.media.session.MediaSessionManager::class.java)
-                    .getActiveSessions(null).any { it.packageName == task.component.packageName &&
-                        it.playbackState?.state in setOf(android.media.session.PlaybackState.STATE_PLAYING,
-                            android.media.session.PlaybackState.STATE_BUFFERING) }
-        }.getOrDefault(false) || runCatching {
-            val app = context.packageManager.getApplicationInfo(task.component.packageName, 0)
-            val uid = (task.userId ?: 0) * 100_000 + app.uid % 100_000
-            context.getSystemService(android.media.AudioManager::class.java).activePlaybackConfigurations.any {
-                val clientUid = it.javaClass.getMethod("getClientUid").invoke(it) as? Int
-                clientUid == uid && it.audioAttributes.usage == android.media.AudioAttributes.USAGE_MEDIA &&
-                    it.javaClass.getMethod("isActive").invoke(it) == true
-            }
-        }.getOrDefault(false)
-    }
-
     private fun pinCurrentLandscape(): Boolean {
         if (wideSlotIndex != null) { returnWideToMain(); return true }
         val main = observedTasks.firstOrNull { it.displayId == android.view.Display.DEFAULT_DISPLAY } ?: return false
         val scene = SystemServerWorkspaceBridge.scene(context)
-        if (scene?.taskId != main.taskId || !scene.shouldPin(android.os.SystemClock.uptimeMillis(), playingMedia(main))) return false
+        if (scene?.taskId != main.taskId || !scene.shouldPin(android.os.SystemClock.uptimeMillis())) return false
         return pinTask(main.taskId)
     }
 
