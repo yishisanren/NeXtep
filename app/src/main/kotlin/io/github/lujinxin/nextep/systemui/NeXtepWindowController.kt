@@ -235,11 +235,22 @@ class NeXtepWindowController(
         check(records.size == EXPECTED_WINDOW_COUNT) { "SystemUI windows are unavailable" }
         workspaceVisible = true
         publishPrivacy()
-        reconfigure().getOrThrow()
+        val geometry = reconfigure().getOrThrow()
         records.forEach { record ->
             val view = record.view
             view.animate().cancel()
             view.visibility = View.VISIBLE
+            if (record.title == "NeXtepSidebar") {
+                // Fading the rail builds a hardware layer, and SurfaceView holes inside a layer
+                // show through as black. Slide the rail in from its edge at full alpha instead.
+                val (dx, dy) = sidebarEdgeOffset(geometry)
+                view.alpha = 1f
+                view.translationX = dx
+                view.translationY = dy
+                view.animate().translationX(0f).translationY(0f)
+                    .setDuration(WORKSPACE_ENTER_DURATION_MS).setInterpolator(transitionInterpolator).start()
+                return@forEach
+            }
             view.translationX = 0f
             view.alpha = 0f
             view.translationY = when (record.title) {
@@ -280,16 +291,21 @@ class NeXtepWindowController(
         setWideLayout(null, null)
         SystemServerWorkspaceBridge.clearScene(context)
         topAppStrip?.setWorkspaceVisible(false)
+        val exitGeometry = geometry()
         records.forEach { record ->
             val view = record.view
             view.animate().cancel()
             val params = view.layoutParams as WindowManager.LayoutParams
             params.flags = params.flags and WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER.inv()
             windowManager.updateViewLayout(view, params)
+            val slideOut = record.title == "NeXtepSidebar"
+            val (dx, dy) = if (slideOut) sidebarEdgeOffset(exitGeometry) else 0f to 0f
             view.animate()
-                .alpha(0f)
+                .alpha(if (slideOut) 1f else 0f)
+                .translationX(dx)
                 .translationY(
-                    if (record.title == "NeXtepTopBar" && !controlAtBottom) -dp(EXIT_OFFSET_DP)
+                    if (slideOut) dy
+                    else if (record.title == "NeXtepTopBar" && !controlAtBottom) -dp(EXIT_OFFSET_DP)
                     else dp(EXIT_OFFSET_DP),
                 )
                 .setDuration(WORKSPACE_EXIT_DURATION_MS)
@@ -1010,6 +1026,11 @@ class NeXtepWindowController(
     }
 
     private fun dp(value: Int): Float = value * context.resources.displayMetrics.density
+
+    /** Translation that parks the rail just outside the display edge it hangs from. */
+    private fun sidebarEdgeOffset(geometry: WorkspaceGeometry): Pair<Float, Float> =
+        if (geometry.isLandscape) 0f to (if (geometry.isSidebarAtTop) -1f else 1f) * geometry.sidebarPhysicalHeight
+        else (if (geometry.sidebarSide == SidebarSide.LEFT) -1f else 1f) * geometry.sidebarWidth to 0f
 
     private fun geometry(): WorkspaceGeometry = currentGeometry()
 

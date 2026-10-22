@@ -143,6 +143,8 @@ class TaskSwitcherView(
         if (stateRendered && state == currentState && !waiting) return
         stateRendered = true
         if (state != currentState || waiting) backgroundSwipe.cancel()
+        // A replaced output surface starts black until its display draws; fade it in too.
+        val freshSurface = waiting
         waiting = false
         val previousState = currentState
         currentState = state
@@ -151,7 +153,7 @@ class TaskSwitcherView(
             is SlotState.Ready -> showReady(animated = previousState is SlotState.Occupied)
             is SlotState.Occupied -> {
                 showOccupied(
-                    animated = previousState !is SlotState.Occupied ||
+                    animated = freshSurface || previousState !is SlotState.Occupied ||
                         previousState.taskId != state.taskId,
                 )
             }
@@ -192,6 +194,7 @@ class TaskSwitcherView(
         removeView(previous)
 
         return createSurfaceView().also { replacement ->
+            replacement.alpha = 0f
             replacement.holder.addCallback(listener)
             textureView = replacement
             addView(
