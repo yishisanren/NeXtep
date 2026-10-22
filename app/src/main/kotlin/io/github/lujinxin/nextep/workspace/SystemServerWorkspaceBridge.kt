@@ -71,6 +71,8 @@ object SystemServerWorkspaceBridge {
             ?.takeIf { it.fresh(android.os.SystemClock.uptimeMillis()) }
     }.getOrNull()
 
+    internal fun sceneUri(): android.net.Uri = Settings.Global.getUriFor(SCENE_KEY)
+
     internal fun clearScene(context: Context) {
         runCatching { Settings.Global.putString(context.contentResolver, SCENE_KEY, "") }
     }

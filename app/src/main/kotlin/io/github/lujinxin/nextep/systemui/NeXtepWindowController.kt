@@ -72,6 +72,14 @@ class NeXtepWindowController(
     private var wideTaskId: Int? = null
     private var seenSceneTime = -1L
     private var observedTasks: List<io.github.lujinxin.nextep.task.TaskRepository.TaskSnapshot> = emptyList()
+    private var observedStates: List<SlotState> = emptyList()
+    // A fullscreen request can arrive between task observations; re-evaluate the pin as soon as
+    // system_server publishes it instead of waiting for the next task change.
+    private val sceneObserver = object : android.database.ContentObserver(backdropHandler) {
+        override fun onChange(selfChange: Boolean) {
+            if (workspaceVisible && !suspended) observeTasks(observedTasks, observedStates)
+        }
+    }
     private val workbenchPreferences = runCatching {
         context.createDeviceProtectedStorageContext().getSharedPreferences("nextep_workbench_v1", Context.MODE_PRIVATE)
     }.getOrNull()
@@ -173,6 +181,9 @@ class NeXtepWindowController(
             )
         }.onFailure { NeXtepLog.warn("wallpaper_backdrop", "Wallpaper change listener unavailable", it) }
         backdropHandler.post { refreshWallpaperBackdrop() }
+        runCatching {
+            context.contentResolver.registerContentObserver(SystemServerWorkspaceBridge.sceneUri(), false, sceneObserver)
+        }.onFailure { NeXtepLog.warn("workbench_scene", "Scene observer unavailable", it) }
         mainTaskPresenter.onHomePresented = {
             backdropHandler.post {
                 if (!suspended && workspaceVisible) refreshWallpaperBackdrop()
@@ -933,6 +944,7 @@ class NeXtepWindowController(
 
     private fun observeTasks(tasks: List<io.github.lujinxin.nextep.task.TaskRepository.TaskSnapshot>, states: List<SlotState>) {
         observedTasks = tasks
+        observedStates = states
         publishPrivacy()
         if (!workspaceVisible || suspended || contentDrag.active || slotCoordinator?.launchingApps == true ||
             slotCoordinator?.movingTasks == true) return
@@ -951,9 +963,12 @@ class NeXtepWindowController(
         }
         val main = tasks.firstOrNull { it.displayId == android.view.Display.DEFAULT_DISPLAY } ?: return
         if (scene != null && scene.time > seenSceneTime && scene.taskId == main.taskId &&
-            wideSlotIndex == null && scene.fullscreen && scene.fresh(android.os.SystemClock.uptimeMillis()) &&
-            scene.shouldPin(android.os.SystemClock.uptimeMillis(), playingMedia(main))) {
-            if (pinTask(main.taskId)) seenSceneTime = scene.time
+            wideSlotIndex == null && scene.fullscreen && scene.fresh(android.os.SystemClock.uptimeMillis())) {
+            val pin = scene.shouldPin(android.os.SystemClock.uptimeMillis(), playingMedia(main))
+            NeXtepLog.info("workbench_scene", "Fullscreen scene task=${main.taskId} orientation=${scene.orientation} pin=$pin")
+            if (pin && pinTask(main.taskId)) seenSceneTime = scene.time
+        } else if (scene != null && scene.time > seenSceneTime && scene.fullscreen) {
+            NeXtepLog.info("workbench_scene", "Fullscreen scene ignored task=${scene.taskId} main=${main.taskId} wide=$wideSlotIndex")
         }
     }
 
