@@ -32,6 +32,9 @@ class TaskSwitcherView(
         fun onSlotDragEnded()
         fun onSlotDropped(slotIndex: Int, drag: SlotTaskDrag): Boolean
         fun onContentDropped(slotIndex: Int, event: DragEvent): Boolean = false
+        fun onContentDragStarted() {}
+        fun onContentDragEntered(slotIndex: Int) {}
+        fun onContentDragEnded(accepted: Boolean) {}
     }
 
     var textureView: SurfaceView = createSurfaceView()
@@ -52,6 +55,7 @@ class TaskSwitcherView(
     private var waiting = false
     private var stateRendered = false
     private var ownsDrag = false
+    private var contentDrag = false
     private val backgroundSwipe = SlotBackgroundSwipeGesture(
         view = this,
         currentTask = {
@@ -254,14 +258,17 @@ class TaskSwitcherView(
                 currentState.inDragTargetStates() || currentState !is SlotState.Occupied &&
                 AppDragContract.accepts(event.clipDescription) ||
                 currentState is SlotState.Occupied && ContentDropCompat.accepts(event.clipDescription))
+            contentDrag = accepted && localDrag == null && ContentDropCompat.accepts(event.clipDescription)
+            if (contentDrag) listener?.onContentDragStarted()
             NeXtepLog.info(
                 "slot_drag",
                 "slot=$slotIndex started accepted=$accepted busy=$busy state=$currentState " +
-                    "mime=${event.clipDescription}",
+                    "content=$contentDrag",
             )
             accepted
         }
         DragEvent.ACTION_DRAG_ENTERED -> {
+            if (contentDrag && !busy) listener?.onContentDragEntered(slotIndex)
             if (!busy) {
                 if (currentState is SlotState.Occupied) {
                     foreground = GradientDrawable().apply {
@@ -299,6 +306,8 @@ class TaskSwitcherView(
             handled
         }
         DragEvent.ACTION_DRAG_ENDED -> {
+            if (contentDrag) listener?.onContentDragEnded(event.result)
+            contentDrag = false
             foreground = null
             if (!busy) showState(currentState)
             if ((event.localState as? SlotTaskDrag)?.slotIndex == slotIndex) finishDrag()

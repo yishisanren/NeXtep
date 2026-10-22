@@ -231,10 +231,12 @@ object SystemUiRuntime {
         )
     }
 
-    private fun setSidebarSideFromTopBar(side: SidebarSide) {
-        if (::workspaceController.isInitialized && !workspaceController.setSidebarSide(side)) {
+    private fun setSidebarSideFromTopBar(side: SidebarSide): Boolean {
+        val applied = ::workspaceController.isInitialized && workspaceController.setSidebarSide(side)
+        if (!applied) {
             NeXtepLog.warn("sidebar_side", "Unable to switch side=$side")
         }
+        return applied
     }
 
     private fun reconfigureForViewport() {

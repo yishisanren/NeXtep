@@ -33,7 +33,33 @@ class SlotTaskCoordinator(
     private val onInternalSlotDrag: (TaskSwitcherView, SlotTaskDrag) -> Boolean = { _, _ -> false },
     private val onInternalDragTouch: (android.view.View, android.view.MotionEvent) -> Boolean = { _, _ -> false },
     private val onTasksObserved: (List<TaskRepository.TaskSnapshot>, List<SlotState>) -> Unit = { _, _ -> },
+    private val onContentDragStarted: () -> Unit = {},
+    private val onContentDragEntered: (Int) -> Unit = {},
+    private val onContentDragEnded: (Boolean) -> Unit = {},
 ) : VirtualDisplaySlot.Listener, TaskSwitcherView.Listener {
+    internal data class ContentExchange(val slot: Int, val sourceTask: Int, val targetTask: Int)
+
+    internal fun contentExchangeTarget(index: Int): ContentExchange? {
+        if (!validActiveSlot(index) || transitionInProgress || recentSelectionPending || appLaunch.running) return null
+        val side = slotRecords[index].state as? SlotState.Occupied ?: return null
+        val main = taskRepository.foregroundTask()?.takeIf(::isExchangeableMainTask) ?: return null
+        return ContentExchange(index, main.taskId, side.taskId)
+    }
+
+    internal fun exchangeContent(target: ContentExchange, restoring: Boolean,
+                                 complete: (Result<Unit>) -> Unit): Boolean {
+        val expected = contentExchangeTarget(target.slot) ?: return false
+        val source = if (restoring) target.targetTask else target.sourceTask
+        val destination = if (restoring) target.sourceTask else target.targetTask
+        if (expected.sourceTask != source || expected.targetTask != destination) return false
+        return runTransition("content exchange restoring=$restoring", completed = complete) {
+            swapWithMain(target.slot, slotRecords[target.slot].state as SlotState.Occupied)
+        }.isSuccess
+    }
+
+    override fun onContentDragStarted() = onContentDragStarted.invoke()
+    override fun onContentDragEntered(slotIndex: Int) = onContentDragEntered.invoke(slotIndex)
+    override fun onContentDragEnded(accepted: Boolean) = onContentDragEnded.invoke(accepted)
     private data class SlotRecord(
         var state: SlotState = SlotState.Empty,
         var retainedTaskId: Int? = null,
@@ -771,18 +797,9 @@ class SlotTaskCoordinator(
     }
 
     override fun onContentDropped(slotIndex: Int, event: android.view.DragEvent): Boolean {
-        if (!validActiveSlot(slotIndex) || transitionInProgress || appLaunch.running) return false
-        val target = slotRecords[slotIndex].state as? SlotState.Occupied ?: return false
-        val handled = ContentDropCompat.deliver(event, target.component.packageName) { source ->
-            val intent = Intent(source).apply {
-                taskRepository.findTask(target.taskId)?.userId?.let { userId ->
-                    putExtra(TriggerBroadcastContract.EXTRA_TARGET_USER, android.os.UserHandle.getUserHandleForUid(userId * 100_000))
-                }
-            }
-            assignIntent(slotIndex, intent, external = true).isSuccess
-        }
-        if (!handled) showMessage(AppLanguage.string(applicationContext, R.string.workbench_drop_unsupported))
-        return handled
+        // A release before expansion finishes is rejected. Never substitute a share
+        // Activity or deliver the payload to the source app now occupying this slot.
+        return false
     }
 
     override fun onDisplayReady(slotIndex: Int, displayId: Int) {
@@ -1470,7 +1487,8 @@ class SlotTaskCoordinator(
         }
     }
 
-    private fun runTransition(label: String, animation: Pair<SlotTaskDrag, Int?>? = null, operation: () -> Unit): Result<Unit> {
+    private fun runTransition(label: String, animation: Pair<SlotTaskDrag, Int?>? = null,
+                              completed: (Result<Unit>) -> Unit = {}, operation: () -> Unit): Result<Unit> {
         if (transitionInProgress || recentSelectionPending) {
             NeXtepLog.warn("slot_coordinator", "Ignored concurrent transition $label")
             return Result.failure(IllegalStateException("Another slot transition is settling"))
@@ -1493,6 +1511,8 @@ class SlotTaskCoordinator(
                 reconcile("settled $label")
                 NeXtepLog.info("slot_coordinator", "Transition settled $label")
             }, SETTLE_DELAY_MS)
+            // Cancellation may start a reverse exchange in this callback.
+            completed(result)
         }
         fun performMove(reveal: () -> Unit = {}): Result<Unit> {
             val result = runCatching {

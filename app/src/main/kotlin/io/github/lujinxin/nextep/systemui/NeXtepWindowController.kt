@@ -28,7 +28,7 @@ import io.github.lujinxin.nextep.workspace.WorkspaceGeometry
 class NeXtepWindowController(
     private val context: Context,
     private val mainTaskPresenter: MainTaskPresentationCoordinator,
-    private val onSidebarSideRequested: (SidebarSide) -> Unit,
+    private val onSidebarSideRequested: (SidebarSide) -> Boolean,
     private val onSettingsRequested: () -> Unit,
     private val onExitRequested: () -> Unit,
     private val onViewportChanged: () -> Unit,
@@ -47,6 +47,12 @@ class NeXtepWindowController(
     private var slotBackgroundSwipeEnabled = true
     private var frostStrength = 50
     private val swapAnimator = WorkspaceSwapAnimator(context)
+    private var contentTarget: SlotTaskCoordinator.ContentExchange? = null
+    private var contentOriginSide = SidebarSide.RIGHT
+    private var contentLayoutChanging = false
+    private val contentDrag = io.github.lujinxin.nextep.workspace.WorkspaceContentDragSession(
+        ::expandContentTarget, ::restoreContentTarget, { contentTarget = null },
+    )
     private val internalDrag = WorkspaceInternalDragController(
         context, ::geometry, { slotWindows.map { it.view } },
         ::highlightInternalDragTarget, ::dropInternalPayload,
@@ -86,7 +92,7 @@ class NeXtepWindowController(
         { intents, done -> slotCoordinator?.openSearches(intents, done)
             ?: Result.failure(IllegalStateException("Workspace unavailable")) },
         ::pinCurrentLandscape, { setCaptureAllowed(false); onSettingsRequested() }, onExitRequested,
-        ::toggleAppearance, { sidebarSide }, onSidebarSideRequested,
+        ::toggleAppearance, { sidebarSide }, { onSidebarSideRequested(it); Unit },
         { slotCoordinator?.cancelApplicationLaunch() })
     private fun toggleAppearance() {
         appearance = if (appearance == WorkbenchAppearance.DARK) WorkbenchAppearance.LIGHT else WorkbenchAppearance.DARK
@@ -293,7 +299,7 @@ class NeXtepWindowController(
         applyWindowGeometry(geometry)
         sidebarView?.let { panel -> applySlotLayout(panel, geometry) }
         applySidebarBackdrop(geometry)
-        records.firstOrNull { it.title == "NeXtepSidebar" }?.view?.let { sidebar ->
+        records.firstOrNull { it.title == "NeXtepSidebar" }?.view?.takeUnless { contentLayoutChanging }?.let { sidebar ->
             sidebar.animate().cancel()
             sidebar.translationY = 0f
             sidebar.alpha = 0f
@@ -454,7 +460,7 @@ class NeXtepWindowController(
     }
 
     private fun applyWindowGeometry(geometry: WorkspaceGeometry) {
-        cancelDragVisuals()
+        if (!contentLayoutChanging) cancelDragVisuals()
         records.forEach { record ->
             val params = record.view.layoutParams as? WindowManager.LayoutParams ?: return@forEach
             configureWindow(record, params, geometry)
@@ -540,16 +546,104 @@ class NeXtepWindowController(
                 },
                 onInternalDragTouch = internalDrag::touch,
                 onTasksObserved = ::observeTasks,
+                onContentDragStarted = { if (workspaceVisible && !suspended) contentDrag.begin() },
+                onContentDragEntered = { index ->
+                    // Defer reparent until ViewGroup has finished dispatching ENTERED.
+                    backdropHandler.post {
+                        runCatching { contentDrag.enter(index) }.onFailure {
+                            NeXtepLog.warn("content_drag", "Content expansion unavailable", it)
+                            swapAnimator.cancel()
+                            contentDrag.abandon()
+                        }
+                    }
+                },
+                onContentDragEnded = { accepted -> backdropHandler.post {
+                    runCatching { contentDrag.end(accepted) }.onFailure {
+                        NeXtepLog.warn("content_drag", "Content drag recovery unavailable", it)
+                        contentDrag.abandon()
+                    }
+                } },
             )
         }
     }
 
     private fun cancelDragVisuals() {
+        contentDrag.abandon()
         internalDrag.cancel()
         slotWindows.forEach { it.view.cancelBackgroundSwipe() }
         slotCoordinator?.onSlotDragEnded()
         slotCoordinator?.cancelPendingDragExchange()
         swapAnimator.cancel()
+    }
+
+    private fun contentSide(side: SidebarSide): Boolean {
+        contentLayoutChanging = true
+        return try { onSidebarSideRequested(side) } finally { contentLayoutChanging = false }
+    }
+
+    private fun expandContentTarget(index: Int, complete: (Boolean) -> Unit): Boolean {
+        if (!workspaceVisible || suspended || wideSlotIndex != null) return false
+        val coordinator = slotCoordinator ?: return false
+        val target = coordinator.contentExchangeTarget(index) ?: return false
+        val old = geometry()
+        contentOriginSide = sidebarSide
+        contentTarget = target
+        val destinationSide = if (sidebarSide == SidebarSide.RIGHT) SidebarSide.LEFT else SidebarSide.RIGHT
+        val next = old.copy(sidebarSide = destinationSide)
+        val bounds = slotWindows.map { slot -> android.graphics.Rect().also {
+            if (!slot.view.getScreenVisibleRect(it)) return false
+        } }
+        val main = android.graphics.RectF(old.contentLeft.toFloat(), old.contentTop.toFloat(),
+            old.contentRight.toFloat(), old.contentBottom.toFloat())
+        val frames = mutableListOf<WorkspaceSwapAnimator.Frame>()
+        bounds.forEachIndexed { i, rect ->
+            val from = android.graphics.RectF(rect)
+            val to = android.graphics.RectF(rect).apply {
+                offset((next.sidebarLeft - old.sidebarLeft).toFloat(),
+                    (next.sidebarTop - old.sidebarTop).toFloat())
+            }
+            if (i == index) frames.add(WorkspaceSwapAnimator.Frame(
+                io.github.lujinxin.nextep.framework.TaskSurfaceCompat.capturePreview(target.sourceTask), main, to))
+            else frames.add(WorkspaceSwapAnimator.Frame(slotWindows[i].view.captureProtectedPreview(), from, to))
+        }
+        // Target stays anchored at its own right edge while the other tasks move left.
+        frames.add(WorkspaceSwapAnimator.Frame(slotWindows[index].view.captureProtectedPreview(),
+            android.graphics.RectF(bounds[index]), android.graphics.RectF(next.contentLeft.toFloat(),
+                next.contentTop.toFloat(), next.contentRight.toFloat(), next.contentBottom.toFloat())))
+        swapAnimator.animateFrames(frames, listOf(main) + bounds.map { android.graphics.RectF(it) },
+            old.screenWidth, old.screenHeight) { reveal ->
+            if (!contentDrag.active || !workspaceVisible || suspended || !contentSide(destinationSide)) {
+                reveal(); complete(false)
+            } else {
+                var reported = false
+                fun settled(success: Boolean) {
+                    if (reported) return
+                    reported = true
+                    if (!success) contentSide(contentOriginSide)
+                    reveal()
+                    complete(success)
+                    NeXtepLog.info("content_drag", "Expansion settled success=$success")
+                }
+                if (!coordinator.exchangeContent(target, restoring = false) { settled(it.isSuccess) }) settled(false)
+            }
+        }
+        return true
+    }
+
+    private fun restoreContentTarget(index: Int, complete: () -> Unit) {
+        val target = contentTarget?.takeIf { it.slot == index }
+        if (target == null || !workspaceVisible || suspended) { complete(); return }
+        var reported = false
+        fun restored() {
+            if (reported) return
+            reported = true
+            contentSide(contentOriginSide)
+            complete()
+        }
+        if (slotCoordinator?.exchangeContent(target, restoring = true) {
+                if (it.isFailure) NeXtepLog.warn("content_drag", "Cancellation task restore unavailable", it.exceptionOrNull())
+                restored()
+            } != true) restored()
     }
 
     private fun highlightInternalDragTarget(target: WorkspaceInternalDragController.Target?) {
@@ -765,7 +859,7 @@ class NeXtepWindowController(
     private fun observeTasks(tasks: List<io.github.lujinxin.nextep.task.TaskRepository.TaskSnapshot>, states: List<SlotState>) {
         observedTasks = tasks
         publishPrivacy()
-        if (!workspaceVisible || suspended || slotCoordinator?.launchingApps == true) return
+        if (!workspaceVisible || suspended || contentDrag.active || slotCoordinator?.launchingApps == true) return
         val scene = SystemServerWorkspaceBridge.scene(context)
         val foregroundId = tasks.firstOrNull { it.displayId == android.view.Display.DEFAULT_DISPLAY }?.taskId
         if (foregroundId != suppressedAutoTaskId) suppressedAutoTaskId = null

@@ -20,6 +20,7 @@ import io.github.lujinxin.nextep.logging.NeXtepLog
  * preview covers relayout, then fade to the live buffers. Nothing retains an app
  * frame after the transition ends or the workspace is hidden/locked. */
 internal class WorkspaceSwapAnimator(private val context: Context) {
+    data class Frame(val bitmap: Bitmap?, val from: RectF, val to: RectF)
     private val manager = context.getSystemService(WindowManager::class.java)
     private var overlay: SwapPreviewView? = null
     private var animator: ValueAnimator? = null
@@ -29,17 +30,22 @@ internal class WorkspaceSwapAnimator(private val context: Context) {
         start: RectF, sourceBounds: RectF, targetBounds: RectF,
         screenWidth: Int, screenHeight: Int,
         move: (() -> Unit) -> Unit,
-    ) {
+    ) = animateFrames(buildList {
+        if (target != null) add(Frame(target, targetBounds, sourceBounds))
+        add(Frame(source, start, targetBounds))
+    }, listOf(sourceBounds, targetBounds), screenWidth, screenHeight, move)
+
+    fun animateFrames(frames: List<Frame>, covers: List<RectF>, screenWidth: Int, screenHeight: Int,
+                      move: (() -> Unit) -> Unit) {
         cancel()
         val windowType = SystemUiWindowTypeResolver.resolve()
         if (windowType == null) {
-            source?.recycle()
-            target?.recycle()
+            frames.forEach { it.bitmap?.recycle() }
             move {}
             return
         }
         val token = ++generation
-        val preview = SwapPreviewView(context, source, target, start, sourceBounds, targetBounds)
+        val preview = SwapPreviewView(context, frames, covers)
         val params = WindowManager.LayoutParams(
             screenWidth, screenHeight, windowType,
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
@@ -114,11 +120,8 @@ internal class WorkspaceSwapAnimator(private val context: Context) {
 
 private class SwapPreviewView(
     context: Context,
-    private val source: Bitmap?,
-    private val target: Bitmap?,
-    private val start: RectF,
-    private val sourceBounds: RectF,
-    private val targetBounds: RectF,
+    private val frames: List<WorkspaceSwapAnimator.Frame>,
+    private val covers: List<RectF>,
 ) : View(context) {
     var progress = 0f
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -138,10 +141,8 @@ private class SwapPreviewView(
         if (released) return
         // The live tasks stay put until the compositor move. Cover their old
         // positions so a shrinking preview cannot expose a second stationary app.
-        canvas.drawRoundRect(sourceBounds, cornerRadius, cornerRadius, backgroundPaint)
-        canvas.drawRoundRect(targetBounds, cornerRadius, cornerRadius, backgroundPaint)
-        if (target != null) drawFrame(canvas, target, targetBounds, sourceBounds)
-        drawFrame(canvas, source, start, targetBounds)
+        covers.forEach { canvas.drawRoundRect(it, cornerRadius, cornerRadius, backgroundPaint) }
+        frames.forEach { drawFrame(canvas, it.bitmap, it.from, it.to) }
     }
 
     private fun drawFrame(canvas: Canvas, bitmap: Bitmap?, from: RectF, to: RectF) {
@@ -169,7 +170,6 @@ private class SwapPreviewView(
     fun release() {
         if (released) return
         released = true
-        source?.recycle()
-        target?.recycle()
+        frames.forEach { it.bitmap?.recycle() }
     }
 }

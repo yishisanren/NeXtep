@@ -23,6 +23,22 @@ class WorkspaceSwapAnimatorTest {
     private fun preview(animator: WorkspaceSwapAnimator) = animator.javaClass.getDeclaredField("overlay")
         .apply { isAccessible = true }.get(animator) as? View
 
+    @Test fun contentExpansionUsesOneSecureOverlayAndReleasesEveryAppPreviewOnCancel() {
+        val animator = WorkspaceSwapAnimator(context)
+        val bitmaps = List(5) { Bitmap.createBitmap(20, 40, Bitmap.Config.ARGB_8888) }
+        val frames = bitmaps.mapIndexed { index, bitmap -> WorkspaceSwapAnimator.Frame(bitmap,
+            RectF(260f, index * 80f, 300f, index * 80f + 80), RectF(0f, 100f, 240f, 580f)) }
+        var moved = false
+        animator.animateFrames(frames, frames.map { it.from }, 320, 640) { moved = true }
+        val view = checkNotNull(preview(animator))
+        assertTrue((view.layoutParams as WindowManager.LayoutParams).flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
+        animator.cancel()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500))
+        assertFalse(moved)
+        assertTrue(bitmaps.all { it.isRecycled })
+        assertNull(preview(animator))
+    }
+
     @Test fun protectedPreviewWaitsForCompletionInsteadOfAFixedDelay() {
         val animator = WorkspaceSwapAnimator(context)
         val source = Bitmap.createBitmap(40, 80, Bitmap.Config.ARGB_8888)

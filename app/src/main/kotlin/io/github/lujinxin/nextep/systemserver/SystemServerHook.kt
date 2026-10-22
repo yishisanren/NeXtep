@@ -22,6 +22,7 @@ object SystemServerHook {
     fun install(module: XposedModule, classLoader: ClassLoader) {
         if (!installed.compareAndSet(false, true)) return
         HookGuard.run("workspace_ime_target") { WorkspaceImeTargetHook.install(module, classLoader) }
+        HookGuard.run("workspace_content_drag") { WorkspaceContentDragHook.install(module, classLoader) }
         HookGuard.run("workspace_navigation") { WorkspaceNavigationBarHook.install(module, classLoader) }
         HookGuard.run("slot_native_layout") { WorkspaceSlotNativeLayoutHook.install(module, classLoader) }
         val workspaceTasksInstalled = HookGuard.run("workspace_task_surface") {
