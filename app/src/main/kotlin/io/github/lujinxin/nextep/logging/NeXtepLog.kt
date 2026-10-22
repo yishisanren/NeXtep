@@ -5,6 +5,8 @@ import android.util.Log
 
 object NeXtepLog {
     private const val TAG = "NeXtep"
+    // Features whose messages carry only ids, flags and geometry.
+    private val MESSAGE_FEATURES = setOf("workbench_scene", "workspace_configuration", "systemui_runtime", "wide_layout")
     private val events = java.util.ArrayDeque<String>()
 
     fun diagnostics(): String = synchronized(events) { events.joinToString("\n") }
@@ -21,7 +23,8 @@ object NeXtepLog {
             if (events.size == 128) events.removeFirst()
             // Deliberately exclude message/Intent/ClipData: they may contain a
             // search phrase, URI, account label or text dragged from another app.
-            events.addLast("${android.os.SystemClock.uptimeMillis()} priority=$priority feature=$feature error=${error?.javaClass?.simpleName ?: "none"}")
+            val detail = if (feature in MESSAGE_FEATURES) " message=$message" else ""
+            events.addLast("${android.os.SystemClock.uptimeMillis()} priority=$priority feature=$feature error=${error?.javaClass?.simpleName ?: "none"}$detail")
         }
         val enriched = "pid=${android.os.Process.myPid()} thread=${Thread.currentThread().name} " +
             "feature=$feature sdk=${Build.VERSION.SDK_INT} message=$message"

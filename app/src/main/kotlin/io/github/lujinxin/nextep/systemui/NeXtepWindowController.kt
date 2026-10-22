@@ -77,6 +77,8 @@ class NeXtepWindowController(
     // system_server publishes it instead of waiting for the next task change.
     private val sceneObserver = object : android.database.ContentObserver(backdropHandler) {
         override fun onChange(selfChange: Boolean) {
+            NeXtepLog.info("workbench_scene", "Scene changed visible=$workspaceVisible suspended=$suspended " +
+                "scene=${SystemServerWorkspaceBridge.scene(context)}")
             if (workspaceVisible && !suspended) observeTasks(observedTasks, observedStates)
         }
     }

@@ -73,6 +73,23 @@ object SystemServerWorkspaceBridge {
 
     internal fun sceneUri(): android.net.Uri = Settings.Global.getUriFor(SCENE_KEY)
 
+    private const val SCENE_TRACE_KEY = "nextep_workspace_scene_trace_v1"
+
+    /** Last 16 scene decisions from system_server; ids and flags only. */
+    internal fun traceScene(context: Context, entry: String) {
+        runCatching {
+            val resolver = context.contentResolver
+            val previous = Settings.Global.getString(resolver, SCENE_TRACE_KEY).orEmpty()
+                .split('|').filter { it.isNotEmpty() }.takeLast(15)
+            Settings.Global.putString(resolver, SCENE_TRACE_KEY,
+                (previous + "${android.os.SystemClock.uptimeMillis()}:$entry").joinToString("|"))
+        }
+    }
+
+    internal fun sceneTrace(context: Context): String = runCatching {
+        Settings.Global.getString(context.contentResolver, SCENE_TRACE_KEY).orEmpty().replace('|', '\n')
+    }.getOrDefault("")
+
     internal fun clearScene(context: Context) {
         runCatching { Settings.Global.putString(context.contentResolver, SCENE_KEY, "") }
     }
