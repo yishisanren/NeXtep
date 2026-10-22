@@ -145,6 +145,14 @@ class TopAppStripView(
         installTouchableStatusBarPassThrough()
     }
 
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        // Use spare toolbar space, keeping the app icons intact on shorter displays.
+        val extraTop = (MeasureSpec.getSize(heightMeasureSpec) -
+            dp(WorkspaceControlMetrics.COMPACT_HEIGHT_DP)).coerceIn(0, dp(32))
+        controls.setPadding(dp(7), extraTop, dp(7), dp(WorkspaceControlMetrics.CONTENT_BOTTOM_PADDING_DP))
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+    }
+
     private val configChangedReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             // Read configuration through the explicit module receiver; do not trust broadcast extras.

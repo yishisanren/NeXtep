@@ -44,7 +44,14 @@ class WorkbenchUiTest {
         payment.getDrawingRect(bounds)
         view.offsetDescendantRectToMyCoords(payment, bounds)
         assertTrue(bounds.left > width / 2)
-        assertTrue(bounds.bottom <= (96 * context.resources.displayMetrics.density).toInt())
+        assertTrue(bounds.bottom <= (128 * context.resources.displayMetrics.density).toInt())
+        val heading = field(view, "heading") as View
+        val headingBounds = Rect()
+        heading.getDrawingRect(headingBounds)
+        view.offsetDescendantRectToMyCoords(heading, headingBounds)
+        assertTrue(headingBounds.top >= (80 * context.resources.displayMetrics.density).toInt())
+        val apps = field(view, "appScroll") as View
+        assertTrue(apps.height >= (43 * context.resources.displayMetrics.density).toInt())
         assertNotSame(field(view, "appRow"), payment.parent)
         assertTrue(payment.performClick())
         assertEquals(1, opened)
