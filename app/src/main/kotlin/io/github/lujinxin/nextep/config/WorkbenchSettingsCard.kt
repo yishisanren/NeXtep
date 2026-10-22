@@ -13,7 +13,7 @@ import io.github.lujinxin.nextep.trigger.TriggerBroadcastContract
 import io.github.lujinxin.nextep.trigger.TriggerCoordinator
 import io.github.lujinxin.nextep.trigger.TriggerSource
 
-/** SystemUI keeps the workbench preferences; this card only mirrors its reply and sends commands. */
+/** SystemUI keeps the workbench preferences; these cards only mirror its reply and send commands. */
 internal class WorkbenchSettingsCard(
     private val activity: AppCompatActivity,
     private val query: ((TriggerCoordinator.RequestResult) -> Unit) -> Unit = { TriggerCoordinator.queryWorkbench(activity, it) },
@@ -21,7 +21,6 @@ internal class WorkbenchSettingsCard(
         TriggerCoordinator.workbenchCommand(activity, key, value, done)
     },
 ) {
-    private val content = SettingsScreen.sectionContent(activity)
     private val status = SettingsScreen.sectionDescription(activity, activity.getString(R.string.workbench_state_loading))
     private val controls = mutableListOf<View>()
     private var syncing = false
@@ -30,28 +29,40 @@ internal class WorkbenchSettingsCard(
     val position: MaterialButtonToggleGroup
     val recents: SwitchMaterial
     val capture: SwitchMaterial
-    val view: View
+    val layoutCard: View
+    val privacyCard: View
+    val supportCard: View
 
     init {
-        content.addView(SettingsScreen.sectionTitle(activity, activity.getString(R.string.workbench_settings_title)), SettingsScreen.matchWidth())
-        content.addView(status, SettingsScreen.matchWidth())
-        appearance = choice(activity.getString(R.string.workbench_appearance), TriggerBroadcastContract.COMMAND_APPEARANCE,
+        val layout = SettingsScreen.sectionContent(activity)
+        layout.addView(SettingsScreen.sectionTitle(activity, activity.getString(R.string.section_layout)), SettingsScreen.matchWidth())
+        layout.addView(status, SettingsScreen.matchWidth())
+        appearance = choice(layout, activity.getString(R.string.workbench_appearance), TriggerBroadcastContract.COMMAND_APPEARANCE,
             listOf("LIGHT" to activity.getString(R.string.appearance_light), "DARK" to activity.getString(R.string.appearance_dark)))
-        side = choice(activity.getString(R.string.workbench_side), TriggerBroadcastContract.COMMAND_SIDEBAR_SIDE,
+        side = choice(layout, activity.getString(R.string.workbench_side), TriggerBroadcastContract.COMMAND_SIDEBAR_SIDE,
             listOf("LEFT" to activity.getString(R.string.window_side_left), "RIGHT" to activity.getString(R.string.window_side_right)))
-        position = choice(activity.getString(R.string.control_position), TriggerBroadcastContract.COMMAND_CONTROL_BOTTOM,
+        position = choice(layout, activity.getString(R.string.control_position), TriggerBroadcastContract.COMMAND_CONTROL_BOTTOM,
             listOf("false" to activity.getString(R.string.control_top), "true" to activity.getString(R.string.control_bottom)))
-        recents = toggle(activity.getString(R.string.workbench_hide_recents),
+        layoutCard = SettingsScreen.sectionCard(activity).apply { addView(layout) }
+
+        val privacy = SettingsScreen.sectionContent(activity)
+        privacy.addView(SettingsScreen.sectionTitle(activity, activity.getString(R.string.section_privacy)), SettingsScreen.matchWidth())
+        recents = toggle(privacy, activity.getString(R.string.workbench_hide_recents),
             activity.getString(R.string.workbench_hide_recents_summary), TriggerBroadcastContract.COMMAND_HIDE_RECENTS)
-        capture = toggle(activity.getString(R.string.workbench_capture),
+        capture = toggle(privacy, activity.getString(R.string.workbench_capture),
             activity.getString(R.string.workbench_capture_summary), TriggerBroadcastContract.COMMAND_CAPTURE)
+        privacyCard = SettingsScreen.sectionCard(activity).apply { addView(privacy) }
+
+        val support = SettingsScreen.sectionContent(activity)
+        support.addView(SettingsScreen.sectionTitle(activity, activity.getString(R.string.section_support)), SettingsScreen.matchWidth())
         val export = SettingsRowButton.create(activity).apply {
             text = activity.getString(R.string.workbench_export_action)
             setOnClickListener { command(TriggerBroadcastContract.COMMAND_EXPORT_DIAGNOSTICS, "true") }
         }
-        content.addView(row(activity.getString(R.string.workbench_export), activity.getString(R.string.workbench_export_summary), export),
+        support.addView(row(activity.getString(R.string.workbench_export), activity.getString(R.string.workbench_export_summary), export),
             SettingsScreen.matchWidth())
         controls += export
+        // Exit is the recovery path when SystemUI stops answering, so it never waits for a reply.
         val exit = SettingsRowButton.create(activity).apply {
             text = activity.getString(R.string.workbench_exit_action)
             setOnClickListener {
@@ -59,9 +70,10 @@ internal class WorkbenchSettingsCard(
                 TriggerCoordinator.requestSet(activity, false, TriggerSource.SYSTEM_RECOVERY) { isEnabled = true; refresh() }
             }
         }
-        content.addView(row(activity.getString(R.string.window_exit), activity.getString(R.string.workbench_exit_summary), exit),
+        support.addView(row(activity.getString(R.string.window_exit), activity.getString(R.string.workbench_exit_summary), exit),
             SettingsScreen.matchWidth())
-        view = SettingsScreen.sectionCard(activity).apply { addView(content) }
+        supportCard = SettingsScreen.sectionCard(activity).apply { addView(support) }
+
         apply(null)
         status.text = activity.getString(R.string.workbench_state_loading)
         refresh()
@@ -113,7 +125,7 @@ internal class WorkbenchSettingsCard(
         }
     }
 
-    private fun choice(title: String, key: String, options: List<Pair<String, String>>): MaterialButtonToggleGroup {
+    private fun choice(content: LinearLayout, title: String, key: String, options: List<Pair<String, String>>): MaterialButtonToggleGroup {
         content.addView(SettingsScreen.subsectionTitle(activity, title), SettingsScreen.matchWidth())
         val buttons = options.map { (value, label) -> SettingsScreen.modeButton(activity, label).apply { tag = value } }
         return MaterialButtonToggleGroup(activity).apply {
@@ -128,7 +140,7 @@ internal class WorkbenchSettingsCard(
         }
     }
 
-    private fun toggle(title: String, summary: String, key: String): SwitchMaterial {
+    private fun toggle(content: LinearLayout, title: String, summary: String, key: String): SwitchMaterial {
         val switch = SwitchMaterial(activity).apply {
             contentDescription = activity.getString(R.string.setting_description, title, summary)
             minimumWidth = SettingsScreen.dp(activity, 72)

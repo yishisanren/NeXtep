@@ -87,7 +87,7 @@ internal object UpdateSection {
         }
         listOf(check, download, MaterialButton(activity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
             text = activity.getString(R.string.update_source)
-            setOnClickListener { openBrowser(activity, "https://github.com/lujinxin/NeXtep") }
+            setOnClickListener { openBrowser(activity, UpdateChecker.REPOSITORY_URL) }
         }).forEachIndexed { index, button ->
             button.minHeight = dp(48)
             button.insetTop = dp(4)

@@ -16,7 +16,6 @@
     <uses-permission android:name="io.github.lujinxin.nextep.permission.CONTROL_WORKSPACE" />
     <uses-permission android:name="android.permission.REORDER_TASKS" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
@@ -36,98 +35,17 @@
         <activity
             android:name=".config.MainActivity"
             android:exported="true"
-            android:label="@string/app_name" />
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
 
         <activity
             android:name=".config.FavoriteAppsActivity"
             android:exported="false"
             android:label="@string/app_strip_title" />
-
-        <!-- Finish the icon entry in its own task before showing the real settings activity. -->
-        <activity
-            android:name=".icons.LauncherEntryActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:taskAffinity=""
-            android:theme="@android:style/Theme.NoDisplay" />
-
-        <!-- Disabling an alias must never finish the visible settings activity. -->
-        <activity-alias
-            android:name=".icons.DefaultLauncher"
-            android:enabled="true"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher"
-            android:label="@string/app_name"
-            android:targetActivity=".icons.LauncherEntryActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".icons.SpringLauncher"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_spring"
-            android:label="@string/app_name"
-            android:targetActivity=".icons.LauncherEntryActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".icons.SummerLauncher"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_summer"
-            android:label="@string/app_name"
-            android:targetActivity=".icons.LauncherEntryActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".icons.AutumnLauncher"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_autumn"
-            android:label="@string/app_name"
-            android:targetActivity=".icons.LauncherEntryActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".icons.WinterLauncher"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_winter"
-            android:label="@string/app_name"
-            android:targetActivity=".icons.LauncherEntryActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <receiver
-            android:name=".icons.LauncherIconReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-                <action android:name="android.intent.action.TIME_SET" />
-                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
-            </intent-filter>
-        </receiver>
 
         <service
             android:name=".trigger.NeXtepTileService"

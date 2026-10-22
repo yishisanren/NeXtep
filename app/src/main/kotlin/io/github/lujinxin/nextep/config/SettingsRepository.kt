@@ -47,11 +47,6 @@ class SettingsRepository(private val context: Context) {
         navigationButtonsEnabled = preferences.getBoolean("navigation_buttons_enabled", false),
     )
 
-    fun setNavigationButtonsEnabled(enabled: Boolean) {
-        preferences.edit().putBoolean("navigation_buttons_enabled", enabled).apply()
-        notifyTopContentChanged()
-    }
-
     fun setStatusBarGestureEnabled(enabled: Boolean) {
         preferences.edit().putBoolean("status_bar_gesture_enabled", enabled).apply()
         notifyTopContentChanged()
@@ -62,67 +57,10 @@ class SettingsRepository(private val context: Context) {
         notifyTopContentChanged()
     }
 
-    fun setSlotBackgroundSwipeEnabled(enabled: Boolean) {
-        preferences.edit().putBoolean("slot_background_swipe_enabled", enabled).apply()
-        notifyTopContentChanged()
-    }
-
     private fun notifyTopContentChanged() {
         context.sendBroadcast(android.content.Intent(WorkspaceConfigContract.ACTION_CHANGED)
             .addFlags(android.content.Intent.FLAG_RECEIVER_FOREGROUND)
             .setPackage("com.android.systemui"))
-    }
-
-    fun setTopTitle(title: String) {
-        preferences.edit()
-            .putString(KEY_TOP_TITLE, title.trim().ifEmpty { DEFAULT_TOP_TITLE })
-            .putString("top_content_mode", if (title.isBlank()) TopContentMode.ICON else TopContentMode.TEXT)
-            .apply()
-        notifyTopContentChanged()
-    }
-
-    fun topTitleDraft(): String =
-        preferences.getString("top_title_draft", preferences.getString(KEY_TOP_TITLE, "")).orEmpty()
-
-    fun setTopTitleDraft(value: String) {
-        preferences.edit().putString("top_title_draft", value).apply()
-    }
-
-    fun setTopContentMode(mode: String) {
-        preferences.edit().putString("top_content_mode", TopContentMode.resolve(mode, "")).apply()
-        notifyTopContentChanged()
-    }
-
-    fun setTopShowSeconds(enabled: Boolean) {
-        preferences.edit().putBoolean("top_show_seconds", enabled).apply()
-        notifyTopContentChanged()
-    }
-
-    fun setTopTextScroll(enabled: Boolean) {
-        preferences.edit().putBoolean("top_text_scroll", enabled).apply()
-        notifyTopContentChanged()
-    }
-
-    fun setTopTextFontFamily(family: String) {
-        preferences.edit().putString("top_text_font", TopTextStyle.resolveFamily(family)).apply()
-        notifyTopContentChanged()
-    }
-
-    fun setTopTextSize(sizeSp: Int) {
-        preferences.edit().putInt("top_text_size", sizeSp.coerceIn(
-            TopTextStyle.MIN_SIZE_SP, TopTextStyle.MAX_SIZE_SP,
-        )).apply()
-        notifyTopContentChanged()
-    }
-
-    fun setTopTextBold(enabled: Boolean) {
-        preferences.edit().putBoolean("top_text_bold", enabled).apply()
-        notifyTopContentChanged()
-    }
-
-    fun setFrostStrength(value: Int) {
-        preferences.edit().putInt("frost_strength", value.coerceIn(0, 100)).apply()
-        notifyTopContentChanged()
     }
 
     fun setTopApps(components: List<String>) {

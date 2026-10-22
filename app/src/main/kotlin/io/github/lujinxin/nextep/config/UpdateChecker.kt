@@ -7,8 +7,9 @@ import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
 internal object UpdateChecker {
-    const val RELEASES_URL = "https://github.com/lujinxin/NeXtep/releases"
-    private const val API_URL = "https://api.github.com/repos/lujinxin/NeXtep/releases?per_page=100"
+    const val REPOSITORY_URL = "https://github.com/yishisanren/NeXtep"
+    const val RELEASES_URL = "$REPOSITORY_URL/releases"
+    private const val API_URL = "https://api.github.com/repos/yishisanren/NeXtep/releases?per_page=100"
     private const val MAX_BYTES = 2 * 1024 * 1024
 
     data class Release(val version: String, val notes: String, val downloadUrl: String)
@@ -27,8 +28,7 @@ internal object UpdateChecker {
             return release.takeIf { code > installedCode }
         }
 
-        val current = versionParts(installedName.substringBefore("-corner."))
-            ?: error("当前版本格式无法比较，请查看下载页面")
+        val current = versionParts(installedName) ?: error("当前版本格式无法比较，请查看下载页面")
         val releases = JSONArray(fetch(API_URL))
         val candidates = (0 until releases.length()).mapNotNull { index ->
             val json = releases.getJSONObject(index)
@@ -50,13 +50,13 @@ internal object UpdateChecker {
         return latest.second.takeIf { compareVersions(latest.first, current) > 0 }
     }
 
-    private fun versionParts(value: String): List<Long>? {
-        // Repository tags use vX.Y.Z; reject unknown schemes rather than guess ordering.
-        val match = Regex("^[vV]?(\\d+)\\.(\\d+)\\.(\\d+)$").matchEntire(value) ?: return null
-        return match.groupValues.drop(1).map { it.toLongOrNull() ?: return null }
+    internal fun versionParts(value: String): List<Long>? {
+        // Tags are vX.Y.Z or vX.Y.Z-workbench.N; reject unknown schemes rather than guess ordering.
+        val match = Regex("^[vV]?(\\d+)\\.(\\d+)\\.(\\d+)(?:-workbench\\.(\\d+))?$").matchEntire(value) ?: return null
+        return match.groupValues.drop(1).map { if (it.isEmpty()) 0L else it.toLongOrNull() ?: return null }
     }
 
-    private fun compareVersions(left: List<Long>, right: List<Long>): Int {
+    internal fun compareVersions(left: List<Long>, right: List<Long>): Int {
         for (index in left.indices) {
             val comparison = left[index].compareTo(right[index])
             if (comparison != 0) return comparison

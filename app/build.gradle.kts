@@ -14,8 +14,8 @@ android {
         applicationId = "io.github.lujinxin.nextep"
         minSdk = 35
         targetSdk = 36
-        versionCode = 43
-        versionName = "1.3.0-workbench.29"
+        versionCode = 44
+        versionName = "1.3.0-workbench.30"
 
     }
 
@@ -46,8 +46,6 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)
-    implementation("androidx.viewpager:viewpager:1.0.0")
-    implementation("cn.6tail:lunar:1.7.7")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.17")
 }

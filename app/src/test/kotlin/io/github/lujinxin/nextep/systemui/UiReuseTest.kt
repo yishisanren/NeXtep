@@ -128,28 +128,4 @@ class UiReuseTest {
         TopTextStyle.typeface("sans-serif", true)
         assertFalse(fonts.isInitialized())
     }
-
-    @Test fun marqueeReusesLayoutUntilItsTextOrPaintChanges() {
-        val view = LoopingTitleView(RuntimeEnvironment.getApplication()).apply {
-            layoutParams = LinearLayout.LayoutParams(240, 60)
-            text = "A scrolling title"
-            setScrolling(true, true)
-            measure(View.MeasureSpec.makeMeasureSpec(240, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(60, View.MeasureSpec.EXACTLY))
-            layout(0, 0, 240, 60)
-        }
-        val canvas = Canvas(Bitmap.createBitmap(240, 60, Bitmap.Config.ARGB_8888))
-        view.draw(canvas)
-        val first = field(view, "line")
-        assertNotNull(first)
-        repeat(120) { view.setScrolling(true, true); view.draw(canvas) }
-        assertSame(first, field(view, "line"))
-        view.text = "Changed title"
-        view.draw(canvas)
-        assertNotSame(first, field(view, "line"))
-        val next = field(view, "line")
-        view.paint.textSize += 2f
-        view.draw(canvas)
-        assertNotSame(next, field(view, "line"))
-    }
 }

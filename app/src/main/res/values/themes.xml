@@ -1,6 +1,5 @@
 <resources>
     <style name="Theme.NeXtep" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_splash_round</item>
         <item name="android:windowActionModeOverlay">true</item>
         <item name="colorPrimary">#1F5CDE</item>
         <item name="colorOnPrimary">#FFFFFF</item>

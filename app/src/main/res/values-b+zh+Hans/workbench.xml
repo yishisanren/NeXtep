@@ -1,5 +1,5 @@
 <resources>
-    <string name="workbench_title">一步工作台</string>
+    <string name="workbench_title">格窗</string>
     <string name="workbench_choose_main_app">在桌面选择应用，将在大窗打开</string>
     <string name="workbench_theme">切换浅色／深色外观</string>
     <string name="workbench_payment">付款与扫一扫</string>
@@ -36,7 +36,6 @@
     <string name="workbench_launch_denied">系统拒绝启动或移动此应用。</string>
     <string name="workbench_window_timeout">目标小窗未能就绪，请退出工作台后重新打开再试。</string>
     <string name="workbench_place_failed">应用已打开，但无法放入目标窗口。</string>
-    <string name="workbench_settings_title">一步工作台</string>
     <string name="workbench_settings_summary">修改后立即作用于 SystemUI 中的工作台。</string>
     <string name="workbench_state_loading">正在读取工作台状态…</string>
     <string name="workbench_state_unavailable">工作台未响应。更新后请先重启手机再试。</string>

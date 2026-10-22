@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/nextep-logo.png" alt="NeXtep icon" width="220">
+  <img src="assets/panes-logo.png" alt="Panes icon" width="220">
 </p>
 
-<h2 align="center">NeXtep — A Tribute to and Continuation of OneStep</h2>
+<h2 align="center">Panes (格窗) — a side workspace for the native ColorOS launcher, forked from NeXtep</h2>
 
 <p align="center">
   <a href="README.md">English</a> / <a href="README_CN.md">中文</a>
@@ -28,7 +28,7 @@
 
 # NeXtep
 
-This fork's `1.3.0-workbench.29` adds OneStep Workbench: up to ten favorite apps chosen in Settings, native ColorOS dialogs, a unified light/dark panel, a gear that opens Settings directly, the control area at the top or bottom, in-place slot expansion without a visible jump, and landscape-fullscreen video pinning. Tapping an empty slot parks the current main app there before opening HOME; the next selected app opens in the main window. Native content drag and bottom-corner gestures remain available. [Custom APK](https://github.com/yishisanren/NeXtep/releases/tag/v1.3.0-workbench.29) · [Features and validation limits](docs/WORKBENCH.md) · [Earlier performance work](docs/PERFORMANCE.md). This is a prerelease; build and installation checks do not replace user device acceptance. In-app updates still target upstream; installing an upstream build replaces this fork's features.
+This fork's `1.3.0-workbench.30` adds OneStep Workbench: up to ten favorite apps chosen in Settings, native ColorOS dialogs, a unified light/dark panel, a gear that opens Settings directly, the control area at the top or bottom, in-place slot expansion without a visible jump, and landscape-fullscreen video pinning. Tapping an empty slot parks the current main app there before opening HOME; the next selected app opens in the main window. Native content drag and bottom-corner gestures remain available. [Custom APK](https://github.com/yishisanren/NeXtep/releases/tag/v1.3.0-workbench.30) · [Features and validation limits](docs/WORKBENCH.md) · [Earlier performance work](docs/PERFORMANCE.md). This is a prerelease; build and installation checks do not replace user device acceptance. In-app updates still target upstream; installing an upstream build replaces this fork's features.
 
 **NeXtep** is an **LSPosed module** that adds a **native side workspace** to ColorOS 16 / 17 while keeping the **stock launcher**. It provides **one main window and four live task slots**, with task switching, drag-and-drop, media controls, and customizable app shortcuts integrated into SystemUI.
 

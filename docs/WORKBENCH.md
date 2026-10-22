@@ -1,13 +1,13 @@
 # 工作台定制版
 
-版本：`1.3.0-workbench.29`，versionCode `43`，运行协议 51。一步工作台提供设置中选择的最多十个常用应用、原生系统弹窗、统一的浅深色面板、顶部或底部控制区、侧窗原位扩展、横屏全屏视频收放，以及添加应用时保留原主窗任务。实际效果由用户真机验收。
+版本：`1.3.0-workbench.30`，versionCode `44`，运行协议 51。一步工作台提供设置中选择的最多十个常用应用、原生系统弹窗、统一的浅深色面板、顶部或底部控制区、侧窗原位扩展、横屏全屏视频收放，以及添加应用时保留原主窗任务。实际效果由用户真机验收。
 
 ## 窗口和外观
 
 - 一个主窗加四个独立实时 VirtualDisplay 侧窗。侧窗点击交换、内部拖动、左右布局与任务退出恢复继续使用原来的任务协调器。
 - 蓝色系深浅主题、渐变控制面板、圆角侧窗和主窗蓝色边框。功能按钮与空小窗共用同一卡片底色和描边，自绘图标按主题着色；第三方应用图标保持原样。主窗圆角由本模块的覆盖层绘制，不覆盖原生任务的圆角状态。
-- 控制区左侧固定显示“一步工作台”和当前日期；右侧依次为比价、支付、设置齿轮三个 40dp 向量按钮（间距 8dp），标题行与常用栏作为整体在状态栏下方居中。齿轮直接打开 NeXtep 设置（仍在工作台内）。常用栏只显示设置里选择的应用及顺序，最多十个，不按使用记录补充；为空时不显示。常用应用在设置页的「App 栏」入口进入二级页面选择和拖动排序。系统分身身份继续保留。
-- NeXtep 设置 → 一步工作台：浅色／深色外观、小窗靠左／靠右、控制区顶部／底部、最近任务隐藏、本次允许截图／录屏、导出诊断、退出工作台。这些偏好由 SystemUI 保存，设置页通过签名权限保护的控制广播读取和修改；截图许可只对当前会话有效，退出、锁屏、回桌面／最近任务或打开设置时复位。
+- 控制区左侧固定显示“格窗”和当前日期；右侧依次为比价、支付、设置齿轮三个 40dp 向量按钮（间距 8dp），标题行与常用栏作为整体在状态栏下方居中。齿轮直接打开 格窗设置（仍在工作台内）。常用栏只显示设置里选择的应用及顺序，最多十个，不按使用记录补充；为空时不显示。常用应用在设置页的「App 栏」入口进入二级页面选择和拖动排序。系统分身身份继续保留。
+- 格窗设置是一个单页，六组：常用应用（编辑入口、切换时收起上一个应用）、布局（浅色／深色、小窗靠左／靠右、控制区顶部／底部）、打开方式（控制中心开关、底角手势）、隐私（最近任务隐藏、本次允许截图／录屏）、遇到问题（导出诊断、退出工作台）、关于（版本、检查更新、署名）。布局、隐私和导出、退出这些偏好由 SystemUI 保存，设置页通过签名权限保护的控制广播读取和修改；截图许可只对当前会话有效，退出、锁屏、回桌面／最近任务或打开设置时复位。
 - 控制区选择底部时，标题、常用栏和三个入口作为整体移到屏幕底部（横屏时移到手机物理底边），侧栏与主窗相应上移占满剩余区域（竖屏时侧栏从状态栏下方开始），窗口坐标、内容缩放和触摸区域一起调整，并为导航手势保留边缘余量。横屏全屏视频也收纳在所选位置。
 - 模块弹窗使用 ROM 导出的 ColorOS 系统主题与原生控件；不覆盖系统弹窗背景或宽度。缺少 Oplus 主题时回退 Android DeviceDefault。
 - 主窗任务请求横屏（例如视频点全屏）时收进宽窗，显示器保持竖屏不再整体旋转，下方保留主窗和另外三个侧窗；竖屏全屏还需检测到媒体播放信号，避免游戏、阅读器等全屏应用被收纳。宽窗任务重新请求竖屏并显示状态栏后回到主窗。静音且没有媒体会话的竖屏播放器可能无法识别；识别依赖应用与 ROM。
@@ -81,3 +81,11 @@
 显示与授权接入使用 [SurfaceView secure 输出](https://developer.android.com/reference/android/view/SurfaceView#setSecure(boolean))、[secure VirtualDisplay](https://developer.android.com/reference/android/hardware/display/DisplayManager#VIRTUAL_DISPLAY_FLAG_SECURE)、[Android 图形输出限制](https://source.android.com/docs/core/graphics/arch-tv)和 [AOSP DragAndDropPermissions](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/core/java/android/view/DragAndDropPermissions.java)。私有系统接口缺失时跳过相关适配，不影响原生系统行为。
 
 搜索入口静态核对来源：[京东到家公开前端](https://daojia.jd.com/)、[淘宝闪购公开搜索页](https://tb.ele.me/app/eleme/et-search/search)、[淘宝官方安装包](https://download.alicdn.com/wireless/taobao4android/latest/702757.apk)及[美团官方安装包下载页](https://i.meituan.com/client/homemt)。只使用接口名称与参数，不分发第三方应用代码或资源。
+
+## Shell 命令
+
+原「高级」页的三条命令。以 Root 身份在手机解锁状态下执行，不加 `adb shell` 前缀；LSPosed 中需已启用本模块并重启。
+
+- 进入：`am broadcast -n io.github.lujinxin.nextep/.trigger.WorkspaceControlBrokerReceiver -a io.github.lujinxin.nextep.action.HOST_SET_REQUEST --ez io.github.lujinxin.nextep.extra.REQUESTED_ACTIVE true`
+- 退出：`am broadcast -n io.github.lujinxin.nextep/.trigger.WorkspaceControlBrokerReceiver -a io.github.lujinxin.nextep.action.HOST_SET_REQUEST --ez io.github.lujinxin.nextep.extra.REQUESTED_ACTIVE false`
+- 查询：`settings get global nextep_workspace_active_v1`（1 小窗模式，0 普通模式，null 尚无记录）
