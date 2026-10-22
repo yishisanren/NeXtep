@@ -342,7 +342,9 @@ class TaskSwitcherView(
         setStatusVisible(false)
 
         textureView.animate().cancel()
-        if (animated) {
+        // A coordinated exchange already animates a protected preview. The live
+        // destination must match its final size when that preview is revealed.
+        if (animated && !busy) {
             textureView.alpha = 0f
             textureView.scaleX = CONTENT_ENTER_SCALE
             textureView.scaleY = CONTENT_ENTER_SCALE

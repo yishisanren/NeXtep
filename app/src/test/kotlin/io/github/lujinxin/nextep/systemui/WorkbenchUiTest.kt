@@ -89,6 +89,18 @@ class WorkbenchUiTest {
         assertEquals(1080f / 2354, output.width.toFloat() / output.height, .003f)
     }
 
+    @Test fun exchangedLiveSlotHasNoSecondScaleAnimationWhenPreviewReveals() {
+        val view = TaskSwitcherView(context, 0)
+        view.setBusy(true)
+        view.showState(io.github.lujinxin.nextep.display.SlotState.Occupied(20, 42,
+            android.content.ComponentName("example.app", "example.app.Main")))
+        assertEquals(1f, view.textureView.scaleX, 0f)
+        assertEquals(1f, view.textureView.scaleY, 0f)
+        assertEquals(1f, view.textureView.alpha, 0f)
+        view.setBusy(false)
+        assertEquals(1f, view.textureView.scaleX, 0f)
+    }
+
     @Test fun everySearchKeepsUnicodeAndSeparatorsInsideOneQuery() {
         val query = "牛奶 & #/ 500ml + 50% 😀"
         val targets = WorkbenchIntents.searches(WorkbenchIntents.Search.SHOPPING, query)

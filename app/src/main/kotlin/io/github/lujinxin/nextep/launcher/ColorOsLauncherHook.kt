@@ -73,6 +73,7 @@ object ColorOsLauncherHook {
                     }
                 })
                 NeXtepLog.info("launcher_workspace_app_animation", "Installed static workspace launch source")
+                module.log(android.util.Log.INFO, "NeXtep", "Installed static workspace launch source")
             }
             HookGuard.run("launcher_recent_task_selection") {
                 val recents = classLoader.loadClass("com.android.quickstep.views.RecentsView")

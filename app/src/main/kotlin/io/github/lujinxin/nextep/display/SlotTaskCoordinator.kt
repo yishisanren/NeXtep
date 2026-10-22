@@ -1439,7 +1439,7 @@ class SlotTaskCoordinator(
                 setState(slotIndex, SlotState.Occupied(occupied.displayId, mainTask.taskId,
                     mainTask.component), "exchange submitted")
             } else setState(slotIndex, SlotState.Ready(occupied.displayId), "promotion submitted")
-            deferredMove = DeferredMove(ready = {
+            deferredMove = DeferredMove(ready = ready@{
                 val current = taskRepository.runningTasks()
                 val promoted = current.firstOrNull { it.taskId == slotTask.taskId }
                 val demoted = mainTask?.let { old -> current.firstOrNull { it.taskId == old.taskId } }
@@ -1454,8 +1454,11 @@ class SlotTaskCoordinator(
                 else {
                     if (mainTask != null) {
                         val source = slots[slotIndex].sourceBounds()
-                        TaskSurfaceCompat.fitSlotSurface(mainTask.taskId, occupied.displayId,
-                            Rect(source.left, source.top, source.right, source.bottom)).getOrThrow()
+                        // Task metadata is ready before the old main transform is cleared.
+                        // Admit the destination fit now, retaining Shell exchange classification.
+                        if (!TaskSurfaceCompat.fitSlotSurface(mainTask.taskId, occupied.displayId,
+                            Rect(source.left, source.top, source.right, source.bottom),
+                            finishExchange = true).getOrThrow()) return@ready false
                     }
                     mainTaskPresenter.presentTask(slotTask.taskId, geometryProvider()).getOrThrow()
                     true

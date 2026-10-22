@@ -114,27 +114,31 @@ object TaskSurfaceCompat {
 
     /** Slot tasks render in display-local coordinates. Moving a fitted main task
      * must clear its matrix and position as well as its physical-display crop. */
-    fun fitSlotSurface(taskId: Int, displayId: Int, crop: Rect): Result<Unit> = runCatching {
+    fun fitSlotSurface(taskId: Int, displayId: Int, crop: Rect,
+                       finishExchange: Boolean = false): Result<Boolean> = runCatching {
         require(displayId != Display.DEFAULT_DISPLAY)
         // Do not overwrite the outgoing display-0 snapshot before Shell's
-        // reparent. WM owns the move/finish; steady slot fitting runs afterwards.
-        if (isDisplayExchanging(taskId)) return@runCatching
+        // reparent. Settlement admits fitting only after destination metadata is ready;
+        // the recent-exchange marker remains available to Shell's finish policy.
+        if (isDisplayExchanging(taskId) &&
+            (!finishExchange || exchangeDisplays[taskId] != displayId)
+        ) return@runCatching false
         val observed = observedStates[taskId]
         val cached = slotSurfaces[taskId]?.takeIf {
             it.displayId == displayId && it.crop == crop && observed?.displayId == displayId &&
                 observedLeashes[taskId] === it.leash && isValid(it.leash)
         }
         val slot = cached ?: run {
-            val state = findLiveTaskState(taskId) ?: return@runCatching
+            val state = findLiveTaskState(taskId) ?: return@runCatching false
             if (state.displayId != displayId || state.vendorWindowed ||
                 state.windowingMode != WINDOWING_MODE_FULLSCREEN
-            ) return@runCatching
-            val leash = findTaskLeash(taskId, requireMainDisplay = false) ?: return@runCatching
-            if (!isValid(leash)) return@runCatching
+            ) return@runCatching false
+            val leash = findTaskLeash(taskId, requireMainDisplay = false) ?: return@runCatching false
+            if (!isValid(leash)) return@runCatching false
             SlotSurface(displayId, leash, Rect(crop)).also { slotSurfaces[taskId] = it }
         }
         val now = SystemClock.uptimeMillis()
-        if (now - slot.lastAppliedAt < STEADY_REAPPLY_INTERVAL_MS) return@runCatching
+        if (slot.lastAppliedAt != 0L && now - slot.lastAppliedAt < STEADY_REAPPLY_INTERVAL_MS) return@runCatching true
         transactionGuard.ownedTransaction {
             SurfaceControl.Transaction().use { transaction ->
                 writeFrame(transaction, slot.leash, slot.frame)
@@ -142,6 +146,7 @@ object TaskSurfaceCompat {
                 slot.lastAppliedAt = now
             }
         }
+        true
     }.onFailure { NeXtepLog.warn("slot_surface", "Unable to restore slot coordinates taskId=$taskId", it) }
 
     /** Reserve fitting before a display move, without touching the small-window surface. */
@@ -166,6 +171,8 @@ object TaskSurfaceCompat {
     fun hasPreparedPromotion(taskId: Int): Boolean = preparedPresentations.containsKey(taskId)
 
     fun markDisplayExchange(taskId: Int, destinationDisplayId: Int) {
+        // A new move revokes the former slot transform before Shell reparents it.
+        slotSurfaces.remove(taskId)
         val now = SystemClock.uptimeMillis()
         displayExchanges.entries.removeIf {
             if (it.value >= now) false else {
@@ -481,7 +488,7 @@ object TaskSurfaceCompat {
             if (slotSurfaces[taskId] != slot || state.displayId != slot.displayId ||
                 state.vendorWindowed || state.windowingMode != WINDOWING_MODE_FULLSCREEN ||
                 observedLeashes[taskId] !== slot.leash || !isValid(slot.leash) ||
-                isDisplayExchanging(taskId)
+                (isDisplayExchanging(taskId) && exchangeDisplays[taskId] != slot.displayId)
             ) return@forEach
             // A queued Shell finish may still contain the former main transform.
             // Preserve its visibility/layer writes, but commit local slot coordinates.
