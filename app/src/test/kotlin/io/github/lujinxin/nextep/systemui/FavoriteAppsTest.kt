@@ -31,44 +31,31 @@ class FavoriteAppsTest {
         dialog.dismiss()
         activity.finish()
     }
-    @Test fun theEleventhPositionEditsExactlyTheVisibleOrderAndSurvivesAnEmptySelection() {
-        var edited = emptyList<String>()
-        val strip = TopAppStripView(context, {}, {}, { _, _ -> false }, { _, _ -> false },
-            onEditAppsRequested = { edited = it })
+    @Test fun theStripShowsExactlyTheSelectionWithNoEditorTileAndSurvivesAnEmptySelection() {
+        val strip = TopAppStripView(context, {}, {}, { _, _ -> false }, { _, _ -> false })
         val render = strip.javaClass.getDeclaredMethod("renderApps", List::class.java).apply { isAccessible = true }
         val row = strip.javaClass.getDeclaredField("appRow").apply { isAccessible = true }.get(strip) as LinearLayout
         val entries = (0..11).map { TopAppRepository.AppEntry("app$it", "App $it",
             ColorDrawable(Color.BLUE), Intent(), 0) }
         render.invoke(strip, entries)
-        assertEquals(11, row.childCount)
-        row.getChildAt(10).performClick()
-        assertEquals(entries.take(10).map { it.key }, edited)
-        render.invoke(strip, entries.take(10).reversed())
-        row.getChildAt(10).performClick()
-        assertEquals(entries.take(10).reversed().map { it.key }, edited)
+        assertEquals(10, row.childCount)
+        render.invoke(strip, entries.take(3).reversed())
+        assertEquals(3, row.childCount)
+        assertEquals(listOf("App 2", "App 1", "App 0"), (0 until 3).map { row.getChildAt(it).contentDescription })
         render.invoke(strip, emptyList<TopAppRepository.AppEntry>())
-        assertEquals(1, row.childCount)
-        row.getChildAt(0).performClick()
-        assertTrue(edited.isEmpty())
+        assertEquals(0, row.childCount)
     }
 
-    @Test fun savingFavoritesAtomicallyEnablesManualOrderAndKeepsAnExplicitEmptyList() {
-        assertTrue(SettingsRepository(context).setFavoriteApps((0..15).map { "app$it" }))
-        val reopened = SettingsRepository(context).topBarSettings()
-        assertTrue(reopened.manualAppOrder)
-        assertEquals((0..9).map { "app$it" }, reopened.appComponents)
-        assertTrue(SettingsRepository(context).setFavoriteApps(emptyList()))
-        assertTrue(SettingsRepository(context).topBarSettings().manualAppOrder)
+    @Test fun savedSelectionKeepsOrderCapsAtTenAndAllowsAnExplicitEmptyList() {
+        SettingsRepository(context).setTopApps((0..15).map { "app$it" })
+        assertEquals((0..9).map { "app$it" }, SettingsRepository(context).topBarSettings().appComponents)
+        SettingsRepository(context).setTopApps(listOf("b", "a", "b"))
+        assertEquals(listOf("b", "a"), SettingsRepository(context).topBarSettings().appComponents)
+        SettingsRepository(context).setTopApps(emptyList())
         assertTrue(SettingsRepository(context).topBarSettings().appComponents.isEmpty())
-    }
-
-    @Test fun theProviderRejectsOverLimitAndMalformedWritesBeforeChangingPreferences() {
         val provider = Robolectric.buildContentProvider(WorkspaceConfigProvider::class.java).create().get()
-        SettingsRepository(context).setFavoriteApps(listOf("kept"))
-        for (keys in listOf((0..10).map { "app$it" }, listOf("one\ntwo"))) {
-            val extras = android.os.Bundle().apply { putStringArrayList(WorkspaceConfigContract.EXTRA_APPS, ArrayList(keys)) }
-            assertThrows(IllegalArgumentException::class.java) { provider.call("set_top_apps", null, extras) }
-            assertEquals(listOf("kept"), SettingsRepository(context).topBarSettings().appComponents)
-        }
+        assertNull(provider.call("set_top_apps", null, android.os.Bundle()))
+        assertEquals(emptyList<String>(), provider.call("query", null, null)!!
+            .getStringArrayList(WorkspaceConfigContract.EXTRA_APPS))
     }
 }

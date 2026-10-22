@@ -28,6 +28,9 @@ import io.github.lujinxin.nextep.R
 import io.github.lujinxin.nextep.apps.LauncherAppCatalogContract
 import io.github.lujinxin.nextep.apps.LauncherAppRepository
 import io.github.lujinxin.nextep.trigger.NeXtepTileService
+import io.github.lujinxin.nextep.trigger.TriggerBroadcastContract
+import io.github.lujinxin.nextep.trigger.TriggerCoordinator
+import io.github.lujinxin.nextep.trigger.TriggerSource
 
 object SettingsScreen {
     private data class AppOption(
@@ -45,7 +48,6 @@ object SettingsScreen {
         // while the unprivileged settings process is still loading the catalogue.
         val selected = settings.appComponents.distinct()
             .filter { it in appByName || it.contains('|') }.take(MAX_TOP_APPS).toMutableList()
-        var manualMode = settings.manualAppOrder
 
         return LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
@@ -164,6 +166,8 @@ object SettingsScreen {
                     ), matchWidth())
                 }, matchWidth())
             }, matchWidth().apply { bottomMargin = dp(activity, 16) })
+
+            addView(workbenchSection(activity), matchWidth().apply { bottomMargin = dp(activity, 16) })
 
             val frostSection = sectionCard(activity).apply {
                 addView(sectionContent(activity).apply {
@@ -360,25 +364,9 @@ object SettingsScreen {
             val manualContainer = LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
             }
-            val automaticButton = modeButton(activity, activity.getString(R.string.sort_automatic))
-            val manualButton = modeButton(activity, activity.getString(R.string.sort_manual))
-            val modeSelector = MaterialButtonToggleGroup(activity).apply {
-                isSingleSelection = true
-                isSelectionRequired = true
-                addView(automaticButton, LinearLayout.LayoutParams(0, dp(activity, 44), 1f))
-                addView(manualButton, LinearLayout.LayoutParams(0, dp(activity, 44), 1f))
-                check(if (manualMode) manualButton.id else automaticButton.id)
-            }
-            val modeDescription = sectionDescription(activity, "")
 
             lateinit var render: () -> Unit
             render = {
-                manualContainer.visibility = if (manualMode) View.VISIBLE else View.GONE
-                modeDescription.text = if (manualMode) {
-                    activity.getString(R.string.sort_manual_summary)
-                } else {
-                    activity.getString(R.string.sort_automatic_summary)
-                }
                 selectedContainer.removeAllViews()
                 if (selected.isEmpty()) {
                     selectedContainer.addView(emptyHint(activity, activity.getString(R.string.selected_apps_empty)))
@@ -421,8 +409,6 @@ object SettingsScreen {
                 addView(sectionContent(activity).apply {
                     addView(sectionTitle(activity, activity.getString(R.string.app_strip_title)), matchWidth())
                     addView(sectionDescription(activity, activity.getString(R.string.app_strip_summary)), matchWidth())
-                    addView(modeSelector, matchWidth().apply { topMargin = dp(activity, 14) })
-                    addView(modeDescription, matchWidth().apply { topMargin = dp(activity, 8) })
                     addView(manualContainer.apply {
                         addView(subsectionTitle(activity, activity.getString(R.string.selected_apps)), matchWidth())
                         addView(selectedContainer, matchWidth())
@@ -434,12 +420,6 @@ object SettingsScreen {
                 })
             }, matchWidth())
 
-            modeSelector.addOnButtonCheckedListener { _, checkedId, isChecked ->
-                if (!isChecked) return@addOnButtonCheckedListener
-                manualMode = checkedId == manualButton.id
-                repository.setManualAppOrder(manualMode)
-                render()
-            }
             render()
             LauncherAppCatalogContract.query(activity) { profiles ->
                 if (profiles == null || activity.isDestroyed || activity.isFinishing) return@query
@@ -453,6 +433,112 @@ object SettingsScreen {
                 render()
             }
         }
+    }
+
+    /** SystemUI keeps these preferences; this card only mirrors its reply and sends commands. */
+    private fun workbenchSection(activity: AppCompatActivity): View {
+        val content = sectionContent(activity)
+        val status = sectionDescription(activity, activity.getString(R.string.workbench_state_loading))
+        val controls = mutableListOf<View>()
+        var syncing = false
+        lateinit var apply: (android.os.Bundle?) -> Unit
+        fun refresh() = TriggerCoordinator.queryWorkbench(activity) { result ->
+            if (activity.isDestroyed || activity.isFinishing) return@queryWorkbench
+            apply((result as? TriggerCoordinator.RequestResult.Ready)?.extras
+                ?.takeIf { it.containsKey(TriggerBroadcastContract.EXTRA_APPEARANCE) })
+        }
+        fun command(key: String, value: String) {
+            if (syncing) return
+            controls.forEach { it.isEnabled = false }
+            TriggerCoordinator.workbenchCommand(activity, key, value) { result ->
+                if (activity.isDestroyed || activity.isFinishing) return@workbenchCommand
+                if (result !is TriggerCoordinator.RequestResult.Ready) {
+                    Toast.makeText(activity, R.string.workbench_command_failed, Toast.LENGTH_SHORT).show()
+                }
+                refresh()
+            }
+        }
+        fun choice(title: String, key: String, options: List<Pair<String, String>>): MaterialButtonToggleGroup {
+            content.addView(subsectionTitle(activity, title), matchWidth())
+            val buttons = options.map { (value, label) -> modeButton(activity, label).apply { tag = value } }
+            return MaterialButtonToggleGroup(activity).apply {
+                isSingleSelection = true
+                isSelectionRequired = true
+                buttons.forEach { addView(it, LinearLayout.LayoutParams(0, dp(activity, 44), 1f)) }
+                addOnButtonCheckedListener { group, checkedId, isChecked ->
+                    if (isChecked) command(key, group.findViewById<View>(checkedId).tag as String)
+                }
+                content.addView(this, matchWidth())
+                controls += this
+            }
+        }
+        fun toggle(title: String, summary: String, key: String): SwitchMaterial {
+            val switch = SwitchMaterial(activity).apply {
+                contentDescription = activity.getString(R.string.setting_description, title, summary)
+                minimumWidth = dp(activity, 72)
+                minimumHeight = dp(activity, 48)
+                setOnCheckedChangeListener { _, enabled -> command(key, enabled.toString()) }
+            }
+            content.addView(settingRow(activity, title, summary, switch).apply {
+                setPadding(0, dp(activity, 6), 0, dp(activity, 6))
+                setOnClickListener { switch.performClick() }
+            }, matchWidth())
+            controls += switch
+            return switch
+        }
+        content.addView(sectionTitle(activity, activity.getString(R.string.workbench_settings_title)), matchWidth())
+        content.addView(status, matchWidth())
+        val appearance = choice(activity.getString(R.string.workbench_appearance), TriggerBroadcastContract.COMMAND_APPEARANCE,
+            listOf("LIGHT" to activity.getString(R.string.appearance_light), "DARK" to activity.getString(R.string.appearance_dark)))
+        val side = choice(activity.getString(R.string.workbench_side), TriggerBroadcastContract.COMMAND_SIDEBAR_SIDE,
+            listOf("LEFT" to activity.getString(R.string.window_side_left), "RIGHT" to activity.getString(R.string.window_side_right)))
+        val position = choice(activity.getString(R.string.control_position), TriggerBroadcastContract.COMMAND_CONTROL_BOTTOM,
+            listOf("false" to activity.getString(R.string.control_top), "true" to activity.getString(R.string.control_bottom)))
+        val recents = toggle(activity.getString(R.string.workbench_hide_recents),
+            activity.getString(R.string.workbench_hide_recents_summary), TriggerBroadcastContract.COMMAND_HIDE_RECENTS)
+        val capture = toggle(activity.getString(R.string.workbench_capture),
+            activity.getString(R.string.workbench_capture_summary), TriggerBroadcastContract.COMMAND_CAPTURE)
+        val export = SettingsRowButton.create(activity).apply {
+            text = activity.getString(R.string.workbench_export_action)
+            setOnClickListener { command(TriggerBroadcastContract.COMMAND_EXPORT_DIAGNOSTICS, "true") }
+        }
+        content.addView(settingRow(activity, activity.getString(R.string.workbench_export),
+            activity.getString(R.string.workbench_export_summary), export).apply { setPadding(0, dp(activity, 6), 0, dp(activity, 6)) }, matchWidth())
+        controls += export
+        val exit = SettingsRowButton.create(activity).apply {
+            text = activity.getString(R.string.workbench_exit_action)
+            setOnClickListener {
+                isEnabled = false
+                TriggerCoordinator.requestSet(activity, false, TriggerSource.SYSTEM_RECOVERY) { isEnabled = true; refresh() }
+            }
+        }
+        content.addView(settingRow(activity, activity.getString(R.string.window_exit),
+            activity.getString(R.string.workbench_exit_summary), exit).apply { setPadding(0, dp(activity, 6), 0, dp(activity, 6)) }, matchWidth())
+        apply = { state ->
+            syncing = true
+            fun MaterialButtonToggleGroup.select(value: String) {
+                for (index in 0 until childCount) { val button = getChildAt(index) as MaterialButton; if (button.tag == value) check(button.id) }
+            }
+            if (state == null) {
+                status.text = activity.getString(R.string.workbench_state_unavailable)
+                controls.forEach { it.isEnabled = false }
+            } else {
+                status.text = activity.getString(R.string.workbench_settings_summary)
+                appearance.select(state.getString(TriggerBroadcastContract.EXTRA_APPEARANCE).orEmpty())
+                side.select(state.getString(TriggerBroadcastContract.EXTRA_SIDEBAR_SIDE).orEmpty())
+                position.select(state.getBoolean(TriggerBroadcastContract.EXTRA_CONTROL_BOTTOM).toString())
+                recents.isChecked = state.getBoolean(TriggerBroadcastContract.EXTRA_HIDE_RECENTS)
+                capture.isChecked = state.getBoolean(TriggerBroadcastContract.EXTRA_CAPTURE_ALLOWED)
+                controls.forEach { it.isEnabled = true }
+                // Capture is a session grant; it needs a visible workspace to take effect.
+                capture.isEnabled = state.getBoolean(TriggerBroadcastContract.EXTRA_ACTIVE)
+            }
+            syncing = false
+        }
+        apply(null)
+        status.text = activity.getString(R.string.workbench_state_loading)
+        refresh()
+        return sectionCard(activity).apply { addView(content) }
     }
 
     private fun draggableSelectedRow(

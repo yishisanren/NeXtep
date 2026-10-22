@@ -45,16 +45,12 @@
     <string name="top_text_size">トップの文字サイズ</string>
     <string name="top_content_title">トップの表示内容</string>
     <string name="top_content_summary">設定はすぐに反映されます。カスタムテキストの編集後は「テキストを保存」を押してください。</string>
-    <string name="sort_automatic">自動</string>
-    <string name="sort_manual">手動</string>
-    <string name="sort_manual_summary">アプリを有効にし、選択した項目を長押しして並べ替えます。</string>
-    <string name="sort_automatic_summary">最近の使用状況に合わせて自動で並べ替えます。</string>
     <string name="selected_apps_empty">下のアプリを有効にすると、ここに順番に追加されます。</string>
     <string name="app_remove">%1$s を削除</string>
     <string name="app_add">%1$s を追加</string>
     <string name="apps_limit">最大 %1$d 個のアプリを選択できます。</string>
     <string name="app_strip_title">アプリバー</string>
-    <string name="app_strip_summary">自動モードは最近の使用順に並べます。手動モードではアプリを選択し、ドラッグで並べ替えられます。</string>
+    <string name="app_strip_summary">最大 10 個のアプリを選んでドラッグで並べ替えます。バーにはこの選択だけが表示されます。</string>
     <string name="selected_apps">選択したアプリ</string>
     <string name="all_apps">すべてのアプリ</string>
     <string name="app_drag_description">%1$s、長押ししてドラッグで並べ替え</string>

@@ -28,7 +28,7 @@
 
 # NeXtep
 
-This fork's `1.3.0-workbench.12` adds OneStep Workbench: ten favorite apps plus an editor, native ColorOS dialogs, modern tool icons, in-place slot expansion and landscape-fullscreen video pinning. Tapping an empty slot parks the current main app there before opening HOME; the next selected app opens in the main window. Native content drag and bottom-corner gestures remain available. [Custom APK](https://github.com/yishisanren/NeXtep/releases/tag/v1.3.0-workbench.12) · [Features and validation limits](docs/WORKBENCH.md) · [Earlier performance work](docs/PERFORMANCE.md). This is a prerelease; build and installation checks do not replace user device acceptance. In-app updates still target upstream; installing an upstream build replaces this fork's features.
+This fork's `1.3.0-workbench.13` adds OneStep Workbench: up to ten favorite apps chosen in Settings, native ColorOS dialogs, a unified light/dark panel, a gear that opens Settings directly, the control area at the top or bottom, in-place slot expansion without a visible jump, and landscape-fullscreen video pinning. Tapping an empty slot parks the current main app there before opening HOME; the next selected app opens in the main window. Native content drag and bottom-corner gestures remain available. [Custom APK](https://github.com/yishisanren/NeXtep/releases/tag/v1.3.0-workbench.13) · [Features and validation limits](docs/WORKBENCH.md) · [Earlier performance work](docs/PERFORMANCE.md). This is a prerelease; build and installation checks do not replace user device acceptance. In-app updates still target upstream; installing an upstream build replaces this fork's features.
 
 **NeXtep** is an **LSPosed module** that adds a **native side workspace** to ColorOS 16 / 17 while keeping the **stock launcher**. It provides **one main window and four live task slots**, with task switching, drag-and-drop, media controls, and customizable app shortcuts integrated into SystemUI.
 
@@ -44,7 +44,7 @@ The project primarily targets **OnePlus PLK110**, previously verified on **Andro
 
 - **Stock launcher:** keeps the ColorOS launcher without registering a replacement HOME app, with adaptations for launcher shortcut menus, desktop search, and the assistant panel.
 - **One main window and four live slots:** keep several app tasks visible together and move whole tasks between the main window and slots.
-- **Left and right layouts:** switch through More. Tapping a slot expands it on its own side while the other tasks move to the opposite rail.
+- **Left and right layouts, top or bottom controls:** choose in NeXtep Settings → Workspace. Tapping a slot expands it on its own side while the other tasks move to the opposite rail.
 - **Portrait and both landscape orientations:** controls stay at the phone's physical top. Only landscape fullscreen with active media playback pins above the main window and three remaining slots. Exiting fullscreen restores the app and toolbar. Silent players without a media session may not be detected.
 - **Navigation-button adaptation:** optionally fit the main window and slots around the system navigation bar. Enable it for three-button navigation and disable it for gesture navigation; after changing the system navigation mode, toggle the option again.
 - **Task retention:** restore eligible slot tasks that remain in the system when closing and reopening the workspace. Locking pauses slot output; unlocking restores the workspace with its tasks.

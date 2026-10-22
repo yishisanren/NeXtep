@@ -1,13 +1,8 @@
 <resources>
     <string name="workbench_title">One Step Workspace</string>
-    <string name="workbench_edit_apps">Favorite apps · up to 10</string>
-    <string name="workbench_loading_apps">Loading installed apps…</string>
-    <string name="workbench_apps_limit">Select up to 10 apps</string>
-    <string name="workbench_save">Save</string>
     <string name="workbench_choose_main_app">Choose an app from the home screen to open in the main window</string>
     <string name="workbench_theme">Switch light / dark appearance</string>
     <string name="workbench_payment">Pay and scan</string>
-    <string name="workbench_more">Workspace tools</string>
     <string name="workbench_wechat_scan">WeChat · Scan</string>
     <string name="workbench_wechat_pay">WeChat · Payment code</string>
     <string name="workbench_alipay_scan">Alipay · Scan</string>
@@ -24,15 +19,11 @@
     <string name="workbench_compare_failed">Keep enough empty side windows and check the installed app versions.</string>
     <string name="workbench_compare_missing">No installed app supports these search entries.</string>
     <string name="workbench_capture">Allow capture for this session</string>
-    <string name="workbench_capture_on">Capture allowed for this session. Protection returns on exit, lock or backgrounding.</string>
-    <string name="workbench_capture_off">Capture protection restored.</string>
     <string name="workbench_hide_recents">Hide workspace tasks from Recents</string>
     <string name="workbench_export">Export diagnostics</string>
     <string name="workbench_exported">Diagnostics saved to Downloads.</string>
     <string name="workbench_export_failed">Could not export diagnostics.</string>
     <string name="workbench_drop_unsupported">This app cannot receive this content, or the source did not grant access.</string>
-    <string name="workbench_wide">Move landscape app to the top</string>
-    <string name="workbench_wide_failed">No landscape app can be placed at the top right now.</string>
     <string name="workbench_cancel">Cancel</string>
     <string name="workbench_pay_short">Pay</string>
     <string name="workbench_compare_short">Price</string>
@@ -45,4 +36,22 @@
     <string name="workbench_launch_denied">The system denied this app launch or window move.</string>
     <string name="workbench_window_timeout">The target window did not become ready. Close and reopen the workspace, then try again.</string>
     <string name="workbench_place_failed">The app opened, but could not be placed in its window.</string>
+    <string name="workbench_settings_title">Workspace</string>
+    <string name="workbench_settings_summary">Applied immediately to the workspace in SystemUI.</string>
+    <string name="workbench_state_loading">Reading the workspace state…</string>
+    <string name="workbench_state_unavailable">The workspace did not respond. Reboot after updating, then try again.</string>
+    <string name="workbench_command_failed">The workspace did not accept this change.</string>
+    <string name="workbench_appearance">Appearance</string>
+    <string name="appearance_light">Light</string>
+    <string name="appearance_dark">Dark</string>
+    <string name="workbench_side">Small windows</string>
+    <string name="control_position">Control area</string>
+    <string name="control_top">Top</string>
+    <string name="control_bottom">Bottom</string>
+    <string name="workbench_hide_recents_summary">Only while the workspace is open; tasks are not removed.</string>
+    <string name="workbench_capture_summary">Allowed until exit, lock, Home or Recents; never saved.</string>
+    <string name="workbench_export_summary">Saves recent event metadata of this module to Downloads.</string>
+    <string name="workbench_export_action">Export</string>
+    <string name="workbench_exit_summary">Returns every app to its normal window.</string>
+    <string name="workbench_exit_action">Exit</string>
 </resources>

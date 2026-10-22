@@ -82,8 +82,8 @@ internal class WorkspaceViewport(
         }
     }
 
-    fun geometry(side: SidebarSide, refreshMetrics: Boolean = false): WorkspaceGeometry {
-        return layout(refreshMetrics).geometry(side)
+    fun geometry(side: SidebarSide, controlAtBottom: Boolean = false, refreshMetrics: Boolean = false): WorkspaceGeometry {
+        return layout(refreshMetrics).geometry(side, controlAtBottom)
     }
 
     fun layout(refreshMetrics: Boolean = false): WorkspaceLayoutProfile {

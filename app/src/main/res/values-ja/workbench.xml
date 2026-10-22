@@ -2,7 +2,6 @@
     <string name="workbench_title">ワンステップ</string>
     <string name="workbench_theme">ライト／ダーク表示を切り替え</string>
     <string name="workbench_payment">支払いとスキャン</string>
-    <string name="workbench_more">ワークスペースのツール</string>
     <string name="workbench_wechat_scan">WeChat · スキャン</string>
     <string name="workbench_wechat_pay">WeChat · 支払いコード</string>
     <string name="workbench_alipay_scan">Alipay · スキャン</string>
@@ -19,15 +18,11 @@
     <string name="workbench_compare_failed">空きウィンドウを確保し、アプリが検索リンクに対応しているか確認してください。</string>
     <string name="workbench_compare_missing">この検索に対応するインストール済みアプリがありません。</string>
     <string name="workbench_capture">今回のみ画面キャプチャを許可</string>
-    <string name="workbench_capture_on">今回のみキャプチャを許可しました。終了、ロック、バックグラウンド移行で保護を戻します。</string>
-    <string name="workbench_capture_off">画面キャプチャの保護を戻しました。</string>
     <string name="workbench_hide_recents">最近のタスクでワークスペースのアプリを非表示</string>
     <string name="workbench_export">診断ログを書き出す</string>
     <string name="workbench_exported">診断ログをダウンロードに保存しました。</string>
     <string name="workbench_export_failed">診断ログを保存できませんでした。</string>
     <string name="workbench_drop_unsupported">受信アプリが未対応か、送信元からアクセスが許可されていません。</string>
-    <string name="workbench_wide">横向きアプリを上部に配置</string>
-    <string name="workbench_wide_failed">上部に配置できる横向きアプリがありません。</string>
     <string name="workbench_cancel">キャンセル</string>
     <string name="workbench_pay_short">支払</string>
     <string name="workbench_compare_short">比較</string>
@@ -40,4 +35,22 @@
     <string name="workbench_launch_denied">システムがアプリの起動または移動を拒否しました。</string>
     <string name="workbench_window_timeout">対象ウィンドウを準備できませんでした。ワークスペースを開き直してください。</string>
     <string name="workbench_place_failed">アプリは開きましたが、対象ウィンドウに配置できませんでした。</string>
+    <string name="workbench_settings_title">ワークスペース</string>
+    <string name="workbench_settings_summary">変更は SystemUI のワークスペースにすぐ反映されます。</string>
+    <string name="workbench_state_loading">ワークスペースの状態を読み込み中…</string>
+    <string name="workbench_state_unavailable">ワークスペースが応答しません。更新後は再起動してからお試しください。</string>
+    <string name="workbench_command_failed">ワークスペースがこの変更を受け付けませんでした。</string>
+    <string name="workbench_appearance">外観</string>
+    <string name="appearance_light">ライト</string>
+    <string name="appearance_dark">ダーク</string>
+    <string name="workbench_side">小ウィンドウの位置</string>
+    <string name="control_position">操作エリアの位置</string>
+    <string name="control_top">上</string>
+    <string name="control_bottom">下</string>
+    <string name="workbench_hide_recents_summary">ワークスペース表示中のみ有効。タスクは終了しません。</string>
+    <string name="workbench_capture_summary">終了・ロック・ホーム・最近のタスクで保護に戻ります。保存されません。</string>
+    <string name="workbench_export_summary">このモジュールの最近のイベント情報をダウンロードに保存します。</string>
+    <string name="workbench_export_action">書き出す</string>
+    <string name="workbench_exit_summary">すべてのアプリを通常のウィンドウに戻します。</string>
+    <string name="workbench_exit_action">終了</string>
 </resources>

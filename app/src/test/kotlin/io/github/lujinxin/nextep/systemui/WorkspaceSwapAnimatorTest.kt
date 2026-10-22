@@ -18,10 +18,12 @@ import java.time.Duration
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 @LooperMode(LooperMode.Mode.PAUSED)
+@org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
 class WorkspaceSwapAnimatorTest {
     private val context get() = RuntimeEnvironment.getApplication()
     private fun preview(animator: WorkspaceSwapAnimator) = animator.javaClass.getDeclaredField("overlay")
         .apply { isAccessible = true }.get(animator) as? View
+    private fun WorkspaceSwapAnimator(context: android.content.Context) = WorkspaceSwapAnimator(context) { WorkbenchAppearance.DARK }
 
     @Test fun contentExpansionUsesOneSecureOverlayAndReleasesEveryAppPreviewOnCancel() {
         val animator = WorkspaceSwapAnimator(context)
@@ -46,7 +48,7 @@ class WorkspaceSwapAnimatorTest {
         var reveal: (() -> Unit)? = null
         val small = RectF(260f, 100f, 300f, 180f)
         val main = RectF(0f, 100f, 240f, 580f)
-        animator.animate(source, null, small, small, main, 320, 640) {
+        animator.animate(source, null, false, small, small, main, 320, 640) {
             moves++
             reveal = it
         }
@@ -66,7 +68,7 @@ class WorkspaceSwapAnimatorTest {
         val animator = WorkspaceSwapAnimator(context)
         val source = Bitmap.createBitmap(40, 80, Bitmap.Config.ARGB_8888)
         val rect = RectF(0f, 0f, 40f, 80f)
-        animator.animate(source, null, rect, rect, rect, 320, 640) { fail("Cancelled transition moved a task") }
+        animator.animate(source, null, false, rect, rect, rect, 320, 640) { fail("Cancelled transition moved a task") }
         animator.cancel()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
         assertNull(preview(animator))
@@ -77,15 +79,38 @@ class WorkspaceSwapAnimatorTest {
         val animator = WorkspaceSwapAnimator(context)
         val rect = RectF(0f, 0f, 40f, 80f)
         var oldReveal: (() -> Unit)? = null
-        animator.animate(null, null, rect, rect, RectF(0f, 0f, 240f, 480f), 320, 640) { oldReveal = it }
+        animator.animate(null, null, true, rect, rect, RectF(0f, 0f, 240f, 480f), 320, 640) { oldReveal = it }
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(400))
         assertNotNull(preview(animator))
         animator.cancel()
-        animator.animate(null, null, rect, rect, rect, 320, 640) { }
+        animator.animate(null, null, true, rect, rect, rect, 320, 640) { }
         val newer = preview(animator)
         checkNotNull(oldReveal).invoke()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(400))
         assertSame(newer, preview(animator))
         animator.cancel()
+    }
+
+    @Test fun emptySlotPreviewsMatchTheLiveCardInEitherAppearanceInsteadOfAFixedDarkBox() {
+        for (theme in WorkbenchAppearance.entries) {
+            val card = RectF(10f, 10f, 70f, 130f)
+            val cover = RectF(100f, 0f, 160f, 120f)
+            val view = SwapPreviewView(context, listOf(WorkspaceSwapAnimator.Frame(null, card, card, empty = true)),
+                listOf(cover), theme)
+            view.progress = 1f
+            view.measure(View.MeasureSpec.makeMeasureSpec(200, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(150, View.MeasureSpec.EXACTLY))
+            view.layout(0, 0, 200, 150)
+            val image = Bitmap.createBitmap(200, 150, Bitmap.Config.ARGB_8888)
+            view.draw(android.graphics.Canvas(image))
+            assertEquals(theme.card, image.getPixel(16, 16))
+            assertEquals(theme.opaquePanel, image.getPixel(130, 60))
+            val live = io.github.lujinxin.nextep.display.TaskSwitcherView(context, 0).apply { setAppearance(theme) }
+            assertEquals(theme.card, (live.background as android.graphics.drawable.GradientDrawable).color!!.defaultColor)
+            // The plus badge is present in the moving card, not only after the fade.
+            val centre = image.getPixel(40, 70)
+            assertNotEquals(theme.card, centre)
+            assertTrue(android.graphics.Color.alpha(centre) == 255)
+        }
     }
 }

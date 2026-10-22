@@ -15,6 +15,7 @@ object TriggerBroadcastContract {
     const val ACTION_SYSTEMUI_SET_WORKSPACE = "io.github.lujinxin.nextep.action.SYSTEMUI_SET_WORKSPACE"
     const val ACTION_LAUNCH_SLOT_TEST = "io.github.lujinxin.nextep.action.LAUNCH_SLOT_TEST"
     const val ACTION_LAUNCHER_APP_REQUEST = "io.github.lujinxin.nextep.action.LAUNCHER_APP_REQUEST"
+    const val ACTION_WORKBENCH_COMMAND = "io.github.lujinxin.nextep.action.WORKBENCH_COMMAND"
     const val CONTROL_PERMISSION = "io.github.lujinxin.nextep.permission.CONTROL_WORKSPACE"
     const val EXTRA_SOURCE = "io.github.lujinxin.nextep.extra.TRIGGER_SOURCE"
     const val EXTRA_ACTIVE = "io.github.lujinxin.nextep.extra.WORKSPACE_ACTIVE"
@@ -29,7 +30,22 @@ object TriggerBroadcastContract {
     const val EXTRA_TARGET_USER_ID = "io.github.lujinxin.nextep.extra.TARGET_USER_ID"
     const val EXTRA_BYPASS_MULTI_APP_CHOOSER =
         "io.github.lujinxin.nextep.extra.BYPASS_MULTI_APP_CHOOSER"
-    const val RUNTIME_PROTOCOL_VERSION = 50
+    // Workbench preferences stay in SystemUI; the settings page reads them from the
+    // query reply and changes them with commands on the same protected receiver.
+    const val EXTRA_COMMAND_KEY = "io.github.lujinxin.nextep.extra.COMMAND_KEY"
+    const val EXTRA_COMMAND_VALUE = "io.github.lujinxin.nextep.extra.COMMAND_VALUE"
+    const val EXTRA_APPEARANCE = "io.github.lujinxin.nextep.extra.WORKBENCH_APPEARANCE"
+    const val EXTRA_SIDEBAR_SIDE = "io.github.lujinxin.nextep.extra.WORKBENCH_SIDEBAR_SIDE"
+    const val EXTRA_HIDE_RECENTS = "io.github.lujinxin.nextep.extra.WORKBENCH_HIDE_RECENTS"
+    const val EXTRA_CONTROL_BOTTOM = "io.github.lujinxin.nextep.extra.WORKBENCH_CONTROL_BOTTOM"
+    const val EXTRA_CAPTURE_ALLOWED = "io.github.lujinxin.nextep.extra.WORKBENCH_CAPTURE_ALLOWED"
+    const val COMMAND_APPEARANCE = "appearance"
+    const val COMMAND_SIDEBAR_SIDE = "sidebar_side"
+    const val COMMAND_HIDE_RECENTS = "hide_recents"
+    const val COMMAND_CONTROL_BOTTOM = "control_bottom"
+    const val COMMAND_CAPTURE = "capture"
+    const val COMMAND_EXPORT_DIAGNOSTICS = "export_diagnostics"
+    const val RUNTIME_PROTOCOL_VERSION = 51
     const val RESULT_HANDLED = 0x4E58
     const val RESULT_NOT_READY = 0
 
@@ -44,6 +60,10 @@ object TriggerBroadcastContract {
         targetIntent(ACTION_SET_WORKSPACE, targetPackage)
             .putExtra(EXTRA_REQUESTED_ACTIVE, active)
             .putExtra(EXTRA_SOURCE, source.name)
+
+    fun workbenchCommandIntent(key: String, value: String): Intent =
+        targetIntent(ACTION_WORKBENCH_COMMAND, SYSTEM_UI_PACKAGE)
+            .putExtra(EXTRA_COMMAND_KEY, key).putExtra(EXTRA_COMMAND_VALUE, value)
 
     fun hostSetIntent(active: Boolean): Intent = Intent(ACTION_HOST_SET_REQUEST)
         .setComponent(

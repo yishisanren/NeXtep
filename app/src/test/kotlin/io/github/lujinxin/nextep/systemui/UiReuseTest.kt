@@ -111,13 +111,12 @@ class UiReuseTest {
         first.performClick()
         assertEquals(2, clicked.single().getIntExtra("version", -1))
         render.invoke(strip, listOf(entry("a")))
-        assertEquals(2, row.childCount)
+        assertEquals(1, row.childCount)
         assertSame(first, row.getChildAt(0))
         render.invoke(strip, emptyList<TopAppRepository.AppEntry>())
-        assertEquals(1, row.childCount)
-        assertNotSame(first, row.getChildAt(0))
+        assertEquals(0, row.childCount)
         render.invoke(strip, listOf(entry("b")))
-        assertEquals(2, row.childCount)
+        assertEquals(1, row.childCount)
         assertEquals("b", row.getChildAt(0).contentDescription)
     }
 

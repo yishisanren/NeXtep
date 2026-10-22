@@ -21,6 +21,7 @@ import io.github.lujinxin.nextep.display.WORKSPACE_SLOT_COUNT
 import io.github.lujinxin.nextep.logging.NeXtepLog
 import io.github.lujinxin.nextep.safety.FeatureGate
 import io.github.lujinxin.nextep.task.MainTaskPresentationCoordinator
+import io.github.lujinxin.nextep.trigger.TriggerBroadcastContract
 import io.github.lujinxin.nextep.workspace.SidebarSide
 import io.github.lujinxin.nextep.workspace.SystemServerWorkspaceBridge
 import io.github.lujinxin.nextep.workspace.WorkspaceGeometry
@@ -46,7 +47,7 @@ class NeXtepWindowController(
     private var slotWindows: List<VirtualDisplaySlot> = emptyList()
     private var slotBackgroundSwipeEnabled = true
     private var frostStrength = 50
-    private val swapAnimator = WorkspaceSwapAnimator(context)
+    private val swapAnimator = WorkspaceSwapAnimator(context) { appearance }
     private var contentTarget: SlotTaskCoordinator.ContentExchange? = null
     private var contentOriginSide = SidebarSide.RIGHT
     private var contentLayoutChanging = false
@@ -79,22 +80,58 @@ class NeXtepWindowController(
     }.getOrDefault(WorkbenchAppearance.DARK)
     private var recentsHidden = workbenchPreferences?.getBoolean("hide_recents", false) ?: false
     private val capturePolicy = io.github.lujinxin.nextep.workspace.WorkspaceCapturePolicy()
+    private var controlAtBottom = workbenchPreferences?.getBoolean("control_bottom", false) ?: false
     private val tools = WorkbenchToolsController(context, { appearance }, { capturePolicy.captureAllowed },
-        ::setCaptureAllowed, { recentsHidden }, { hidden ->
-            recentsHidden = hidden
-            workbenchPreferences?.edit()?.putBoolean("hide_recents", hidden)?.apply()
-            publishPrivacy()
-        }, { intent -> slotCoordinator?.openExternalInMain(intent)
+        { intent -> slotCoordinator?.openExternalInMain(intent)
             ?: Result.failure(IllegalStateException("Workspace unavailable")) },
         { intents, done -> slotCoordinator?.openSearches(intents, done)
             ?: Result.failure(IllegalStateException("Workspace unavailable")) },
-        ::pinCurrentLandscape, { setCaptureAllowed(false); onSettingsRequested() }, onExitRequested,
-        ::toggleAppearance, { sidebarSide }, { onSidebarSideRequested(it); Unit },
         { slotCoordinator?.cancelApplicationLaunch() })
-    private fun toggleAppearance() {
-        appearance = if (appearance == WorkbenchAppearance.DARK) WorkbenchAppearance.LIGHT else WorkbenchAppearance.DARK
-        workbenchPreferences?.edit()?.putString("appearance", appearance.name)?.apply()
-        applyAppearance()
+
+    /** Settings-page view of the SystemUI-owned workbench preferences and session state. */
+    fun workbenchState(): android.os.Bundle = android.os.Bundle().apply {
+        putString(TriggerBroadcastContract.EXTRA_APPEARANCE, appearance.name)
+        putString(TriggerBroadcastContract.EXTRA_SIDEBAR_SIDE, sidebarSide.name)
+        putBoolean(TriggerBroadcastContract.EXTRA_HIDE_RECENTS, recentsHidden)
+        putBoolean(TriggerBroadcastContract.EXTRA_CONTROL_BOTTOM, controlAtBottom)
+        putBoolean(TriggerBroadcastContract.EXTRA_CAPTURE_ALLOWED, capturePolicy.captureAllowed)
+    }
+
+    /** Commands arrive only through the signature-protected control receiver. */
+    fun applyWorkbenchCommand(key: String, value: String?): Boolean = when (key) {
+        TriggerBroadcastContract.COMMAND_APPEARANCE -> runCatching { WorkbenchAppearance.valueOf(checkNotNull(value)) }
+            .map { selected ->
+                appearance = selected
+                workbenchPreferences?.edit()?.putString("appearance", selected.name)?.apply()
+                applyAppearance()
+                true
+            }.getOrDefault(false)
+        TriggerBroadcastContract.COMMAND_SIDEBAR_SIDE -> runCatching { SidebarSide.valueOf(checkNotNull(value)) }
+            .map { side -> if (workspaceVisible && !suspended) onSidebarSideRequested(side) else { sidebarSide = side; true } }
+            .getOrDefault(false)
+        TriggerBroadcastContract.COMMAND_HIDE_RECENTS -> {
+            recentsHidden = value.toBoolean()
+            workbenchPreferences?.edit()?.putBoolean("hide_recents", recentsHidden)?.apply()
+            publishPrivacy()
+            true
+        }
+        TriggerBroadcastContract.COMMAND_CONTROL_BOTTOM -> {
+            setControlAtBottom(value.toBoolean())
+            true
+        }
+        TriggerBroadcastContract.COMMAND_CAPTURE -> {
+            setCaptureAllowed(value.toBoolean())
+            capturePolicy.captureAllowed == value.toBoolean()
+        }
+        TriggerBroadcastContract.COMMAND_EXPORT_DIAGNOSTICS -> tools.exportDiagnostics()
+        else -> false
+    }
+
+    private fun setControlAtBottom(bottom: Boolean) {
+        if (controlAtBottom == bottom) return
+        controlAtBottom = bottom
+        workbenchPreferences?.edit()?.putBoolean("control_bottom", bottom)?.apply()
+        onViewportChanged()
     }
 
     private val wallpaperReceiver = object : BroadcastReceiver() {
@@ -198,7 +235,7 @@ class NeXtepWindowController(
             view.translationX = 0f
             view.alpha = 0f
             view.translationY = when (record.title) {
-                "NeXtepTopBar" -> -dp(ENTER_OFFSET_DP)
+                "NeXtepTopBar" -> if (controlAtBottom) dp(ENTER_OFFSET_DP) else -dp(ENTER_OFFSET_DP)
                 else -> dp(ENTER_OFFSET_DP)
             }
             view.animate()
@@ -237,7 +274,7 @@ class NeXtepWindowController(
             view.animate()
                 .alpha(0f)
                 .translationY(
-                    if (record.title == "NeXtepTopBar") -dp(EXIT_OFFSET_DP)
+                    if (record.title == "NeXtepTopBar" && !controlAtBottom) -dp(EXIT_OFFSET_DP)
                     else dp(EXIT_OFFSET_DP),
                 )
                 .setDuration(WORKSPACE_EXIT_DURATION_MS)
@@ -264,7 +301,7 @@ class NeXtepWindowController(
         ?: Result.failure(IllegalStateException("Slot coordinator unavailable"))
 
     fun currentGeometry(refreshViewport: Boolean = false): WorkspaceGeometry =
-        viewport.geometry(sidebarSide, refreshViewport)
+        viewport.geometry(sidebarSide, controlAtBottom, refreshViewport)
 
     fun setNavigationButtonsEnabled(enabled: Boolean) {
         viewport.setNavigationButtonsEnabled(enabled)
@@ -357,9 +394,8 @@ class NeXtepWindowController(
                 },
                 onAppDragTouch = internalDrag::touch,
                 onPaymentRequested = tools::showPayment,
-                onToolsRequested = tools::showMore,
+                onToolsRequested = { setCaptureAllowed(false); onSettingsRequested() },
                 onCompareRequested = tools::showSearch,
-                onEditAppsRequested = tools::showTopApps,
             ).also { topAppStrip = it },
             width = geometry.screenWidth,
             height = geometry.topHeight,
@@ -463,7 +499,7 @@ class NeXtepWindowController(
             configureWindow(record, params, geometry)
             windowManager.updateViewLayout(record.view, params)
         }
-        topAppStrip?.setLandscape(geometry.isLandscape, geometry.isControlOnLeft)
+        topAppStrip?.setLandscape(geometry.isLandscape, geometry.isControlOnLeft, geometry.controlAtBottom)
     }
 
     private fun configureWindow(
@@ -610,6 +646,7 @@ class NeXtepWindowController(
         val main = android.graphics.RectF(old.contentLeft.toFloat(), old.contentTop.toFloat(),
             old.contentRight.toFloat(), old.contentBottom.toFloat())
         val frames = mutableListOf<WorkspaceSwapAnimator.Frame>()
+        val states = slotCoordinator?.slotStates().orEmpty()
         bounds.forEachIndexed { i, rect ->
             val from = android.graphics.RectF(rect)
             val to = android.graphics.RectF(rect).apply {
@@ -618,7 +655,8 @@ class NeXtepWindowController(
             }
             if (i == index) frames.add(WorkspaceSwapAnimator.Frame(
                 sourceTask?.let { io.github.lujinxin.nextep.framework.TaskSurfaceCompat.capturePreview(it) }, main, to))
-            else frames.add(WorkspaceSwapAnimator.Frame(slotWindows[i].view.captureProtectedPreview(), from, to))
+            else frames.add(WorkspaceSwapAnimator.Frame(slotWindows[i].view.captureProtectedPreview(), from, to,
+                empty = states.getOrNull(i) !is SlotState.Occupied))
         }
         // Target expands on its own side while the other tasks cross to the opposite rail.
         frames.add(WorkspaceSwapAnimator.Frame(slotWindows[index].view.captureProtectedPreview(),
@@ -657,9 +695,9 @@ class NeXtepWindowController(
         contentHighlightView?.background =
             if (target == WorkspaceInternalDragController.Target.Main) {
                 android.graphics.drawable.GradientDrawable().apply {
-                    setColor(Color.argb(25, 62, 190, 198))
-                    setStroke(dp(2).toInt(), Color.rgb(80, 216, 224))
-                    cornerRadius = dp(8)
+                    setColor((appearance.accent and 0x00FFFFFF) or 0x19000000)
+                    setStroke(dp(2).toInt(), appearance.accent)
+                    cornerRadius = dp(14)
                 }
             } else mainFrame()
     }
@@ -715,14 +753,14 @@ class NeXtepWindowController(
             android.graphics.RectF(point.x - halfWidth, point.y - halfHeight,
                 point.x + halfWidth, point.y + halfHeight)
         val sourcePreview = sourceView.captureProtectedPreview()
+        val targetOccupied = targetIndex == null ||
+            slotCoordinator?.slotStates()?.getOrNull(targetIndex) is SlotState.Occupied
         val targetPreview = if (targetIndex != null) {
-            if (slotCoordinator?.slotStates()?.getOrNull(targetIndex) is SlotState.Occupied) {
-                slotWindows[targetIndex].view.captureProtectedPreview()
-            } else null
+            if (targetOccupied) slotWindows[targetIndex].view.captureProtectedPreview() else null
         } else mainTaskPresenter.currentTaskId()?.let {
             io.github.lujinxin.nextep.framework.TaskSurfaceCompat.capturePreview(it)
         }
-        swapAnimator.animate(sourcePreview, targetPreview, startRect,
+        swapAnimator.animate(sourcePreview, targetPreview, !targetOccupied, startRect,
             android.graphics.RectF(sourceRect), android.graphics.RectF(targetRect),
             geometry.screenWidth, geometry.screenHeight, move)
     }
@@ -832,7 +870,7 @@ class NeXtepWindowController(
     private fun applyAppearance() {
         topAppStrip?.setAppearance(appearance)
         sidebarView?.background = appearance.background()
-        slotWindows.forEach { it.view.setAppearance(appearance.card, appearance.outline, appearance.text) }
+        slotWindows.forEach { it.view.setAppearance(appearance) }
         contentHighlightView?.background = mainFrame()
     }
 

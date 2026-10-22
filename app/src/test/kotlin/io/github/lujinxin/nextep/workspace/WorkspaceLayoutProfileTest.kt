@@ -71,6 +71,17 @@ class WorkspaceLayoutProfileTest {
     }
 
     @Test
+    fun controlEdgeIsASessionChoiceThatNeverEntersTheRecordedProfile() {
+        val profile = WorkspaceLayoutProfile.create(1216, 2640, 476, WorkspaceNavigationInsets())
+        val bottom = profile.geometry(SidebarSide.LEFT, controlAtBottom = true)
+        assertTrue(bottom.controlAtBottom)
+        assertEquals(SidebarSide.LEFT, bottom.sidebarSide)
+        assertFalse(profile.geometry(SidebarSide.LEFT).controlAtBottom)
+        assertFalse(checkNotNull(WorkspaceLayoutProfile.decode(profile.encode())).geometry.controlAtBottom)
+        assertEquals(profile.slots, profile.copy(geometry = bottom).slots)
+    }
+
+    @Test
     fun savedProfileRoundTripsBothNavigationModesAndRotations() {
         for ((width, height) in listOf(1080 to 2354, 2354 to 1080)) {
             for (insets in listOf(WorkspaceNavigationInsets(),

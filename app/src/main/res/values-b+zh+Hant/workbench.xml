@@ -1,13 +1,8 @@
 <resources>
     <string name="workbench_title">一步工作台</string>
-    <string name="workbench_edit_apps">常用應用 · 最多 10 個</string>
-    <string name="workbench_loading_apps">正在讀取已安裝應用…</string>
-    <string name="workbench_apps_limit">最多選擇 10 個應用</string>
-    <string name="workbench_save">儲存</string>
     <string name="workbench_choose_main_app">在桌面選擇應用，將在大窗開啟</string>
     <string name="workbench_theme">切換淺色／深色外觀</string>
     <string name="workbench_payment">付款與掃描</string>
-    <string name="workbench_more">工作台工具</string>
     <string name="workbench_wechat_scan">微信 · 掃一掃</string>
     <string name="workbench_wechat_pay">微信 · 收付款碼</string>
     <string name="workbench_alipay_scan">支付寶 · 掃一掃</string>
@@ -24,15 +19,11 @@
     <string name="workbench_compare_failed">請保留足夠的空側窗，並檢查已安裝的應用版本是否支援搜尋入口。</string>
     <string name="workbench_compare_missing">找不到支援這些搜尋入口的已安裝應用。</string>
     <string name="workbench_capture">本次允許截圖／錄影</string>
-    <string name="workbench_capture_on">本次已允許截圖與錄影；退出、鎖定或切到背景後恢復保護。</string>
-    <string name="workbench_capture_off">已恢復截圖保護。</string>
     <string name="workbench_hide_recents">在最近任務中隱藏工作台應用</string>
     <string name="workbench_export">匯出診斷記錄</string>
     <string name="workbench_exported">診斷記錄已儲存至下載目錄。</string>
     <string name="workbench_export_failed">診斷記錄匯出失敗。</string>
     <string name="workbench_drop_unsupported">此應用無法接收該內容，或來源未授予存取權限。</string>
-    <string name="workbench_wide">橫向應用置頂</string>
-    <string name="workbench_wide_failed">目前沒有可置頂的橫向應用。</string>
     <string name="workbench_cancel">取消</string>
     <string name="workbench_pay_short">支付</string>
     <string name="workbench_compare_short">比價</string>
@@ -45,4 +36,22 @@
     <string name="workbench_launch_denied">系統拒絕啟動或移動此應用。</string>
     <string name="workbench_window_timeout">目標小視窗未能就緒，請退出工作台後重新開啟再試。</string>
     <string name="workbench_place_failed">應用已開啟，但無法放入目標視窗。</string>
+    <string name="workbench_settings_title">一步工作台</string>
+    <string name="workbench_settings_summary">修改後立即作用於 SystemUI 中的工作台。</string>
+    <string name="workbench_state_loading">正在讀取工作台狀態…</string>
+    <string name="workbench_state_unavailable">工作台未回應。更新後請先重新啟動手機再試。</string>
+    <string name="workbench_command_failed">工作台未接受本次修改。</string>
+    <string name="workbench_appearance">外觀</string>
+    <string name="appearance_light">淺色</string>
+    <string name="appearance_dark">深色</string>
+    <string name="workbench_side">小窗位置</string>
+    <string name="control_position">控制區位置</string>
+    <string name="control_top">頂部</string>
+    <string name="control_bottom">底部</string>
+    <string name="workbench_hide_recents_summary">僅工作台開啟期間生效，不會結束任務。</string>
+    <string name="workbench_capture_summary">退出、鎖屏、回桌面或最近任務後恢復保護，不會儲存。</string>
+    <string name="workbench_export_summary">把本模組最近的事件中繼資料儲存到下載目錄。</string>
+    <string name="workbench_export_action">匯出</string>
+    <string name="workbench_exit_summary">所有應用回到普通視窗。</string>
+    <string name="workbench_exit_action">退出</string>
 </resources>

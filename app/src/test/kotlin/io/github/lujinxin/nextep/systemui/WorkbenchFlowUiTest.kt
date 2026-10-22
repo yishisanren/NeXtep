@@ -47,10 +47,10 @@ class WorkbenchFlowUiTest {
         view.layout(0, 0, width, height)
     }
 
-    @Test fun compactHeaderHasOnlyComparePayAndMoreAndAlwaysShowsADate() {
+    @Test fun compactHeaderHasOnlyComparePayAndSettingsAndAlwaysShowsADate() {
         val tapped = mutableListOf<String>()
         val strip = TopAppStripView(context, {}, {}, { _, _ -> false }, { _, _ -> false },
-            { tapped += "pay" }, { tapped += "more" }, { tapped += "compare" })
+            { tapped += "pay" }, { tapped += "settings" }, { tapped += "compare" })
         strip.setWorkspaceVisible(false)
         val density = context.resources.displayMetrics.density
         for (landscape in listOf(false, true)) {
@@ -75,10 +75,28 @@ class WorkbenchFlowUiTest {
             assertEquals(View.VISIBLE, (field(strip, "controls") as View).visibility)
             compare.performClick(); pay.performClick(); more.performClick()
         }
-        assertEquals(listOf("compare", "pay", "more", "compare", "pay", "more"), tapped)
+        assertEquals(listOf("compare", "pay", "settings", "compare", "pay", "settings"), tapped)
+        assertNull(ShadowAlertDialog.getLatestAlertDialog())
+        assertEquals(0, (field(strip, "appRow") as LinearLayout).childCount)
         for (theme in WorkbenchAppearance.entries) {
             assertTrue(Color.blue(theme.accent) > Color.red(theme.accent))
         }
+    }
+
+    @Test fun controlAreaAtTheBottomMovesTheReserveAndTouchBandToTheOuterEdge() {
+        val strip = TopAppStripView(context, {}, {}, { _, _ -> false }, { _, _ -> false })
+        val density = context.resources.displayMetrics.density
+        val reserve = (io.github.lujinxin.nextep.workspace.WorkspaceControlMetrics.STATUS_HEIGHT_DP * density).toInt()
+        val controls = field(strip, "controls") as View
+        strip.setLandscape(false, false, controlAtBottom = false)
+        layout(strip, (360 * density).toInt(), (142 * density).toInt())
+        assertEquals(reserve, controls.top)
+        strip.setLandscape(false, false, controlAtBottom = true)
+        layout(strip, (360 * density).toInt(), (142 * density).toInt())
+        assertEquals(0, controls.top)
+        assertEquals(strip.height - reserve, controls.bottom)
+        val row = (field(strip, "compareButton") as View).parent as View
+        assertTrue(row.bottom <= controls.height)
     }
 
     @Test fun wideVideoHidesEveryTopControlAndRestoresThemWithoutReservingSpace() {
@@ -138,10 +156,8 @@ class WorkbenchFlowUiTest {
     }
 
     private fun tools(search: (List<Intent>, (Result<Unit>) -> Unit) -> Result<Unit>,
-        theme: () -> Unit = {}, side: () -> SidebarSide = { SidebarSide.RIGHT },
-        setSide: (SidebarSide) -> Unit = {}, cancel: () -> Unit = {}) = WorkbenchToolsController(
-        context, { WorkbenchAppearance.DARK }, { false }, {}, { false }, {},
-        { Result.success(Unit) }, search, { false }, {}, {}, theme, side, setSide, cancel,
+        cancel: () -> Unit = {}, open: (Intent) -> Result<Unit> = { Result.success(Unit) }) = WorkbenchToolsController(
+        context, { WorkbenchAppearance.DARK }, { false }, open, search, cancel,
     )
 
     @Test fun searchInputActuallySubmitsAllResolvedAppsAndWaitsForTaskPlacement() {
@@ -211,21 +227,24 @@ class WorkbenchFlowUiTest {
         assertEquals(1, cancelled)
     }
 
-    @Test fun moreContainsThemeAndSideSelectionAndNoMediaControls() {
-        var theme = 0
-        var side = SidebarSide.RIGHT
-        val tools = tools({ _, _ -> Result.success(Unit) }, { theme++ }, { side }, { side = it })
-        tools.showMore()
-        var dialog = ShadowAlertDialog.getLatestAlertDialog()
-        val items = (0 until dialog.listView.adapter.count).map { dialog.listView.adapter.getItem(it).toString() }
-        assertTrue(items[0].contains("light", true) || items[0].contains("外观"))
-        assertFalse(items.any { it == context.getString(R.string.media_control_title) })
-        dialog.listView.performItemClick(null, 0, 0)
-        assertEquals(1, theme)
-        tools.showMore(); dialog = ShadowAlertDialog.getLatestAlertDialog()
-        dialog.listView.performItemClick(null, 1, 1)
-        assertEquals(SidebarSide.LEFT, side)
-        tools.dismiss()
+    @Test fun paymentPanelRendersAllFourEntriesAsRowsAndOpensTheResolvedOne() {
+        val alipay = WorkbenchIntents.payment(WorkbenchIntents.Payment.ALIPAY_PAY).first()
+        exported(alipay)
+        var opened: Intent? = null
+        val tools = tools({ _, _ -> Result.success(Unit) }, open = { opened = it; Result.success(Unit) })
+        tools.showPayment()
+        val dialog = ShadowAlertDialog.getLatestAlertDialog()
+        val labels = listOf(R.string.workbench_wechat_scan, R.string.workbench_wechat_pay,
+            R.string.workbench_alipay_scan, R.string.workbench_alipay_pay).map { context.getString(it) }
+        val rows = descendants(dialog.window!!.decorView).filterIsInstance<TextView>()
+            .filter { it.text.toString() in labels }
+        assertEquals(labels, rows.map { it.text.toString() })
+        rows.forEach { assertNotNull(it.compoundDrawablesRelative[0]); assertTrue(it.isClickable) }
+        assertTrue(rows[0].alpha < 1f) // WeChat is not installed in this test environment.
+        assertEquals(1f, rows[3].alpha, 0f)
+        rows[3].performClick()
+        assertEquals(alipay.data, opened?.data)
+        assertFalse(dialog.isShowing)
     }
 
     @Test fun anAppTileDragReachesTheRequestedWindowAndPreservesItsUser() {

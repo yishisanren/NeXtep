@@ -2,7 +2,6 @@
     <string name="workbench_title">원스텝 작업 공간</string>
     <string name="workbench_theme">밝은 테마 / 어두운 테마 전환</string>
     <string name="workbench_payment">결제 및 스캔</string>
-    <string name="workbench_more">작업 공간 도구</string>
     <string name="workbench_wechat_scan">WeChat · 스캔</string>
     <string name="workbench_wechat_pay">WeChat · 결제 코드</string>
     <string name="workbench_alipay_scan">Alipay · 스캔</string>
@@ -19,15 +18,11 @@
     <string name="workbench_compare_failed">빈 보조 창을 확보하고 앱이 검색 링크를 지원하는지 확인해 주세요.</string>
     <string name="workbench_compare_missing">이 검색을 지원하는 설치된 앱이 없습니다.</string>
     <string name="workbench_capture">이번 세션에서 화면 캡처 허용</string>
-    <string name="workbench_capture_on">이번 세션에서 캡처가 허용됩니다. 종료, 잠금 또는 백그라운드 전환 시 보호가 복원됩니다.</string>
-    <string name="workbench_capture_off">화면 캡처 보호가 복원되었습니다.</string>
     <string name="workbench_hide_recents">최근 작업에서 작업 공간 앱 숨기기</string>
     <string name="workbench_export">진단 로그 내보내기</string>
     <string name="workbench_exported">진단 로그가 다운로드 폴더에 저장되었습니다.</string>
     <string name="workbench_export_failed">진단 로그를 저장하지 못했습니다.</string>
     <string name="workbench_drop_unsupported">대상 앱이 지원하지 않거나 원본 앱에서 접근을 허용하지 않았습니다.</string>
-    <string name="workbench_wide">가로 앱을 상단에 배치</string>
-    <string name="workbench_wide_failed">상단에 배치할 수 있는 가로 앱이 없습니다.</string>
     <string name="workbench_cancel">취소</string>
     <string name="workbench_pay_short">결제</string>
     <string name="workbench_compare_short">비교</string>
@@ -40,4 +35,22 @@
     <string name="workbench_launch_denied">시스템이 앱 실행 또는 이동을 거부했습니다.</string>
     <string name="workbench_window_timeout">대상 창을 준비하지 못했습니다. 작업 공간을 닫았다가 다시 여세요.</string>
     <string name="workbench_place_failed">앱이 열렸지만 대상 창에 배치하지 못했습니다.</string>
+    <string name="workbench_settings_title">작업 공간</string>
+    <string name="workbench_settings_summary">변경 사항은 SystemUI의 작업 공간에 즉시 적용됩니다.</string>
+    <string name="workbench_state_loading">작업 공간 상태를 읽는 중…</string>
+    <string name="workbench_state_unavailable">작업 공간이 응답하지 않습니다. 업데이트 후 재부팅한 뒤 다시 시도하세요.</string>
+    <string name="workbench_command_failed">작업 공간이 이 변경을 받아들이지 않았습니다.</string>
+    <string name="workbench_appearance">외관</string>
+    <string name="appearance_light">밝게</string>
+    <string name="appearance_dark">어둡게</string>
+    <string name="workbench_side">작은 창 위치</string>
+    <string name="control_position">제어 영역 위치</string>
+    <string name="control_top">위</string>
+    <string name="control_bottom">아래</string>
+    <string name="workbench_hide_recents_summary">작업 공간이 열려 있는 동안만 적용되며 작업을 종료하지 않습니다.</string>
+    <string name="workbench_capture_summary">종료, 잠금, 홈, 최근 작업 후 보호가 복원됩니다. 저장되지 않습니다.</string>
+    <string name="workbench_export_summary">이 모듈의 최근 이벤트 메타데이터를 다운로드에 저장합니다.</string>
+    <string name="workbench_export_action">내보내기</string>
+    <string name="workbench_exit_summary">모든 앱을 일반 창으로 되돌립니다.</string>
+    <string name="workbench_exit_action">종료</string>
 </resources>

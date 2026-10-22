@@ -13,6 +13,7 @@ import io.github.lujinxin.nextep.display.ContentDropCompat
 import io.github.lujinxin.nextep.display.TaskSwitcherView
 import io.github.lujinxin.nextep.framework.VirtualDisplayFlagsCompat
 import io.github.lujinxin.nextep.workspace.SidebarSide
+import io.github.lujinxin.nextep.workspace.WorkspaceGeometry
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
@@ -57,14 +58,58 @@ class WorkbenchUiTest {
         assertEquals(1, opened)
     }
 
-    @Test fun lightAndDarkAppearancesUpdateActualControlText() {
+    @Test fun lightAndDarkAppearancesActuallyRecolourTheDrawnControlIcons() {
         val view = TopAppStripView(context, {}, {},
             { _, _ -> false }, { _, _ -> false })
-        val payment = field(view, "paymentButton") as android.widget.ImageButton
-        view.setAppearance(WorkbenchAppearance.LIGHT)
-        assertEquals(WorkbenchAppearance.LIGHT.accent, payment.imageTintList!!.defaultColor)
-        view.setAppearance(WorkbenchAppearance.DARK)
-        assertEquals(WorkbenchAppearance.DARK.accent, payment.imageTintList!!.defaultColor)
+        for (theme in WorkbenchAppearance.entries) {
+            view.setAppearance(theme)
+            for (name in listOf("paymentButton", "compareButton", "toolsButton")) {
+                val button = field(view, name) as android.widget.ImageButton
+                assertEquals(theme.accent, button.imageTintList!!.defaultColor)
+                val icon = button.drawable as WorkbenchIcon
+                assertEquals(theme.accent, icon.color)
+                val image = android.graphics.Bitmap.createBitmap(48, 48, android.graphics.Bitmap.Config.ARGB_8888)
+                icon.setBounds(0, 0, 48, 48)
+                icon.draw(android.graphics.Canvas(image))
+                val painted = (0 until 48).flatMap { x -> (0 until 48).map { y -> image.getPixel(x, y) } }
+                    .filter { android.graphics.Color.alpha(it) == 255 }
+                assertTrue(name, painted.isNotEmpty())
+                // Light icons must not stay white on the light panel (±4 covers premultiply rounding).
+                fun near(a: Int, b: Int) = listOf(16, 8, 0).all { kotlin.math.abs((a shr it and 0xFF) - (b shr it and 0xFF)) <= 4 }
+                assertTrue(name, painted.all { near(it, theme.accent) })
+                val background = button.background as android.graphics.drawable.RippleDrawable
+                assertEquals(theme.card, (background.getDrawable(0) as android.graphics.drawable.GradientDrawable).color!!.defaultColor)
+            }
+        }
+        assertEquals(context.getString(io.github.lujinxin.nextep.R.string.open_settings),
+            (field(view, "toolsButton") as View).contentDescription)
+    }
+
+    @Test fun emptySlotBadgeIsSmallerThanBeforeAndFollowsTheAppearance() {
+        val view = TaskSwitcherView(context, 1)
+        val density = context.resources.displayMetrics.density
+        val badge = field(view, "statusView") as View
+        val size = (28 * density).toInt()
+        assertEquals(size, badge.layoutParams.width)
+        assertEquals(size, badge.layoutParams.height)
+        for (theme in WorkbenchAppearance.entries) {
+            view.setAppearance(theme)
+            view.showState(io.github.lujinxin.nextep.display.SlotState.Empty)
+            assertEquals(View.VISIBLE, badge.visibility)
+            assertNull(badge.foreground)
+            val layers = badge.background as android.graphics.drawable.LayerDrawable
+            val plus = layers.getDrawable(1) as WorkbenchIcon
+            assertEquals(theme.secondary, plus.color)
+            val image = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+            layers.setBounds(0, 0, size, size)
+            layers.draw(android.graphics.Canvas(image))
+            val inset = (7 * density).toInt()
+            // The plus stays inside its inset; the disc keeps the whole badge under 28dp.
+            assertTrue(android.graphics.Color.alpha(image.getPixel(size / 2, inset + 1)) > 0)
+            assertNotEquals(theme.secondary, image.getPixel(size / 2, 1) or 0xFF000000.toInt())
+            val disc = (layers.getDrawable(0) as android.graphics.drawable.GradientDrawable).color!!.defaultColor
+            assertTrue(android.graphics.Color.alpha(disc) < 160)
+        }
     }
 
 
@@ -191,6 +236,20 @@ class WorkbenchUiTest {
         assertSame(program, repository.selectForLaunch(listOf(program, app), mini, false))
         assertNull(repository.selectForLaunch(listOf(program), main, true))
         assertNull(repository.selectForLaunch(listOf(program, app), android.content.ComponentName("test.chat", "test.chat.Share"), false))
+    }
+
+    @Test fun publishedGeometryCarriesTheControlEdgeToOtherProcesses() {
+        val bridge = io.github.lujinxin.nextep.workspace.SystemServerWorkspaceBridge
+        val decode = bridge.javaClass.getDeclaredMethod("decodeGeometry", String::class.java).apply { isAccessible = true }
+        for (bottom in listOf(true, false)) {
+            val geometry = WorkspaceGeometry.forDisplay(1216, 2640, SidebarSide.LEFT, 3f, controlAtBottom = bottom)
+            bridge.publish(context, true, geometry)
+            val encoded = android.provider.Settings.Global.getString(context.contentResolver, "nextep_workspace_geometry_v1")
+            assertEquals(geometry, decode.invoke(bridge, encoded))
+        }
+        // Records written by the previous release still decode with the control at the top.
+        assertEquals(WorkspaceGeometry.forDisplay(1216, 2640, SidebarSide.RIGHT, 3f, displayRotation = 0),
+            decode.invoke(bridge, "1216,2640,531,244,RIGHT,0,0,0,0,0"))
     }
 
     @Test fun roundedMainFrameMasksOnlyCornersAndLeavesAppContentVisible() {

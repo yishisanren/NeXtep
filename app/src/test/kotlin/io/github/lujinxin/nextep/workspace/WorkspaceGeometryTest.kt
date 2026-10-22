@@ -1,6 +1,7 @@
 package io.github.lujinxin.nextep.workspace
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -41,6 +42,48 @@ class WorkspaceGeometryTest {
                 } else current.panelSidebarSide == SidebarSide.LEFT
                 assertEquals(diagramAtTop, current.isSidebarAtTop)
                 assertEquals(reference.sidebarPhysicalHeight, current.sidebarPhysicalHeight)
+            }
+        }
+    }
+
+    @Test
+    fun controlAreaAtTheBottomSwapsEdgesWithoutChangingSizesInEveryOrientation() {
+        val devices = listOf(1216 to 2640, 2640 to 1216)
+        val insets = listOf(WorkspaceNavigationInsets(), WorkspaceNavigationInsets(bottom = 132),
+            WorkspaceNavigationInsets(left = 132), WorkspaceNavigationInsets(right = 132))
+        for ((width, height) in devices) for (navigation in insets) for (side in SidebarSide.entries) {
+            for (rotation in if (width > height) listOf(1, 3) else listOf(0)) {
+                val top = WorkspaceGeometry.forDisplay(width, height, side, 3f, navigation, rotation)
+                val bottom = WorkspaceGeometry.forDisplay(width, height, side, 3f, navigation, rotation, controlAtBottom = true)
+                assertEquals(top.topHeight, bottom.topHeight)
+                assertEquals(top.sidebarWidth, bottom.sidebarWidth)
+                assertEquals(top.contentWidth, bottom.contentWidth)
+                assertEquals(top.contentHeight, bottom.contentHeight)
+                assertEquals(top.contentScale, bottom.contentScale, 0f)
+                assertEquals(top.panelRotationDegrees, bottom.panelRotationDegrees, 0f)
+                assertEquals(top.isSidebarAtTop, bottom.isSidebarAtTop)
+                if (width < height) {
+                    assertEquals(top.availableTop, top.controlTop)
+                    assertEquals(bottom.availableBottom - bottom.topHeight, bottom.controlTop)
+                    assertEquals(bottom.availableTop, bottom.contentTop)
+                    assertEquals(bottom.contentTop, bottom.sidebarTop)
+                    assertEquals(bottom.controlTop, bottom.contentBottom)
+                    assertEquals(top.controlLeft, bottom.controlLeft)
+                } else {
+                    assertEquals(!top.isControlOnLeft, bottom.isControlOnLeft)
+                    assertEquals(top.contentTop, bottom.contentTop)
+                    assertEquals(bottom.availableLeft, if (bottom.isControlOnLeft) bottom.controlLeft else bottom.contentLeft)
+                    assertEquals(bottom.availableRight, if (bottom.isControlOnLeft) bottom.contentRight else bottom.controlLeft + bottom.controlWidth)
+                }
+                // Main content never overlaps the control strip or leaves the safe area.
+                val controlRight = bottom.controlLeft + bottom.controlWidth
+                val controlBottom = bottom.controlTop + bottom.controlHeight
+                assertTrue(bottom.contentRight <= bottom.controlLeft || bottom.contentLeft >= controlRight ||
+                    bottom.contentBottom <= bottom.controlTop || bottom.contentTop >= controlBottom)
+                assertTrue(bottom.controlLeft >= bottom.availableLeft && controlRight <= bottom.availableRight)
+                assertTrue(bottom.controlTop >= bottom.availableTop && controlBottom <= bottom.availableBottom)
+                val fittedTop = bottom.availableTop * bottom.contentScale + bottom.contentTranslationY
+                assertEquals(bottom.contentTop.toFloat(), fittedTop, .6f)
             }
         }
     }

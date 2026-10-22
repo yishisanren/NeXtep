@@ -16,6 +16,7 @@ object TriggerCoordinator {
             val homePackage: String,
             val runtimeProtocolVersion: Int,
             val slotStates: String? = null,
+            val extras: Bundle? = null,
         ) : RequestResult
         data class NotReady(val reason: String) : RequestResult
     }
@@ -127,6 +128,13 @@ object TriggerCoordinator {
         }
     }
 
+    /** SystemUI alone owns the workbench preferences; the reply carries their current values. */
+    fun queryWorkbench(context: Context, onResult: (RequestResult) -> Unit) =
+        queryTarget(context, TriggerBroadcastContract.SYSTEM_UI_PACKAGE, onResult)
+
+    fun workbenchCommand(context: Context, key: String, value: String, onResult: (RequestResult) -> Unit) =
+        send(context, TriggerBroadcastContract.workbenchCommandIntent(key, value), onResult)
+
     fun requestSet(
         context: Context,
         active: Boolean,
@@ -220,6 +228,7 @@ object TriggerCoordinator {
                         homePackage,
                         runtimeProtocolVersion,
                         slotStates,
+                        extras,
                     ),
                 )
             }

@@ -6,7 +6,6 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
@@ -19,21 +18,23 @@ import io.github.lujinxin.nextep.logging.NeXtepLog
 /** Animate disposable previews first; perform the display move while the final
  * preview covers relayout, then fade to the live buffers. Nothing retains an app
  * frame after the transition ends or the workspace is hidden/locked. */
-internal class WorkspaceSwapAnimator(private val context: Context) {
-    data class Frame(val bitmap: Bitmap?, val from: RectF, val to: RectF)
+internal class WorkspaceSwapAnimator(private val context: Context, private val appearance: () -> WorkbenchAppearance) {
+    /** A frame without a bitmap draws as a card; an empty one also carries the plus badge. */
+    data class Frame(val bitmap: Bitmap?, val from: RectF, val to: RectF, val empty: Boolean = false)
     private val manager = context.getSystemService(WindowManager::class.java)
     private var overlay: SwapPreviewView? = null
     private var animator: ValueAnimator? = null
     private var generation = 0
     fun animate(
-        source: Bitmap?, target: Bitmap?,
+        source: Bitmap?, target: Bitmap?, targetEmpty: Boolean,
         start: RectF, sourceBounds: RectF, targetBounds: RectF,
         screenWidth: Int, screenHeight: Int,
         move: (() -> Unit) -> Unit,
-    ) = animateFrames(buildList {
-        if (target != null) add(Frame(target, targetBounds, sourceBounds))
-        add(Frame(source, start, targetBounds))
-    }, listOf(sourceBounds, targetBounds), screenWidth, screenHeight, move)
+    ) = animateFrames(listOf(
+        // The vacated card travels back as well, so no bare panel shows where it lands.
+        Frame(target, targetBounds, sourceBounds, empty = targetEmpty),
+        Frame(source, start, targetBounds),
+    ), listOf(sourceBounds, targetBounds), screenWidth, screenHeight, move)
 
     fun animateFrames(frames: List<Frame>, covers: List<RectF>, screenWidth: Int, screenHeight: Int,
                       move: (() -> Unit) -> Unit) {
@@ -45,7 +46,7 @@ internal class WorkspaceSwapAnimator(private val context: Context) {
             return
         }
         val token = ++generation
-        val preview = SwapPreviewView(context, frames, covers)
+        val preview = SwapPreviewView(context, frames, covers, appearance())
         val params = WindowManager.LayoutParams(
             screenWidth, screenHeight, windowType,
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
@@ -118,34 +119,40 @@ internal class WorkspaceSwapAnimator(private val context: Context) {
     }
 }
 
-private class SwapPreviewView(
+internal class SwapPreviewView(
     context: Context,
     private val frames: List<WorkspaceSwapAnimator.Frame>,
     private val covers: List<RectF>,
+    appearance: WorkbenchAppearance,
 ) : View(context) {
     var progress = 0f
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(30, 42, 55) }
+    // Covers mimic the panel behind moving cards; cards mimic a live slot, so the
+    // fade into the real windows changes nothing visible in either theme.
+    private val coverPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = appearance.opaquePanel }
+    private val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = appearance.card }
     private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(165, 210, 242, 245)
+        color = appearance.outline
         style = Paint.Style.STROKE
         strokeWidth = resources.displayMetrics.density
     }
+    private val badge = appearance.emptyBadge(resources.displayMetrics.density)
+    private val badgeSize = (WorkbenchAppearance.BADGE_SIZE_DP * resources.displayMetrics.density).toInt()
     private val destination = RectF()
     private val sourceRect = Rect()
     private val clipPath = android.graphics.Path()
-    private val cornerRadius = resources.displayMetrics.density * 8f
+    private val cornerRadius = resources.displayMetrics.density * 14f
     private var released = false
 
     override fun onDraw(canvas: Canvas) {
         if (released) return
         // The live tasks stay put until the compositor move. Cover their old
         // positions so a shrinking preview cannot expose a second stationary app.
-        covers.forEach { canvas.drawRoundRect(it, cornerRadius, cornerRadius, backgroundPaint) }
-        frames.forEach { drawFrame(canvas, it.bitmap, it.from, it.to) }
+        covers.forEach { canvas.drawRoundRect(it, cornerRadius, cornerRadius, coverPaint) }
+        frames.forEach { drawFrame(canvas, it.bitmap, it.from, it.to, it.empty) }
     }
 
-    private fun drawFrame(canvas: Canvas, bitmap: Bitmap?, from: RectF, to: RectF) {
+    private fun drawFrame(canvas: Canvas, bitmap: Bitmap?, from: RectF, to: RectF, empty: Boolean) {
         fun interpolate(a: Float, b: Float) = a + (b - a) * progress
         destination.set(interpolate(from.left, to.left), interpolate(from.top, to.top),
             interpolate(from.right, to.right), interpolate(from.bottom, to.bottom))
@@ -153,8 +160,13 @@ private class SwapPreviewView(
         clipPath.reset()
         clipPath.addRoundRect(destination, cornerRadius, cornerRadius, android.graphics.Path.Direction.CW)
         canvas.clipPath(clipPath)
-        canvas.drawRoundRect(destination, cornerRadius, cornerRadius, backgroundPaint)
-        if (bitmap != null) {
+        canvas.drawRoundRect(destination, cornerRadius, cornerRadius, cardPaint)
+        if (empty) {
+            val left = (destination.centerX() - badgeSize / 2f).toInt()
+            val top = (destination.centerY() - badgeSize / 2f).toInt()
+            badge.setBounds(left, top, left + badgeSize, top + badgeSize)
+            badge.draw(canvas)
+        } else if (bitmap != null) {
             val scale = minOf(destination.width() / bitmap.width, destination.height() / bitmap.height)
             val imageWidth = bitmap.width * scale
             val imageHeight = bitmap.height * scale

@@ -76,7 +76,10 @@ data class WorkspaceLayoutProfile(
         }
     }
 
-    fun geometry(side: SidebarSide): WorkspaceGeometry = if (side == SidebarSide.LEFT) leftGeometry else rightGeometry
+    /** The recorded profile is position-neutral; side and control edge are session choices. */
+    fun geometry(side: SidebarSide, controlAtBottom: Boolean = false): WorkspaceGeometry =
+        (if (side == SidebarSide.LEFT) leftGeometry else rightGeometry)
+            .let { if (controlAtBottom) it.copy(controlAtBottom = true) else it }
 
     /** Undo TextureView's default stretching and fit the complete recorded canvas.
      * Slot bounds have the same aspect ratio apart from integer-pixel rounding. */

@@ -45,16 +45,12 @@
     <string name="top_text_size">頂部文字字級</string>
     <string name="top_content_title">頂部內容</string>
     <string name="top_content_summary">選項立即生效；編輯自訂文字後需點選儲存文字。</string>
-    <string name="sort_automatic">自動排序</string>
-    <string name="sort_manual">手動排序</string>
-    <string name="sort_manual_summary">啟用 App，並長按已選項目調整順序。</string>
-    <string name="sort_automatic_summary">根據最近使用情況自動排列。</string>
     <string name="selected_apps_empty">開啟下方 App 開關後，會依序加入這裡</string>
     <string name="app_remove">移除 %1$s</string>
     <string name="app_add">新增 %1$s</string>
     <string name="apps_limit">最多選擇 %1$d 個 App</string>
     <string name="app_strip_title">App 列</string>
-    <string name="app_strip_summary">自動模式依最近使用排序；手動模式可選擇並拖曳調整順序。</string>
+    <string name="app_strip_summary">最多選擇 10 個應用並拖曳排序，頂欄只顯示這份選擇。</string>
     <string name="selected_apps">已選 App</string>
     <string name="all_apps">全部 App</string>
     <string name="app_drag_description">%1$s，長按拖曳排序</string>

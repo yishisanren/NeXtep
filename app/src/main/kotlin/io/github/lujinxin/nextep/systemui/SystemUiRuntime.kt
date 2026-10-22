@@ -145,6 +145,7 @@ object SystemUiRuntime {
                 addAction(TriggerBroadcastContract.ACTION_SET_WORKSPACE)
                 addAction(TriggerBroadcastContract.ACTION_QUERY_WORKSPACE)
                 addAction(TriggerBroadcastContract.ACTION_LAUNCH_SLOT_TEST)
+                addAction(TriggerBroadcastContract.ACTION_WORKBENCH_COMMAND)
             }
             applicationContext.registerReceiver(
                 controlReceiver,
@@ -360,6 +361,10 @@ object SystemUiRuntime {
             }
         }
         TriggerBroadcastContract.ACTION_QUERY_WORKSPACE -> true
+        TriggerBroadcastContract.ACTION_WORKBENCH_COMMAND -> windowController.applyWorkbenchCommand(
+            intent.getStringExtra(TriggerBroadcastContract.EXTRA_COMMAND_KEY).orEmpty(),
+            intent.getStringExtra(TriggerBroadcastContract.EXTRA_COMMAND_VALUE),
+        )
         TriggerBroadcastContract.ACTION_LAUNCH_SLOT_TEST -> {
             val active = workspaceController.isActive() || workspaceController.setActive(true)
             active && workspaceController.launchInSlot(
@@ -386,6 +391,7 @@ object SystemUiRuntime {
             TriggerBroadcastContract.EXTRA_SLOT_STATES,
             workspaceController.slotStatesDescription(),
         )
+        putAll(windowController.workbenchState())
     }
 
     private val launcherRequestReceiver = object : BroadcastReceiver() {

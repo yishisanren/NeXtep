@@ -14,6 +14,29 @@ internal enum class WorkbenchAppearance(
         0xFF182333.toInt(), 0xFF526176.toInt(), 0xFFC2CCDB.toInt());
 
     val accent: Int get() = if (this == DARK) 0xFF8CCBEA.toInt() else 0xFF245D80.toInt()
+    /** Opaque panel tone for transition covers; the real panels add a frosted wallpaper under it. */
+    val opaquePanel: Int get() = panelEnd or 0xFF000000.toInt()
+    /** Empty-slot badge: a faint disc of the outline tone with a secondary-coloured plus. */
+    val badgeFill: Int get() = (outline and 0x00FFFFFF) or (if (this == DARK) 0x8A000000.toInt() else 0x7A000000.toInt())
+    val badgeHighlight: Int get() = (accent and 0x00FFFFFF) or 0x55000000
+
+    /** One drawable for the empty-slot plus, shared by live slots and transition previews. */
+    fun emptyBadge(density: Float, highlighted: Boolean = false): android.graphics.drawable.Drawable {
+        val disc = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(if (highlighted) badgeHighlight else badgeFill)
+        }
+        val plus = WorkbenchIcon(WorkbenchIcon.Kind.ADD, if (highlighted) text else secondary)
+        val inset = (BADGE_INSET_DP * density).toInt()
+        return android.graphics.drawable.LayerDrawable(arrayOf(disc, plus)).apply {
+            setLayerInset(1, inset, inset, inset, inset)
+        }
+    }
+
+    companion object {
+        const val BADGE_SIZE_DP = 28
+        const val BADGE_INSET_DP = 7
+    }
 
     fun background(radius: Float = 0f, stroke: Int = 0) = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(panel, panelEnd),

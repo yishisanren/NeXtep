@@ -32,14 +32,25 @@ class TopAppStripView(
     private val onPaymentRequested: () -> Unit = {},
     private val onToolsRequested: () -> Unit = {},
     private val onCompareRequested: () -> Unit = {},
-    private val onEditAppsRequested: (List<String>) -> Unit = {},
 ) : FrameLayout(context) {
     private var landscape = false
     private var controlOnLeft = false
+    private var controlAtBottom = false
 
-    fun setLandscape(value: Boolean, controlOnLeft: Boolean) {
+    /** The status/gesture reserve and pass-through band sit on the display's outer edge. */
+    fun setLandscape(value: Boolean, controlOnLeft: Boolean, controlAtBottom: Boolean = false) {
         landscape = value
         this.controlOnLeft = controlOnLeft
+        if (this.controlAtBottom != controlAtBottom) {
+            this.controlAtBottom = controlAtBottom
+            listOf(controls, dismissHint).forEach { view ->
+                (view.layoutParams as LayoutParams).apply {
+                    topMargin = if (controlAtBottom) 0 else dp(WorkspaceControlMetrics.STATUS_HEIGHT_DP)
+                    bottomMargin = if (controlAtBottom) dp(WorkspaceControlMetrics.STATUS_HEIGHT_DP) else 0
+                }
+                view.requestLayout()
+            }
+        }
     }
 
     private val repository = TopAppRepository(context)
@@ -87,13 +98,9 @@ class TopAppStripView(
         addView(appRow, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
     }
     private val paymentButton = toolButton(WorkbenchIcon.Kind.PAYMENT, R.string.workbench_payment, onPaymentRequested)
-    private val toolsButton = toolButton(WorkbenchIcon.Kind.MORE, R.string.workbench_more, onToolsRequested)
-    private var displayedAppKeys: List<String> = emptyList()
-    private val editAppsButton = toolButton(WorkbenchIcon.Kind.ADD, R.string.workbench_edit_apps) {
-        onEditAppsRequested(displayedAppKeys)
-    }.apply { layoutParams = LinearLayout.LayoutParams(dp(APP_TILE_WIDTH_DP), dp(ACTION_BUTTON_SIZE_DP)) }
+    private val toolsButton = toolButton(WorkbenchIcon.Kind.SETTINGS, R.string.open_settings, onToolsRequested)
     private var appearance = WorkbenchAppearance.DARK
-    private val dividerPaint = Paint().apply { color = Color.argb(90, 255, 255, 255) }
+    private val dividerPaint = Paint().apply { color = WorkbenchAppearance.DARK.outline }
     private var loading = false
     private var refreshPending = false
     private var lastRefreshAt = 0L
@@ -175,9 +182,8 @@ class TopAppStripView(
     private fun updateTitle() {
         heading.text = AppLanguage.string(context, R.string.workbench_title)
         paymentButton.contentDescription = AppLanguage.string(context, R.string.workbench_payment)
-        toolsButton.contentDescription = AppLanguage.string(context, R.string.workbench_more)
+        toolsButton.contentDescription = AppLanguage.string(context, R.string.open_settings)
         compareButton.contentDescription = AppLanguage.string(context, R.string.workbench_compare)
-        editAppsButton.contentDescription = AppLanguage.string(context, R.string.workbench_edit_apps)
         dismissHint.text = AppLanguage.string(context, R.string.window_drop_background)
         removeCallbacks(titleTick)
         titleTick.run()
@@ -230,7 +236,9 @@ class TopAppStripView(
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
         val thickness = resources.displayMetrics.density
-        canvas.drawRect(0f, height - thickness, width.toFloat(), height.toFloat(), dividerPaint)
+        // The divider faces the content, whichever edge the control area occupies.
+        if (controlAtBottom) canvas.drawRect(0f, 0f, width.toFloat(), thickness, dividerPaint)
+        else canvas.drawRect(0f, height - thickness, width.toFloat(), height.toFloat(), dividerPaint)
     }
 
     fun refresh(force: Boolean = false) {
@@ -248,10 +256,7 @@ class TopAppStripView(
             if (config != null) AppLanguage.updateHostLanguage(config.languageTag)
             val result = config?.let {
                 runCatching {
-                    repository.load(
-                        if (config.manualAppOrder) config.appComponents else emptyList(),
-                        manualOrder = config.manualAppOrder,
-                    )
+                    repository.load(config.appComponents)
                 }
             }
             post {
@@ -300,12 +305,19 @@ class TopAppStripView(
         background = value.background()
         titleView.setTextColor(value.text)
         heading.setTextColor(value.text)
-        listOf(paymentButton, compareButton, toolsButton, editAppsButton).forEach {
+        dividerPaint.color = value.outline
+        listOf(paymentButton, compareButton, toolsButton).forEach {
             it.imageTintList = android.content.res.ColorStateList.valueOf(value.accent)
+            // Buttons share the empty-slot card tone so the whole panel reads as one surface.
             it.background = android.graphics.drawable.RippleDrawable(
                 android.content.res.ColorStateList.valueOf(value.accent and 0x33ffffff),
-                value.background(dp(13).toFloat(), dp(1)), null)
+                android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(13).toFloat()
+                    setColor(value.card)
+                    setStroke(dp(1), value.outline)
+                }, null)
         }
+        invalidate()
     }
 
     private fun toolButton(kind: WorkbenchIcon.Kind, label: Int, action: () -> Unit) = android.widget.ImageButton(context).apply {
@@ -346,7 +358,6 @@ class TopAppStripView(
         val scrollX = appScroll.scrollX
         var structureChanged = false
         val visible = entries.take(10)
-        displayedAppKeys = visible.map { it.key }
         val keys = visible.mapTo(hashSetOf()) { it.key }
         val obsolete = appTiles.entries.iterator()
         while (obsolete.hasNext()) {
@@ -371,8 +382,6 @@ class TopAppStripView(
                 }
             }
         }
-        appRow.removeView(editAppsButton)
-        appRow.addView(editAppsButton)
         if (structureChanged) appScroll.post { appScroll.scrollTo(scrollX, 0) }
         NeXtepLog.info("top_apps", "Rendered ${entries.size} launcher activities")
     }
@@ -432,7 +441,9 @@ class TopAppStripView(
                         if (controlOnLeft) region.set(status, 0, height, width)
                         else region.set(0, 0, height - status, width)
                     } else {
-                        region.set(0, if (wideSlot != null) 0 else dp(WorkspaceControlMetrics.STATUS_HEIGHT_DP), width, height)
+                        val status = if (wideSlot != null) 0 else dp(WorkspaceControlMetrics.STATUS_HEIGHT_DP)
+                        if (controlAtBottom) region.set(0, 0, width, height - status)
+                        else region.set(0, status, width, height)
                     }
                 }
                 null

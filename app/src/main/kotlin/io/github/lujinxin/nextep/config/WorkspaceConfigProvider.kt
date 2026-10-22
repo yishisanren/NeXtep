@@ -20,12 +20,6 @@ class WorkspaceConfigProvider : ContentProvider() {
         ) throw SecurityException("Workspace settings are restricted to SystemUI")
         return when (method) {
             "query" -> WorkspaceConfigReceiver.readConfig(owner)
-            "set_top_apps" -> {
-                val keys = extras?.getStringArrayList(WorkspaceConfigContract.EXTRA_APPS)
-                    ?: throw IllegalArgumentException("Missing favorites")
-                require(keys.size <= 10 && keys.all { it.length in 1..1024 && '\n' !in it })
-                Bundle().apply { putBoolean("saved", SettingsRepository(owner).setFavoriteApps(keys)) }
-            }
             else -> null
         }
     }
