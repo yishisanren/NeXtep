@@ -131,10 +131,10 @@ class MainTaskPresentationCoordinator(context: Context) {
 
     fun currentTaskId(): Int? = presentedTaskId
 
-    fun restoreForeground(): Result<Unit> {
+    fun restoreForeground(animated: Boolean = false): Result<Unit> {
         val taskId = presentedTaskId ?: return Result.success(Unit)
         val presenter = activePresenter ?: return Result.success(Unit)
-        return presenter.restore(taskId).mapCatching {
+        return presenter.restore(taskId, animated).mapCatching {
             // The entry cleared bounds already; release must not start another layout change.
             if (presentedTaskId == taskId && activePresenter === presenter) {
                 presentedTaskId = null

@@ -197,7 +197,8 @@ class WorkspaceController(
             SystemServerWorkspaceBridge.publish(applicationContext, false)
             SystemDialogLayoutController.setGeometry(null)
             SystemUiRootTransformController.setActive(false)
-            val restoreResult = mainTaskPresenter.restoreForeground()
+            // The main app grows back while the panels fade; both take 180ms.
+            val restoreResult = mainTaskPresenter.restoreForeground(animated = true)
             windowController.hide()
             restoreResult.getOrThrow()
             state = WorkspaceState.Disabled

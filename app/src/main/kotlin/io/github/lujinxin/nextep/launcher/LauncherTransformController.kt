@@ -119,7 +119,7 @@ object LauncherTransformController {
             )
             return true
         }
-        if (active) scheduleApply() else restoreCurrentDecor()
+        if (active) scheduleApply() else restoreCurrentDecor(animated = true)
         NeXtepLog.info("launcher_transform", "active=$active decor=${decor.javaClass.name}")
         return true
     }
@@ -194,29 +194,45 @@ object LauncherTransformController {
         if (positionAnimators[decor]?.isRunning == true && positionTargets[decor] == transform) return
         positionAnimators.remove(decor)?.cancel()
         positionTargets[decor] = transform
-        if (current != null && current.translationX != transform.translationX &&
-            current.scaleX == transform.scaleX && current.scaleY == transform.scaleY &&
-            current.translationY == transform.translationY
-        ) {
-            val animator = ValueAnimator.ofFloat(current.translationX, transform.translationX)
-            animator.duration = 260L
-            animator.interpolator = DecelerateInterpolator(1.6f)
-            animator.addUpdateListener {
-                writeTransform(decor, transform.copy(translationX = it.animatedValue as Float), isAssistant)
-            }
-            animator.addListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: Animator) {
-                    if (positionAnimators[decor] === animation) {
-                        positionAnimators.remove(decor)
-                        positionTargets.remove(decor)
-                    }
-                }
-            })
-            positionAnimators[decor] = animator
-            animator.start()
-        } else {
-            writeTransform(decor, transform, isAssistant)
+        // The first fit shrinks the untransformed decor in step with SystemUI's 240ms panel
+        // entry; later changes (side switch, control edge) move from the current fit.
+        val start = current ?: TouchCoordinateMapper.Transform(1f, 1f, 0f, 0f)
+        if (start == transform) writeTransform(decor, transform, isAssistant)
+        else animateTransform(decor, start, transform, if (current == null) ENTER_DURATION_MS else SIDE_DURATION_MS,
+            isAssistant) { positionTargets.remove(decor) }
+    }
+
+    private fun animateTransform(
+        decor: View,
+        from: TouchCoordinateMapper.Transform,
+        to: TouchCoordinateMapper.Transform,
+        durationMs: Long,
+        isAssistant: Boolean,
+        onEnd: () -> Unit,
+    ) {
+        fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
+        val animator = ValueAnimator.ofFloat(0f, 1f)
+        animator.duration = durationMs
+        animator.interpolator = DecelerateInterpolator(1.6f)
+        animator.addUpdateListener {
+            val t = it.animatedValue as Float
+            writeTransform(decor, TouchCoordinateMapper.Transform(
+                lerp(from.scaleX, to.scaleX, t), lerp(from.scaleY, to.scaleY, t),
+                lerp(from.translationX, to.translationX, t), lerp(from.translationY, to.translationY, t),
+            ), isAssistant)
         }
+        animator.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: Animator) {
+                // A cancelled animator also ends; only the animator still registered may finish.
+                if (positionAnimators[decor] === animation) {
+                    positionAnimators.remove(decor)
+                    writeTransform(decor, to, isAssistant)
+                    onEnd()
+                }
+            }
+        })
+        positionAnimators[decor] = animator
+        animator.start()
     }
 
     private fun writeTransform(
@@ -259,21 +275,22 @@ object LauncherTransformController {
         }
     }
 
-    private fun restoreCurrentDecor() {
+    private fun restoreCurrentDecor(animated: Boolean = false) {
         positionAnimators.values.toList().forEach { it.cancel() }
         positionAnimators.clear()
         positionTargets.clear()
         val decor = decorReference.get()
         val saved = original
+        val current = appliedTransform
         if (decor != null && saved != null) {
-            decor.pivotX = saved.pivotX
-            decor.pivotY = saved.pivotY
-            decor.scaleX = saved.scaleX
-            decor.scaleY = saved.scaleY
-            decor.translationX = saved.translationX
-            decor.translationY = saved.translationY
-            decor.animationMatrix = saved.animationMatrix
-            decor.clipBounds = saved.clipBounds
+            if (animated && current != null) {
+                // Grow back to full size while SystemUI fades its panels out (180ms).
+                animateTransform(decor, current, TouchCoordinateMapper.Transform(
+                    saved.scaleX, saved.scaleY, saved.translationX, saved.translationY), EXIT_DURATION_MS, false) {
+                    restore(decor, saved)
+                    appliedTransform = null
+                }
+            } else restore(decor, saved)
         }
         appliedTransform = null
         assistantRoots.toMap().forEach { (root, savedRoot) -> restore(root, savedRoot) }
@@ -328,4 +345,8 @@ object LauncherTransformController {
     }
 
     private val REAPPLY_DELAYS_MS = longArrayOf(0L, 120L, 300L, 600L, 1_200L, 2_000L)
+    // Mirrors NeXtepWindowController's panel entry/exit timing.
+    private const val ENTER_DURATION_MS = 240L
+    private const val EXIT_DURATION_MS = 180L
+    private const val SIDE_DURATION_MS = 260L
 }

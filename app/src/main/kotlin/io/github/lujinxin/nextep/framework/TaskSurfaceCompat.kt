@@ -255,13 +255,9 @@ object TaskSurfaceCompat {
             // frame already. Do not shrink it again with a second entry zoom.
             applyPresentation(presentation)
         } else animatePresentation(
+            // Shrink from the full-screen task the user is looking at, in step with the panels.
             taskId = taskId,
-            from = presentation.copy(
-                scaleX = presentation.scaleX * PRESENT_ENTER_SCALE,
-                scaleY = presentation.scaleY * PRESENT_ENTER_SCALE,
-                positionX = presentation.positionX + PRESENT_ENTER_OFFSET_PX,
-                positionY = presentation.positionY + PRESENT_ENTER_OFFSET_PX,
-            ),
+            from = presentation.copy(scaleX = 1f, scaleY = 1f, positionX = 0f, positionY = 0f),
             to = presentation,
             fadeIn = true,
         )
@@ -331,16 +327,28 @@ object TaskSurfaceCompat {
         NeXtepLog.error("task_surface", "Reapply failed taskId=$taskId", error)
     }
 
-    fun restore(taskId: Int): Result<Unit> = runCatching {
+    fun restore(taskId: Int, animated: Boolean = false): Result<Unit> = runCatching {
         // Remove ownership before cancellation so no final frame can revive the transform.
         val pending = preparedPresentations.remove(taskId)
-        val leash = activePresentations.remove(taskId)?.leash ?: pending?.leash ?: return@runCatching
+        val previous = activePresentations.remove(taskId)
+        val leash = previous?.leash ?: pending?.leash ?: return@runCatching
         cancelPresentationAnimation(taskId)
         if (!isValid(leash)) {
             NeXtepLog.warn(
                 "task_surface",
                 "Restore skipped because task leash is gone taskId=$taskId",
             )
+            return@runCatching
+        }
+        if (animated && previous != null) {
+            // Grow back to full screen over the panel fade; ownership ends with the last frame.
+            val now = SystemClock.uptimeMillis()
+            val full = ActivePresentation(taskId, leash, 1f, 1f, 0f, 0f, now, now, crop = null)
+            activePresentations[taskId] = full
+            animatePresentation(taskId, previous, full, fadeIn = false, durationMs = RESTORE_DURATION_MS) {
+                if (activePresentations[taskId] === full) activePresentations.remove(taskId)
+            }
+            NeXtepLog.info("task_surface", "Restoring taskId=$taskId animated")
             return@runCatching
         }
         applyPresentation(
@@ -373,6 +381,8 @@ object TaskSurfaceCompat {
         from: ActivePresentation,
         to: ActivePresentation,
         fadeIn: Boolean,
+        durationMs: Long = if (fadeIn) PRESENT_DURATION_MS else REPOSITION_DURATION_MS,
+        onEnd: () -> Unit = {},
     ) {
         cancelPresentationAnimation(taskId)
         applyPresentation(
@@ -385,7 +395,7 @@ object TaskSurfaceCompat {
             crop = to.crop,
         )
         val animator = ValueAnimator.ofFloat(0f, 1f)
-        animator.duration = if (fadeIn) PRESENT_DURATION_MS else REPOSITION_DURATION_MS
+        animator.duration = durationMs
         animator.interpolator = DecelerateInterpolator(1.6f)
         animator.addUpdateListener { valueAnimator ->
             if (activePresentations[taskId] !== to) {
@@ -424,6 +434,7 @@ object TaskSurfaceCompat {
                             error,
                         )
                     }
+                    onEnd()
                 }
             }
         })
@@ -702,6 +713,5 @@ object TaskSurfaceCompat {
     private const val STEADY_REAPPLY_INTERVAL_MS = 900L
     private const val PRESENT_DURATION_MS = 240L
     private const val REPOSITION_DURATION_MS = 260L
-    private const val PRESENT_ENTER_SCALE = 0.96f
-    private const val PRESENT_ENTER_OFFSET_PX = 10f
+    private const val RESTORE_DURATION_MS = 180L
 }
