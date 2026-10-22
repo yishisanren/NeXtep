@@ -7,10 +7,13 @@ object VirtualDisplayFlagsCompat {
     data class Resolved(val value: Int, val names: List<String>)
 
     fun resolveCandidates(): List<Resolved> {
+        // SECURE is permission to render protected source windows, not screenshot
+        // protection. SystemUI may lack CAPTURE_SECURE_VIDEO_OUTPUT; protect the
+        // output SurfaceView/window instead, as the workbench already does.
         val fallbackValue = DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY or
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION or DisplayManager.VIRTUAL_DISPLAY_FLAG_SECURE
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION
         var value = fallbackValue
-        val names = mutableListOf("OWN_CONTENT_ONLY", "PRESENTATION", "SECURE")
+        val names = mutableListOf("OWN_CONTENT_ONLY", "PRESENTATION")
 
         listOf(
             "VIRTUAL_DISPLAY_FLAG_TRUSTED" to "TRUSTED",
@@ -36,7 +39,7 @@ object VirtualDisplayFlagsCompat {
         val preferred = Resolved(value, names.toList())
         val fallback = Resolved(
             fallbackValue,
-            listOf("OWN_CONTENT_ONLY", "PRESENTATION", "SECURE"),
+            listOf("OWN_CONTENT_ONLY", "PRESENTATION"),
         )
         return listOf(preferred, ownFocus, fallback).distinctBy { it.value }.also { candidates ->
             NeXtepLog.info(

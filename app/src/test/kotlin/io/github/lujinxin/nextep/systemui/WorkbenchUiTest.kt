@@ -61,14 +61,21 @@ class WorkbenchUiTest {
     }
 
 
-    @Test fun protectedOutputNeverFallsBackToAnInsecureDisplayOrTexture() {
+    @Test fun captureProtectionDoesNotRequirePermissionToCreateASecureDisplay() {
         val view = TaskSwitcherView(context, 3)
         assertEquals(SurfaceView::class.java, view.textureView.javaClass)
         assertTrue(view.clipToOutline)
         assertNull(view.capturePreview())
         VirtualDisplayFlagsCompat.resolveCandidates().forEach {
-            assertNotEquals(0, it.value and DisplayManager.VIRTUAL_DISPLAY_FLAG_SECURE)
+            // SystemUI on the user's device lacks CAPTURE_SECURE_VIDEO_OUTPUT.
+            // Every attempted configuration must work without that permission.
+            assertEquals(0, it.value and DisplayManager.VIRTUAL_DISPLAY_FLAG_SECURE)
+            assertNotEquals(0, it.value and DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY)
+            assertFalse("SECURE" in it.names)
         }
+        assertEquals(DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY or
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION,
+            VirtualDisplayFlagsCompat.resolveCandidates().last().value)
     }
 
     @Test fun liveOutputIsFittedWithoutStretchingOrCroppingAppControls() {

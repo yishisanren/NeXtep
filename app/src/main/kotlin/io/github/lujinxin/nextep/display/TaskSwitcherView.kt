@@ -382,8 +382,8 @@ class TaskSwitcherView(
     }
 
     private fun createSurfaceView(): SurfaceView = SurfaceView(context).apply {
-        // SurfaceTexture cannot present protected buffers. The display AND its
-        // output layer must remain secure to show payment/password windows.
+        // Protect this output layer from capture. Source apps' secure windows
+        // remain subject to Android's separate virtual-display restrictions.
         setSecure(!captureAllowed)
         setZOrderMediaOverlay(true)
     }
