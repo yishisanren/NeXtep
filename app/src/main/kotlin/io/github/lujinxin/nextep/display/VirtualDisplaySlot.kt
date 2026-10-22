@@ -14,6 +14,10 @@ class VirtualDisplaySlot(
     context: Context,
     private val index: Int,
 ) : SurfaceHolder.Callback {
+    private companion object {
+        val creator: java.util.concurrent.ExecutorService =
+            java.util.concurrent.Executors.newSingleThreadExecutor { Thread(it, "NeXtep-VirtualDisplay") }
+    }
     interface Listener {
         fun onDisplayReady(slotIndex: Int, displayId: Int)
         fun onDisplayReleased(slotIndex: Int, displayId: Int?, reason: String)
@@ -34,6 +38,9 @@ class VirtualDisplaySlot(
     private var freshSurfaceRequired = false
     private var surfaceGeneration = 1
     private var listener: Listener? = null
+    private var creating = false
+    private var creation = 0
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val inputManager by lazy { applicationContext.getSystemService(android.hardware.input.InputManager::class.java) }
     private val injectInput by lazy { inputManager.javaClass.getMethod("injectInputEvent",
         android.view.InputEvent::class.java, Int::class.javaPrimitiveType) }
@@ -100,6 +107,8 @@ class VirtualDisplaySlot(
         if (value) {
             input.cancel()
             suspended = true
+            creation++
+            creating = false
             // A null Surface turns the display off without removing its tasks/windows.
             // Keep our Surface alive so unlock can reconnect the same display.
             runCatching { virtualDisplay?.setSurface(null) }.onFailure {
@@ -186,27 +195,43 @@ class VirtualDisplaySlot(
     }
 
     private fun createDisplay(createdSurface: Surface, geometry: SlotGeometry) {
-        if (!active || suspended || virtualDisplay != null || !createdSurface.isValid) return
+        if (!active || suspended || virtualDisplay != null || creating || !createdSurface.isValid) return
         activeGeometry = geometry
-        factory.create(index, geometry, createdSurface)
-            .onSuccess { display ->
-                surface = createdSurface
-                virtualDisplay = display
-                listener?.onDisplayReady(index, display.display.displayId)
-                NeXtepLog.info(
-                    "virtual_display",
-                    "Created slot=$index generation=$surfaceGeneration " +
-                        "displayId=${display.display.displayId} geometry=$geometry",
-                )
-                pendingLaunch?.let { intent ->
-                    pendingLaunch = null
-                    launchNow(intent, display.display.displayId)
+        creating = true
+        val token = ++creation
+        // createVirtualDisplay is a ~100ms binder round trip per slot. Off the UI thread, the
+        // entry animation and the main task keep moving while the four displays appear.
+        creator.execute {
+            val result = factory.create(index, geometry, createdSurface)
+            mainHandler.post {
+                if (token != creation) { result.getOrNull()?.release(); return@post }
+                creating = false
+                if (!active || suspended || virtualDisplay != null) { result.getOrNull()?.release(); return@post }
+                if (!createdSurface.isValid) {
+                    // The holder replaced its Surface meanwhile; retry against the current one.
+                    result.getOrNull()?.release()
+                    updateDisplay(view.textureView.holder, rebind = true)
+                    return@post
+                }
+                result.onSuccess { display ->
+                    surface = createdSurface
+                    virtualDisplay = display
+                    listener?.onDisplayReady(index, display.display.displayId)
+                    NeXtepLog.info(
+                        "virtual_display",
+                        "Created slot=$index generation=$surfaceGeneration " +
+                            "displayId=${display.display.displayId} geometry=$geometry",
+                    )
+                    pendingLaunch?.let { intent ->
+                        pendingLaunch = null
+                        launchNow(intent, display.display.displayId)
+                    }
+                }.onFailure {
+                    view.showWaiting()
+                    listener?.onDisplayFailed(index, it.message ?: "display unavailable")
                 }
             }
-            .onFailure {
-                view.showWaiting()
-                listener?.onDisplayFailed(index, it.message ?: "display unavailable")
-            }
+        }
     }
 
     private fun launchNow(intent: Intent, displayId: Int): Result<Unit> = runCatching {
@@ -223,6 +248,9 @@ class VirtualDisplaySlot(
     }
 
     private fun releaseDisplay(reason: String) {
+        // Any display still being created for the old state is released on arrival.
+        creation++
+        creating = false
         val releasedDisplayId = virtualDisplay?.display?.displayId
         runCatching { virtualDisplay?.setSurface(null) }
         virtualDisplay?.release()

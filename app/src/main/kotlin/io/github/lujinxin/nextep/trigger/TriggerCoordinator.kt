@@ -89,32 +89,40 @@ object TriggerCoordinator {
     }
 
     fun queryState(context: Context, onResult: (RequestResult) -> Unit) {
-        if (!SystemServerWorkspaceBridge.isWorkspaceActive(context)) {
-            requestSet(context, false, TriggerSource.SYSTEM_RECOVERY, onResult)
-            return
-        }
         val homePackage = TriggerBroadcastContract.resolveHomePackage(context)
         if (homePackage == null) {
             onResult(RequestResult.NotReady("No resolved HOME package"))
             return
         }
-        queryTarget(context, homePackage) homeQuery@ { homeState ->
-            if (homeState !is RequestResult.Ready) {
-                onResult(homeState)
-                return@homeQuery
+        // SystemUI owns the state. The tile used to force both hosts inactive whenever the
+        // Settings.Global flag read 0, which raced a workspace that was still entering and
+        // closed it again; only a Launcher left transformed after SystemUI went inactive is reset.
+        queryTarget(context, TriggerBroadcastContract.SYSTEM_UI_PACKAGE) systemUiQuery@ { systemUiState ->
+            if (systemUiState !is RequestResult.Ready) {
+                onResult(systemUiState)
+                return@systemUiQuery
             }
-            runtimeMismatch("Launcher", homeState)?.let { mismatch ->
+            runtimeMismatch("SystemUI", systemUiState)?.let { mismatch ->
                 onResult(mismatch)
-                return@homeQuery
+                return@systemUiQuery
             }
-            queryTarget(context, TriggerBroadcastContract.SYSTEM_UI_PACKAGE) { systemUiState ->
-                if (systemUiState !is RequestResult.Ready) {
-                    onResult(systemUiState)
+            if (!systemUiState.active) {
+                setTarget(context, homePackage, false, TriggerSource.SYSTEM_RECOVERY) { homeSet ->
+                    onResult(if (homeSet is RequestResult.Ready) homeSet.copy(
+                        runtimeProtocolVersion = systemUiState.runtimeProtocolVersion,
+                        slotStates = systemUiState.slotStates,
+                    ) else homeSet)
+                }
+                return@systemUiQuery
+            }
+            queryTarget(context, homePackage) { homeState ->
+                if (homeState !is RequestResult.Ready) {
+                    onResult(homeState)
                 } else {
-                    val mismatch = runtimeMismatch("SystemUI", systemUiState)
+                    val mismatch = runtimeMismatch("Launcher", homeState)
                     when {
                         mismatch != null -> onResult(mismatch)
-                        homeState.active != systemUiState.active ->
+                        !homeState.active ->
                             onResult(RequestResult.NotReady("Launcher and SystemUI state mismatch"))
                         else -> onResult(
                             homeState.copy(
