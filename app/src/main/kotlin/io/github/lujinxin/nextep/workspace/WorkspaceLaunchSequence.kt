@@ -1,7 +1,7 @@
 package io.github.lujinxin.nextep.workspace
 
-/** An Activity launch is accepted before its task exists. Move it only after
- * observing the requested foreground task, then start the next application. */
+/** An Activity launch is accepted before its task exists. Observe it at the
+ * requested destination before starting the next application. */
 internal class WorkspaceLaunchSequence<T>(
     private val schedule: (Long, () -> Unit) -> Unit,
     private val start: (T) -> Unit,

@@ -370,6 +370,71 @@ class WorkbenchFlowUiTest {
         assertFalse(coordinator.launchingApps)
     }
 
+    @Test fun desktopSelectionAndTileDropLaunchDirectlyOnTheRequestedDisplay() {
+        exported(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), "test.launcher")
+        for (fromDesktop in listOf(true, false)) {
+            val slots = List(4) { io.github.lujinxin.nextep.display.VirtualDisplaySlot(context, it) }
+            val coordinator = io.github.lujinxin.nextep.display.SlotTaskCoordinator(context, slots,
+                io.github.lujinxin.nextep.task.MainTaskPresentationCoordinator(context),
+                { WorkspaceGeometry.forDisplay(360, 800, density = 1f) })
+            coordinator.javaClass.getDeclaredField("active").apply { isAccessible = true }.set(coordinator, true)
+            val display = context.getSystemService(android.hardware.display.DisplayManager::class.java)
+                .createVirtualDisplay("requested-slot", 360, 800, 160, null, 0)!!
+            slots[2].javaClass.getDeclaredField("virtualDisplay").apply { isAccessible = true }.set(slots[2], display)
+            coordinator.onDisplayReady(2, display.display.displayId)
+            val app = Intent(Intent.ACTION_MAIN).setPackage("test.app")
+            val resolved = exported(app)
+            app.component = ComponentName("test.app", resolved.activityInfo.name)
+            if (fromDesktop) {
+                slots[2].view.performClick()
+                assertTrue(shadowOf(context).nextStartedActivity.hasCategory(Intent.CATEGORY_HOME))
+                assertTrue(coordinator.openFromLauncher(app).isSuccess)
+            } else {
+                assertTrue(coordinator.onIntentDropped(2, app))
+            }
+            shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(1))
+            val launch = shadowOf(context).nextStartedActivityForResult
+            assertNotNull(launch)
+            assertEquals(app.component, launch.intent.component)
+            assertEquals(display.display.displayId,
+                launch.options.getInt("android.activity.launchDisplayId", -1))
+            assertEquals(app.component, shadowOf(context).nextStartedActivity.component)
+            assertNull(shadowOf(context).nextStartedActivity)
+            coordinator.cancelApplicationLaunch()
+            display.release()
+        }
+    }
+
+    @Test fun sideSearchUsesOriginalDisplayLaunchAndPreservesSearchPayload() {
+        val slots = List(4) { io.github.lujinxin.nextep.display.VirtualDisplaySlot(context, it) }
+        val coordinator = io.github.lujinxin.nextep.display.SlotTaskCoordinator(context, slots,
+            io.github.lujinxin.nextep.task.MainTaskPresentationCoordinator(context),
+            { WorkspaceGeometry.forDisplay(360, 800, density = 1f) })
+        coordinator.javaClass.getDeclaredField("active").apply { isAccessible = true }.set(coordinator, true)
+        val display = context.getSystemService(android.hardware.display.DisplayManager::class.java)
+            .createVirtualDisplay("search-slot", 360, 800, 160, null, 0)!!
+        slots[1].javaClass.getDeclaredField("virtualDisplay").apply { isAccessible = true }.set(slots[1], display)
+        coordinator.onDisplayReady(1, display.display.displayId)
+        val intent = WorkbenchIntents.searches(WorkbenchIntents.Search.DELIVERY, "牛奶 & 500ml")[1].intent
+            .putExtra("router_payload", "preserved")
+        exported(intent)
+        val normalized = checkNotNull(WorkspaceIntentResolver.resolve(context.packageManager, intent))
+        val requestType = coordinator.javaClass.declaredClasses.single { it.simpleName == "LaunchRequest" }
+        val request = requestType.declaredConstructors.single { it.parameterCount == 5 }
+            .apply { isAccessible = true }.newInstance(normalized, 1, display.display.displayId, true, false)
+        coordinator.javaClass.getDeclaredMethod("startAppRequest", requestType)
+            .apply { isAccessible = true }.invoke(coordinator, request)
+        val launch = shadowOf(context).nextStartedActivityForResult
+        assertEquals(display.display.displayId, launch.options.getInt("android.activity.launchDisplayId", -1))
+        assertEquals(intent.data, launch.intent.data)
+        assertEquals(Intent.ACTION_VIEW, launch.intent.action)
+        assertEquals("preserved", launch.intent.getStringExtra("router_payload"))
+        assertFalse(launch.intent.hasCategory(Intent.CATEGORY_LAUNCHER))
+        assertEquals(intent.data, shadowOf(context).nextStartedActivity.data)
+        assertNull(shadowOf(context).nextStartedActivity)
+        display.release()
+    }
+
     private fun descendants(view: View): List<View> = listOf(view) +
         if (view is android.view.ViewGroup) (0 until view.childCount).flatMap { descendants(view.getChildAt(it)) } else emptyList()
 }

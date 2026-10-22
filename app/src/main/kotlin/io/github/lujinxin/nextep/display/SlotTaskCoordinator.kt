@@ -65,7 +65,6 @@ class SlotTaskCoordinator(
         val search: Boolean = false, val emptyOnly: Boolean = false,
     ) {
         var observed: TaskRepository.TaskSnapshot? = null
-        var returnTaskId: Int? = null
     }
     private val desktopSelection = io.github.lujinxin.nextep.workspace.WorkspaceSlotSelection()
     val selectingDesktopApp: Boolean get() = desktopSelection.target != null
@@ -114,7 +113,14 @@ class SlotTaskCoordinator(
     private fun startAppRequest(request: LaunchRequest) {
         check(active && !suspended)
         mainSelectionGeneration++
-        request.returnTaskId = if (request.slot == null) null else taskRepository.foregroundTask()?.taskId
+        val index = request.slot
+        if (index != null) {
+            check(slots[index].displayId() == request.displayId) { "Slot display changed" }
+            // Reuse the original direct-to-display path. A new side-window app
+            // must never depend on first becoming a presentable main-screen task.
+            assignIntent(index, request.intent, external = request.search).getOrThrow()
+            return
+        }
         val component = checkNotNull(request.intent.component)
         val existing = taskRepository.findTaskForComponent(component,
             request.intent.targetUser() ?: android.os.Process.myUserHandle())
@@ -126,6 +132,21 @@ class SlotTaskCoordinator(
 
     private fun observeAppRequest(request: LaunchRequest): Boolean {
         check(active && !suspended)
+        val index = request.slot
+        if (index != null) {
+            check(slots[index].displayId() == request.displayId) { "Slot display changed" }
+            val task = taskRepository.runningTasks().firstOrNull { it.displayId == request.displayId }
+                ?: return false
+            val user = io.github.lujinxin.nextep.framework.TaskInfoCompat.userIdentifier(
+                request.intent.targetUser() ?: android.os.Process.myUserHandle())
+            if (task.displayId != request.displayId || task.userId != user ||
+                task.component.packageName != request.intent.component?.packageName) return false
+            reconcile("observe direct slot launch")
+            val occupied = slotRecords[index].state as? SlotState.Occupied ?: return false
+            if (occupied.taskId != task.taskId) return false
+            request.observed = task
+            return true
+        }
         val foreground = taskRepository.foregroundTask() ?: return false
         val user = io.github.lujinxin.nextep.framework.TaskInfoCompat.userIdentifier(
             request.intent.targetUser() ?: android.os.Process.myUserHandle())
@@ -141,23 +162,6 @@ class SlotTaskCoordinator(
         val index = request.slot
         if (index == null) {
             mainTaskPresenter.presentTask(task.taskId, geometryProvider()).getOrThrow()
-        } else {
-            check(slots[index].displayId() == request.displayId) { "Slot display changed" }
-            runTransition("launch task to slot=" + index) {
-                when (val state = slotRecords[index].state) {
-                    is SlotState.Ready -> parkMainTaskInSlot(index, state, task, leaveOverview = false)
-                    is SlotState.Occupied -> swapWithMain(index, state)
-                    else -> error("Slot no longer available")
-                }
-            }.getOrThrow()
-            // Opening a router Activity can create a second task. Restore the
-            // previous main explicitly, rather than whichever old task resumes.
-            request.returnTaskId?.takeIf { it != task.taskId }?.let { id ->
-                taskRepository.findTask(id)?.takeIf { it.displayId == Display.DEFAULT_DISPLAY }?.let {
-                    taskRepository.bringTaskToFront(id).getOrThrow()
-                    mainTaskPresenter.presentTask(id, geometryProvider()).getOrThrow()
-                }
-            }
         }
         NeXtepLog.info("app_launch", "Task observed and placed slot=" + index + " task=" + task.taskId)
     }
