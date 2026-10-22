@@ -53,4 +53,6 @@
     <string name="workbench_export_action">내보내기</string>
     <string name="workbench_exit_summary">모든 앱을 일반 창으로 되돌립니다.</string>
     <string name="workbench_exit_action">종료</string>
+    <string name="favorite_apps_edit">편집</string>
+    <string name="favorite_apps_summary">%2$d개 중 %1$d개 선택됨</string>
 </resources>

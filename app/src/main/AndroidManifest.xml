@@ -38,6 +38,11 @@
             android:exported="true"
             android:label="@string/app_name" />
 
+        <activity
+            android:name=".config.FavoriteAppsActivity"
+            android:exported="false"
+            android:label="@string/app_strip_title" />
+
         <!-- Finish the icon entry in its own task before showing the real settings activity. -->
         <activity
             android:name=".icons.LauncherEntryActivity"

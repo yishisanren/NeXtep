@@ -38,12 +38,6 @@ object SettingsScreen {
 
     fun create(activity: AppCompatActivity, repository: SettingsRepository): View {
         val settings = repository.topBarSettings()
-        val apps = loadApps(activity).toMutableList()
-        val appByName = apps.associateBy { it.key }.toMutableMap()
-        // A saved clone may arrive asynchronously from SystemUI. Keep its order
-        // while the unprivileged settings process is still loading the catalogue.
-        val selected = settings.appComponents.distinct()
-            .filter { it in appByName || it.contains('|') }.take(MAX_TOP_APPS).toMutableList()
 
         return LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
@@ -351,6 +345,39 @@ object SettingsScreen {
             addView(View(activity), LinearLayout.LayoutParams(1, dp(activity, 14)))
             addView(frostSection, matchWidth().apply { bottomMargin = dp(activity, 14) })
 
+            addView(sectionCard(activity).apply {
+                fun summary() = activity.getString(R.string.favorite_apps_summary,
+                    repository.topBarSettings().appComponents.size, MAX_TOP_APPS)
+                val editButton = SettingsRowButton.create(activity).apply {
+                    text = activity.getString(R.string.favorite_apps_edit)
+                    setOnClickListener {
+                        activity.startActivity(android.content.Intent(activity, FavoriteAppsActivity::class.java))
+                    }
+                }
+                val row = settingRow(activity, activity.getString(R.string.app_strip_title), summary(), editButton).apply {
+                    setOnClickListener { editButton.performClick() }
+                    isFocusable = false
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                }
+                val summaryView = (row.getChildAt(0) as LinearLayout).getChildAt(1) as TextView
+                // Coming back from the editor refreshes the count.
+                row.viewTreeObserver.addOnWindowFocusChangeListener { focused -> if (focused) summaryView.text = summary() }
+                addView(row, matchWidth())
+            }, matchWidth())
+        }
+    }
+
+    /** The favourite-app editor shown on its own page: selected order (drag) and the full catalogue. */
+    fun favoriteAppsEditor(activity: AppCompatActivity, repository: SettingsRepository): View {
+        val settings = repository.topBarSettings()
+        val apps = loadApps(activity).toMutableList()
+        val appByName = apps.associateBy { it.key }.toMutableMap()
+        // A saved clone may arrive asynchronously from SystemUI. Keep its order
+        // while the unprivileged settings process is still loading the catalogue.
+        val selected = settings.appComponents.distinct()
+            .filter { it in appByName || it.contains('|') }.take(MAX_TOP_APPS).toMutableList()
+        return LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
             val selectedContainer = LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
             }

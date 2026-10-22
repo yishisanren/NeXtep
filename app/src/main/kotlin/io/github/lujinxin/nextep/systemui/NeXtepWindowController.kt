@@ -751,17 +751,8 @@ class NeXtepWindowController(
     }
 
     private fun animateDragSwap(drag: SlotTaskDrag, targetIndex: Int?, move: (() -> Unit) -> Unit) {
-        if (targetIndex == null && drag.dropPoint == null && wideSlotIndex == null) {
-            val sourceTask = mainTaskPresenter.currentTaskId()
-            val origin = sidebarSide
-            if (animateSlotExpansion(drag.slotIndex, sourceTask,
-                    { workspaceVisible && !suspended }, { move {} }) { reveal ->
-                    move {
-                        if (mainTaskPresenter.currentTaskId() != drag.taskId) contentSide(origin)
-                        reveal()
-                    }
-                }) return
-        }
+        // A tap swaps the slot with the main window in place; the rail keeps its side.
+        // (Content drag still expands the target on its own side, see expandContentTarget.)
         val geometry = geometry()
         val sourceView = slotWindows.getOrNull(drag.slotIndex)?.view
         val sourceRect = android.graphics.Rect()
@@ -918,7 +909,7 @@ class NeXtepWindowController(
     private fun applyCaptureFlags(allowed: Boolean) {
         var failure: Throwable? = null
         fun failed(error: Throwable) { if (failure == null) failure = error else failure?.addSuppressed(error) }
-        slotWindows.forEach { slot -> runCatching { slot.view.setCaptureAllowed(allowed) }.onFailure(::failed) }
+        slotWindows.forEach { slot -> runCatching { slot.setCaptureAllowed(allowed) }.onFailure(::failed) }
         records.forEach { record ->
             val params = record.view.layoutParams as? WindowManager.LayoutParams ?: return@forEach
             params.flags = if (allowed) params.flags and WindowManager.LayoutParams.FLAG_SECURE.inv()

@@ -46,13 +46,27 @@ class WorkbenchUiTest {
         view.offsetDescendantRectToMyCoords(payment, bounds)
         assertTrue(bounds.left > width / 2)
         assertTrue(bounds.bottom <= (128 * context.resources.displayMetrics.density).toInt())
+        val density = context.resources.displayMetrics.density
         val heading = field(view, "heading") as View
         val headingBounds = Rect()
         heading.getDrawingRect(headingBounds)
         view.offsetDescendantRectToMyCoords(heading, headingBounds)
-        assertTrue(headingBounds.top >= (80 * context.resources.displayMetrics.density).toInt())
+        // The title sits below the status band, and the title+app block is centred under it.
+        assertTrue(headingBounds.top >= (40 * density).toInt())
         val apps = field(view, "appScroll") as View
-        assertTrue(apps.height >= (43 * context.resources.displayMetrics.density).toInt())
+        assertTrue(apps.height >= (43 * density).toInt())
+        val row = payment.parent as View
+        val rowBounds = Rect(); row.getDrawingRect(rowBounds); view.offsetDescendantRectToMyCoords(row, rowBounds)
+        val appsBounds = Rect(); apps.getDrawingRect(appsBounds); view.offsetDescendantRectToMyCoords(apps, appsBounds)
+        val above = rowBounds.top - (40 * density).toInt()
+        val below = height - appsBounds.bottom
+        assertTrue("above=$above below=$below", kotlin.math.abs(above - below) <= (4 * density).toInt())
+        // Three equal 40dp buttons separated by 8dp gaps.
+        val compare = field(view, "compareButton") as View
+        val tools = field(view, "toolsButton") as View
+        assertEquals((40 * density).toInt(), payment.width)
+        assertEquals((8 * density).toInt(), payment.left - compare.right)
+        assertEquals((8 * density).toInt(), tools.left - payment.right)
         assertNotSame(field(view, "appRow"), payment.parent)
         assertTrue(payment.performClick())
         assertEquals(1, opened)

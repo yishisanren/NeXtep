@@ -54,4 +54,6 @@
     <string name="workbench_export_action">匯出</string>
     <string name="workbench_exit_summary">所有應用回到普通視窗。</string>
     <string name="workbench_exit_action">退出</string>
+    <string name="favorite_apps_edit">編輯</string>
+    <string name="favorite_apps_summary">已選 %1$d 個，最多 %2$d 個</string>
 </resources>

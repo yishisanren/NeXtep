@@ -127,6 +127,8 @@ class TopAppStripView(
             LinearLayout(context).apply {
                 controls = this
                 orientation = LinearLayout.VERTICAL
+                // Title row and app row sit as one block, centred in the space below the status band.
+                gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(7), 0, dp(7), dp(WorkspaceControlMetrics.CONTENT_BOTTOM_PADDING_DP))
                 addView(
                     actionRow(),
@@ -134,7 +136,8 @@ class TopAppStripView(
                 )
                 addView(
                     appScroll,
-                    LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f),
+                    LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT,
+                        dp(WorkspaceControlMetrics.APP_ICON_SIZE_DP + WorkspaceControlMetrics.APP_BOTTOM_PADDING_DP)),
                 )
             },
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
@@ -148,14 +151,6 @@ class TopAppStripView(
             topMargin = dp(WorkspaceControlMetrics.STATUS_HEIGHT_DP)
         })
         installTouchableStatusBarPassThrough()
-    }
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        // Use spare toolbar space, keeping the app icons intact on shorter displays.
-        val extraTop = (MeasureSpec.getSize(heightMeasureSpec) -
-            dp(WorkspaceControlMetrics.COMPACT_HEIGHT_DP)).coerceIn(0, dp(32))
-        controls.setPadding(dp(7), extraTop, dp(7), dp(WorkspaceControlMetrics.CONTENT_BOTTOM_PADDING_DP))
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
 
     private val configChangedReceiver = object : android.content.BroadcastReceiver() {
@@ -323,7 +318,7 @@ class TopAppStripView(
     private fun toolButton(kind: WorkbenchIcon.Kind, label: Int, action: () -> Unit) = android.widget.ImageButton(context).apply {
         setImageDrawable(WorkbenchIcon(kind, Color.WHITE))
         scaleType = ImageView.ScaleType.FIT_CENTER
-        setPadding(dp(12), dp(12), dp(12), dp(12))
+        setPadding(dp(9), dp(9), dp(9), dp(9))
         contentDescription = AppLanguage.string(context, label)
         isFocusable = true
         setOnClickListener { action() }
@@ -336,20 +331,21 @@ class TopAppStripView(
         addView(
             LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(0, dp(8), 0, 0)
+                gravity = Gravity.CENTER_VERTICAL
                 addView(heading, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(24)))
-                addView(FrameLayout(context).apply {
-                    addView(titleView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-                }, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
+                addView(titleView, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
             },
             LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
                 marginStart = dp(10)
                 marginEnd = dp(10)
             },
         )
-        addView(compareButton, LinearLayout.LayoutParams(buttonSize, buttonSize))
-        addView(paymentButton, LinearLayout.LayoutParams(buttonSize, buttonSize))
-        addView(toolsButton, LinearLayout.LayoutParams(buttonSize, buttonSize))
+        // Three equal 40dp buttons with an 8dp gap read as one group beside the 18sp title.
+        listOf(compareButton, paymentButton, toolsButton).forEachIndexed { index, button ->
+            addView(button, LinearLayout.LayoutParams(buttonSize, buttonSize).apply {
+                if (index > 0) marginStart = dp(ACTION_BUTTON_GAP_DP)
+            })
+        }
     }
 
     private fun renderApps(entries: List<TopAppRepository.AppEntry>) {
@@ -472,7 +468,8 @@ class TopAppStripView(
 
     private companion object {
         const val APP_TILE_WIDTH_DP = 50
-        const val ACTION_BUTTON_SIZE_DP = 48
+        const val ACTION_BUTTON_SIZE_DP = 40
+        const val ACTION_BUTTON_GAP_DP = 8
         const val REFRESH_INTERVAL_MS = 15_000L
         const val TOUCHABLE_INSETS_REGION = 3
     }

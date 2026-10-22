@@ -66,7 +66,7 @@ class WorkbenchFlowUiTest {
             assertSame(more, row.getChildAt(3))
             assertTrue(compare.right <= pay.left && pay.right <= more.left)
             assertTrue(more.right <= row.width)
-            assertTrue(compare.height >= (48 * density).toInt())
+            assertEquals((40 * density).toInt(), compare.height)
             val title = field(strip, "titleView") as TextView
             assertTrue(title.text.any(Char::isDigit))
             assertTrue((field(strip, "heading") as TextView).text.isNotBlank())

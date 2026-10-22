@@ -53,4 +53,6 @@
     <string name="workbench_export_action">書き出す</string>
     <string name="workbench_exit_summary">すべてのアプリを通常のウィンドウに戻します。</string>
     <string name="workbench_exit_action">終了</string>
+    <string name="favorite_apps_edit">編集</string>
+    <string name="favorite_apps_summary">%2$d 個まで選択可能（現在 %1$d 個）</string>
 </resources>

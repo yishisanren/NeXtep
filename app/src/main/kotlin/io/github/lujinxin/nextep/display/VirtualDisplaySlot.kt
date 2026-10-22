@@ -55,6 +55,16 @@ class VirtualDisplaySlot(
 
     fun setInteractive(value: Boolean) { view.setContentInput(if (value) input else null) }
 
+    /** SurfaceView.setSecure only reaches a surface created after the call; rebuild the live one. */
+    fun setCaptureAllowed(allowed: Boolean) {
+        view.setCaptureAllowed(allowed)
+        if (active && !suspended && virtualDisplay != null) {
+            surfaceGeneration += 1
+            view.refreshOutputSurface(this)
+            NeXtepLog.info("virtual_display", "Rebuilt output slot=$index generation=$surfaceGeneration capture=$allowed")
+        }
+    }
+
     init {
         view.textureView.holder.addCallback(this)
     }

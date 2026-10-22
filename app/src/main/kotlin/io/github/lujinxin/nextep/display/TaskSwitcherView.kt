@@ -205,6 +205,10 @@ class TaskSwitcherView(
         }
     }
 
+    /** Rebuild the output layer in place and re-show the current state through it. */
+    fun refreshOutputSurface(listener: SurfaceHolder.Callback): SurfaceView =
+        replaceTextureView(listener).also { showState(currentState) }
+
     override fun onInterceptTouchEvent(event: MotionEvent): Boolean = true
 
     fun setOutputSize(width: Int, height: Int) {
