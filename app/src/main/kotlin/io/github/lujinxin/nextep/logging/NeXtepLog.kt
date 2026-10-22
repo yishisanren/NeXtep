@@ -6,7 +6,8 @@ import android.util.Log
 object NeXtepLog {
     private const val TAG = "NeXtep"
     // Features whose messages carry only ids, flags and geometry.
-    private val MESSAGE_FEATURES = setOf("workbench_scene", "workspace_configuration", "systemui_runtime", "wide_layout")
+    private val MESSAGE_FEATURES = setOf("workbench_scene", "workspace_configuration", "systemui_runtime", "wide_layout",
+        "virtual_display", "slot_state", "slot_coordinator", "slot_retention", "task_surface", "activity_task_manager")
     private val events = java.util.ArrayDeque<String>()
 
     fun diagnostics(): String = synchronized(events) { events.joinToString("\n") }

@@ -15,6 +15,7 @@ class VirtualDisplaySlot(
     private val index: Int,
 ) : SurfaceHolder.Callback {
     private companion object {
+        const val OUTPUT_BOUND_TIMEOUT_MS = 600L
         val creator: java.util.concurrent.ExecutorService =
             java.util.concurrent.Executors.newSingleThreadExecutor { Thread(it, "NeXtep-VirtualDisplay") }
     }
@@ -40,6 +41,11 @@ class VirtualDisplaySlot(
     private var listener: Listener? = null
     private var creating = false
     private var creation = 0
+    private var outputBoundAction: (() -> Unit)? = null
+    private val outputBoundFallback = Runnable {
+        NeXtepLog.warn("virtual_display", "Output not bound in time slot=$index display=${displayId()}")
+        runOutputBound()
+    }
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val inputManager by lazy { applicationContext.getSystemService(android.hardware.input.InputManager::class.java) }
     private val injectInput by lazy { inputManager.javaClass.getMethod("injectInputEvent",
@@ -57,6 +63,7 @@ class VirtualDisplaySlot(
 
     /** SurfaceView.setSecure only reaches a surface created after the call; rebuild the live one. */
     fun setCaptureAllowed(allowed: Boolean) {
+        if (view.isCaptureAllowed() == allowed) return
         view.setCaptureAllowed(allowed)
         if (active && !suspended && virtualDisplay != null) {
             surfaceGeneration += 1
@@ -84,6 +91,30 @@ class VirtualDisplaySlot(
     }
 
     fun sourceBounds(): WorkspaceLayoutProfile.Source = checkNotNull(layoutProfile).source(index)
+
+    /**
+     * Runs [action] once the current output layer feeds the display, immediately when it already
+     * does. A reparented SurfaceView is recreated in its new window on the next traversal; moving a
+     * task before that lands it on a sleeping display. The action still runs after a timeout.
+     */
+    fun whenOutputBound(action: () -> Unit) {
+        mainHandler.removeCallbacks(outputBoundFallback)
+        outputBoundAction = null
+        val current = view.textureView.holder.surface
+        if (virtualDisplay != null && surface === current && current.isValid) {
+            action()
+            return
+        }
+        outputBoundAction = action
+        mainHandler.postDelayed(outputBoundFallback, OUTPUT_BOUND_TIMEOUT_MS)
+    }
+
+    private fun runOutputBound() {
+        mainHandler.removeCallbacks(outputBoundFallback)
+        val action = outputBoundAction ?: return
+        outputBoundAction = null
+        action()
+    }
 
     fun isSuspended(): Boolean = suspended
 
@@ -153,13 +184,20 @@ class VirtualDisplaySlot(
         return launchNow(intent, displayId)
     }
 
-    override fun surfaceCreated(holder: SurfaceHolder) = updateDisplay(holder, rebind = true)
+    override fun surfaceCreated(holder: SurfaceHolder) {
+        NeXtepLog.info("virtual_display", "Surface created slot=$index display=${displayId()}")
+        updateDisplay(holder, rebind = true)
+    }
 
-    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) = updateDisplay(holder, rebind = true)
+    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+        NeXtepLog.info("virtual_display", "Surface changed slot=$index display=${displayId()} size=${width}x$height")
+        updateDisplay(holder, rebind = true)
+    }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         // A lock, rotation or temporary reparent may replace the output layer.
         // Keep its tasks alive on the same display until the new layer arrives.
+        NeXtepLog.info("virtual_display", "Surface destroyed slot=$index display=${displayId()}")
         runCatching { virtualDisplay?.setSurface(null) }
         surface = null
     }
@@ -170,21 +208,24 @@ class VirtualDisplaySlot(
         view.setOutputSize(geometry.width, geometry.height)
         holder.setFixedSize(geometry.width, geometry.height)
         if (!active || suspended) return
-        val output = holder.surface.takeIf { it.isValid } ?: return
+        val output = holder.surface.takeIf { it.isValid }
         val display = virtualDisplay
         if (display == null) {
-            createDisplay(output, geometry)
+            if (output != null) createDisplay(output, geometry)
             return
         }
-        if (rebind || surface !== output) {
+        if (output != null && (rebind || surface !== output)) {
             // SurfaceHolder can retain its Java Surface while replacing the
             // underlying producer on a resize; identity alone cannot detect it.
             display.setSurface(output)
             surface = output
+            runOutputBound()
         }
-        if (virtualDisplay != null && geometry == activeGeometry) {
+        if (geometry == activeGeometry) {
             return
         }
+        // The display resizes without an output layer; a task parked while the
+        // layer is being recreated then lays out at the new canvas, not the old one.
         activeGeometry = geometry
         runCatching {
             display.resize(geometry.width, geometry.height, geometry.densityDpi)
@@ -200,7 +241,7 @@ class VirtualDisplaySlot(
                 error,
             )
             releaseDisplay("resize/rebind failed")
-            createDisplay(output, geometry)
+            if (output != null) createDisplay(output, geometry)
         }
     }
 
@@ -232,6 +273,7 @@ class VirtualDisplaySlot(
                         "Created slot=$index generation=$surfaceGeneration " +
                             "displayId=${display.display.displayId} geometry=$geometry",
                     )
+                    runOutputBound()
                     pendingLaunch?.let { intent ->
                         pendingLaunch = null
                         launchNow(intent, display.display.displayId)
@@ -261,6 +303,8 @@ class VirtualDisplaySlot(
         // Any display still being created for the old state is released on arrival.
         creation++
         creating = false
+        mainHandler.removeCallbacks(outputBoundFallback)
+        outputBoundAction = null
         val releasedDisplayId = virtualDisplay?.display?.displayId
         runCatching { virtualDisplay?.setSurface(null) }
         virtualDisplay?.release()

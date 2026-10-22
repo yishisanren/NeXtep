@@ -398,6 +398,8 @@ class TaskSwitcherView(
         textureView.setSecure(!allowed)
     }
 
+    fun isCaptureAllowed(): Boolean = captureAllowed
+
     internal fun setAppearance(value: WorkbenchAppearance) {
         appearance = value
         (background as? GradientDrawable)?.apply { setColor(value.card); setStroke(dp(1), value.outline) }

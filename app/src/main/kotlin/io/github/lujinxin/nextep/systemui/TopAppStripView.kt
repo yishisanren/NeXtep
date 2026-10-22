@@ -60,6 +60,7 @@ class TopAppStripView(
 
     internal fun setWideSlot(view: View?) {
         if (wideSlot === view) return
+        NeXtepLog.info("wide_layout", "Wide slot host ${if (view == null) "cleared" else "set"} strip=${width}x$height")
         wideSlot?.let { mediaHost.removeView(it) }
         wideSlot = view
         controls.visibility = if (view == null) VISIBLE else GONE

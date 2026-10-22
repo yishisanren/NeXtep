@@ -911,6 +911,9 @@ class NeXtepWindowController(
 
     private fun setCaptureAllowed(allowed: Boolean) {
         if (allowed && (!workspaceVisible || suspended)) return
+        // Home/recents/lock reset an already protected session; rebuilding every
+        // output layer again would blank the slots for nothing.
+        if (!allowed && !capturePolicy.captureAllowed) return
         if (allowed) capturePolicy.allowForSession() else capturePolicy.reset()
         runCatching { applyCaptureFlags(allowed) }.onFailure {
             capturePolicy.reset()
@@ -1019,13 +1022,23 @@ class NeXtepWindowController(
         val previousIndex = wideSlotIndex
         val previousTask = wideTaskId
         setWideLayout(index, taskId)
-        val result = coordinator.parkMainForWide(taskId, index)
-        if (result.isFailure) setWideLayout(previousIndex, previousTask)
-        return result.isSuccess
+        // The slot's output layer moves into the top bar and is recreated there on the next
+        // traversal. Park the task once the display feeds that layer, so the move never lands
+        // on a sleeping display that still has the rail canvas.
+        slotWindows[index].whenOutputBound {
+            if (wideSlotIndex != index || wideTaskId != taskId) return@whenOutputBound
+            val result = coordinator.parkMainForWide(taskId, index)
+            result.onFailure {
+                NeXtepLog.warn("wide_layout", "Pin failed task=$taskId slot=$index", it)
+                setWideLayout(previousIndex, previousTask)
+            }
+        }
+        return true
     }
 
     private fun setWideLayout(index: Int?, taskId: Int?) {
         if (wideSlotIndex == index && wideTaskId == taskId) return
+        NeXtepLog.info("wide_layout", "Wide layout index=$index task=$taskId display=${index?.let { slotWindows.getOrNull(it)?.displayId() }}")
         wideSlotIndex = index
         wideTaskId = taskId
         viewport.setWideSlot(index)
