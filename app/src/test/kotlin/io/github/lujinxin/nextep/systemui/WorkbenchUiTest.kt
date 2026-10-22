@@ -60,11 +60,11 @@ class WorkbenchUiTest {
     @Test fun lightAndDarkAppearancesUpdateActualControlText() {
         val view = TopAppStripView(context, {}, {},
             { _, _ -> false }, { _, _ -> false })
-        val payment = field(view, "paymentButton") as TextView
+        val payment = field(view, "paymentButton") as android.widget.ImageButton
         view.setAppearance(WorkbenchAppearance.LIGHT)
-        assertEquals(WorkbenchAppearance.LIGHT.accent, payment.currentTextColor)
+        assertEquals(WorkbenchAppearance.LIGHT.accent, payment.imageTintList!!.defaultColor)
         view.setAppearance(WorkbenchAppearance.DARK)
-        assertEquals(WorkbenchAppearance.DARK.accent, payment.currentTextColor)
+        assertEquals(WorkbenchAppearance.DARK.accent, payment.imageTintList!!.defaultColor)
     }
 
 

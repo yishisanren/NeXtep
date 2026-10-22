@@ -140,12 +140,20 @@ class SettingsRepository(private val context: Context) {
         notifyTopContentChanged()
     }
 
+    fun setFavoriteApps(components: List<String>): Boolean {
+        val saved = preferences.edit()
+            .putString(KEY_TOP_APPS, components.distinct().take(MAX_TOP_APPS).joinToString(COMPONENT_SEPARATOR))
+            .putBoolean(KEY_MANUAL_APP_ORDER, true).commit()
+        if (saved) notifyTopContentChanged()
+        return saved
+    }
+
     private companion object {
         const val KEY_TOP_TITLE = "top_title"
         const val KEY_TOP_APPS = "top_apps"
         const val KEY_MANUAL_APP_ORDER = "manual_app_order"
         const val DEFAULT_TOP_TITLE = ""
         const val COMPONENT_SEPARATOR = "\n"
-        const val MAX_TOP_APPS = 36
+        const val MAX_TOP_APPS = 10
     }
 }

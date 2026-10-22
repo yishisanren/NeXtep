@@ -48,7 +48,7 @@ class WorkbenchPolicyTest {
     }
 
     @Test fun sceneRotationHoldExpiresAndRequiresANativeReevaluation() {
-        val request = WorkspaceSceneRequest(42, 0, 10_000, true)
+        val request = WorkspaceSceneRequest(42, 0, 10_000, true, fullscreen = true)
         assertEquals(request, WorkspaceSceneRequest.decode(request.encode()))
         assertTrue(request.holdRotation(11_500))
         assertFalse(request.holdRotation(11_501))
@@ -60,5 +60,17 @@ class WorkbenchPolicyTest {
         assertNull(WorkspaceSceneRequest.decode("42,0,10000,2"))
         assertNull(WorkspaceSceneRequest.decode("-1,0,10000,1"))
         assertNull(WorkspaceSceneRequest.decode("42,999,10000,1"))
+    }
+
+    @Test fun onlyFreshLandscapeFullscreenMediaCanEnterTheTopPlayer() {
+        val request = WorkspaceSceneRequest(42, 0, 10_000, true, fullscreen = true)
+        assertTrue(request.shouldPin(10_500, playingMedia = true))
+        assertFalse(request.copy(orientation = 1).shouldPin(10_500, true))
+        assertFalse(request.copy(fullscreen = false).shouldPin(10_500, true))
+        assertFalse(request.shouldPin(10_500, playingMedia = false))
+        assertFalse(request.shouldPin(13_001, playingMedia = true))
+        assertFalse(request.copy(fullscreen = false).holdRotation(10_500))
+        assertFalse(WorkspaceSceneRequest.decode("42,0,10000,1")!!.shouldPin(10_500, true))
+        assertNull(WorkspaceSceneRequest.decode("42,0,10000,1,2"))
     }
 }

@@ -44,7 +44,7 @@ object SettingsScreen {
         // A saved clone may arrive asynchronously from SystemUI. Keep its order
         // while the unprivileged settings process is still loading the catalogue.
         val selected = settings.appComponents.distinct()
-            .filter { it in appByName || it.contains('|') }.toMutableList()
+            .filter { it in appByName || it.contains('|') }.take(MAX_TOP_APPS).toMutableList()
         var manualMode = settings.manualAppOrder
 
         return LinearLayout(activity).apply {
@@ -71,7 +71,7 @@ object SettingsScreen {
                 contentDescription = activity.getString(R.string.setting_description,
                     activity.getString(R.string.language_title), text)
                 setOnClickListener {
-                    com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+                    SystemDialogs.builder(activity)
                         .setTitle(R.string.language_title)
                         .setSingleChoiceItems(languageLabels, AppLanguage.languageTags.indexOf(selectedLanguage)) { dialog, index ->
                             dialog.dismiss()
@@ -670,5 +670,5 @@ object SettingsScreen {
         LinearLayout.LayoutParams.WRAP_CONTENT,
     )
 
-    private const val MAX_TOP_APPS = 36
+    private const val MAX_TOP_APPS = 10
 }

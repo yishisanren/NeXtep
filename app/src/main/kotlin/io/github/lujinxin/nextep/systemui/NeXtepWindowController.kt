@@ -70,9 +70,6 @@ class NeXtepWindowController(
     private var wideSlotIndex: Int? = null
     private var wideTaskId: Int? = null
     private var seenSceneTime = -1L
-    private var suppressedAutoTaskId: Int? = null
-    private val autoPinnedTasks = mutableSetOf<Int>()
-    private val manifestLandscape = mutableMapOf<android.content.ComponentName, Boolean>()
     private var observedTasks: List<io.github.lujinxin.nextep.task.TaskRepository.TaskSnapshot> = emptyList()
     private val workbenchPreferences = runCatching {
         context.createDeviceProtectedStorageContext().getSharedPreferences("nextep_workbench_v1", Context.MODE_PRIVATE)
@@ -229,7 +226,6 @@ class NeXtepWindowController(
         backdropGeneration.incrementAndGet()
         slotCoordinator?.deactivate()
         setWideLayout(null, null)
-        autoPinnedTasks.clear()
         SystemServerWorkspaceBridge.clearScene(context)
         topAppStrip?.setWorkspaceVisible(false)
         records.forEach { record ->
@@ -363,6 +359,7 @@ class NeXtepWindowController(
                 onPaymentRequested = tools::showPayment,
                 onToolsRequested = tools::showMore,
                 onCompareRequested = tools::showSearch,
+                onEditAppsRequested = tools::showTopApps,
             ).also { topAppStrip = it },
             width = geometry.screenWidth,
             height = geometry.topHeight,
@@ -585,9 +582,26 @@ class NeXtepWindowController(
         if (!workspaceVisible || suspended || wideSlotIndex != null) return false
         val coordinator = slotCoordinator ?: return false
         val target = coordinator.contentExchangeTarget(index) ?: return false
-        val old = geometry()
         contentOriginSide = sidebarSide
         contentTarget = target
+        return animateSlotExpansion(index, target.sourceTask, { contentDrag.active },
+            { complete(false) }) { reveal ->
+            var reported = false
+            fun settled(success: Boolean) {
+                if (reported) return
+                reported = true
+                if (!success) contentSide(contentOriginSide)
+                reveal()
+                complete(success)
+                NeXtepLog.info("content_drag", "Expansion settled success=$success")
+            }
+            if (!coordinator.exchangeContent(target, restoring = false) { settled(it.isSuccess) }) settled(false)
+        }
+    }
+
+    private fun animateSlotExpansion(index: Int, sourceTask: Int?, valid: () -> Boolean,
+                                     rejected: () -> Unit, move: (() -> Unit) -> Unit): Boolean {
+        val old = geometry()
         val destinationSide = if (sidebarSide == SidebarSide.RIGHT) SidebarSide.LEFT else SidebarSide.RIGHT
         val next = old.copy(sidebarSide = destinationSide)
         val bounds = slotWindows.map { slot -> android.graphics.Rect().also {
@@ -603,29 +617,18 @@ class NeXtepWindowController(
                     (next.sidebarTop - old.sidebarTop).toFloat())
             }
             if (i == index) frames.add(WorkspaceSwapAnimator.Frame(
-                io.github.lujinxin.nextep.framework.TaskSurfaceCompat.capturePreview(target.sourceTask), main, to))
+                sourceTask?.let { io.github.lujinxin.nextep.framework.TaskSurfaceCompat.capturePreview(it) }, main, to))
             else frames.add(WorkspaceSwapAnimator.Frame(slotWindows[i].view.captureProtectedPreview(), from, to))
         }
-        // Target stays anchored at its own right edge while the other tasks move left.
+        // Target expands on its own side while the other tasks cross to the opposite rail.
         frames.add(WorkspaceSwapAnimator.Frame(slotWindows[index].view.captureProtectedPreview(),
             android.graphics.RectF(bounds[index]), android.graphics.RectF(next.contentLeft.toFloat(),
                 next.contentTop.toFloat(), next.contentRight.toFloat(), next.contentBottom.toFloat())))
         swapAnimator.animateFrames(frames, listOf(main) + bounds.map { android.graphics.RectF(it) },
             old.screenWidth, old.screenHeight) { reveal ->
-            if (!contentDrag.active || !workspaceVisible || suspended || !contentSide(destinationSide)) {
-                reveal(); complete(false)
-            } else {
-                var reported = false
-                fun settled(success: Boolean) {
-                    if (reported) return
-                    reported = true
-                    if (!success) contentSide(contentOriginSide)
-                    reveal()
-                    complete(success)
-                    NeXtepLog.info("content_drag", "Expansion settled success=$success")
-                }
-                if (!coordinator.exchangeContent(target, restoring = false) { settled(it.isSuccess) }) settled(false)
-            }
+            if (!valid() || !workspaceVisible || suspended || !contentSide(destinationSide)) {
+                reveal(); rejected()
+            } else move(reveal)
         }
         return true
     }
@@ -679,6 +682,17 @@ class NeXtepWindowController(
     }
 
     private fun animateDragSwap(drag: SlotTaskDrag, targetIndex: Int?, move: (() -> Unit) -> Unit) {
+        if (targetIndex == null && drag.dropPoint == null && wideSlotIndex == null) {
+            val sourceTask = mainTaskPresenter.currentTaskId()
+            val origin = sidebarSide
+            if (animateSlotExpansion(drag.slotIndex, sourceTask,
+                    { workspaceVisible && !suspended }, { move {} }) { reveal ->
+                    move {
+                        if (mainTaskPresenter.currentTaskId() != drag.taskId) contentSide(origin)
+                        reveal()
+                    }
+                }) return
+        }
         val geometry = geometry()
         val sourceView = slotWindows.getOrNull(drag.slotIndex)?.view
         val sourceRect = android.graphics.Rect()
@@ -719,6 +733,7 @@ class NeXtepWindowController(
         val bounds = profile.slots
         topAppStrip?.setWideSlot(profile.wideSlotIndex?.let { slotWindows[it].view })
         slotWindows.forEachIndexed { index, slot ->
+            slot.setInteractive(index == profile.wideSlotIndex)
             slot.setLayoutProfile(profile)
             slot.view.setBackgroundSwipeEnabled(slotBackgroundSwipeEnabled && index != profile.wideSlotIndex)
             if (index == profile.wideSlotIndex) return@forEachIndexed
@@ -859,58 +874,62 @@ class NeXtepWindowController(
     private fun observeTasks(tasks: List<io.github.lujinxin.nextep.task.TaskRepository.TaskSnapshot>, states: List<SlotState>) {
         observedTasks = tasks
         publishPrivacy()
-        if (!workspaceVisible || suspended || contentDrag.active || slotCoordinator?.launchingApps == true) return
+        if (!workspaceVisible || suspended || contentDrag.active || slotCoordinator?.launchingApps == true ||
+            slotCoordinator?.movingTasks == true) return
         val scene = SystemServerWorkspaceBridge.scene(context)
-        val foregroundId = tasks.firstOrNull { it.displayId == android.view.Display.DEFAULT_DISPLAY }?.taskId
-        if (foregroundId != suppressedAutoTaskId) suppressedAutoTaskId = null
         if (scene != null && scene.time > seenSceneTime && scene.taskId == wideTaskId &&
-            !io.github.lujinxin.nextep.workspace.WorkspaceSceneRequest.landscape(scene.orientation)) {
+            (!scene.fullscreen || !io.github.lujinxin.nextep.workspace.WorkspaceSceneRequest.landscape(scene.orientation))) {
             seenSceneTime = scene.time
-            setWideLayout(null, null)
+            returnWideToMain()
             return
         }
         wideSlotIndex?.let { index ->
             val current = states.getOrNull(index)
             if (current is SlotState.Occupied && current.taskId != wideTaskId ||
                 wideTaskId != null && tasks.none { it.taskId == wideTaskId }) {
-                if (foregroundId == wideTaskId) suppressedAutoTaskId = wideTaskId
                 setWideLayout(null, null)
             }
         }
         val main = tasks.firstOrNull { it.displayId == android.view.Display.DEFAULT_DISPLAY } ?: return
         if (scene != null && scene.time > seenSceneTime && scene.taskId == main.taskId &&
-            main.taskId != suppressedAutoTaskId &&
-            io.github.lujinxin.nextep.workspace.WorkspaceSceneRequest.landscape(scene.orientation)) {
-            if (pinTask(main.taskId)) { seenSceneTime = scene.time; autoPinnedTasks.add(main.taskId) }
-        } else if (wideSlotIndex == null && main.taskId !in autoPinnedTasks && landscapeCandidate(main)) {
-            if (pinTask(main.taskId)) autoPinnedTasks.add(main.taskId)
+            wideSlotIndex == null && scene.shouldPin(android.os.SystemClock.uptimeMillis(), true) && playingMedia(main)) {
+            if (pinTask(main.taskId)) seenSceneTime = scene.time
         }
     }
 
-    private fun landscapeCandidate(task: io.github.lujinxin.nextep.task.TaskRepository.TaskSnapshot): Boolean {
-        val fixed = manifestLandscape.getOrPut(task.component) {
-            runCatching {
-                val info = context.packageManager.getActivityInfo(task.component, 0)
-                io.github.lujinxin.nextep.workspace.WorkspaceSceneRequest.landscape(info.screenOrientation)
-            }.getOrDefault(false)
-        }
-        if (fixed) return true
-        if (task.bounds.width() <= task.bounds.height()) return false
+    private fun playingMedia(task: io.github.lujinxin.nextep.task.TaskRepository.TaskSnapshot): Boolean {
+        // shortcut: silent players without a MediaSession cannot be identified
+        // as media safely; add an app-specific signal only with device evidence.
         return runCatching {
-            val info = context.packageManager.getApplicationInfo(task.component.packageName, 0)
-            info.category == android.content.pm.ApplicationInfo.CATEGORY_GAME ||
-                context.getSystemService(android.media.session.MediaSessionManager::class.java)
+            context.getSystemService(android.media.session.MediaSessionManager::class.java)
                     .getActiveSessions(null).any { it.packageName == task.component.packageName &&
-                        it.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING }
+                        it.playbackState?.state in setOf(android.media.session.PlaybackState.STATE_PLAYING,
+                            android.media.session.PlaybackState.STATE_BUFFERING) }
+        }.getOrDefault(false) || runCatching {
+            val app = context.packageManager.getApplicationInfo(task.component.packageName, 0)
+            val uid = (task.userId ?: 0) * 100_000 + app.uid % 100_000
+            context.getSystemService(android.media.AudioManager::class.java).activePlaybackConfigurations.any {
+                val clientUid = it.javaClass.getMethod("getClientUid").invoke(it) as? Int
+                clientUid == uid && it.audioAttributes.usage == android.media.AudioAttributes.USAGE_MEDIA &&
+                    it.javaClass.getMethod("isActive").invoke(it) == true
+            }
         }.getOrDefault(false)
     }
 
     private fun pinCurrentLandscape(): Boolean {
-        if (wideSlotIndex != null) { setWideLayout(null, null); return true }
+        if (wideSlotIndex != null) { returnWideToMain(); return true }
         val main = observedTasks.firstOrNull { it.displayId == android.view.Display.DEFAULT_DISPLAY } ?: return false
         val scene = SystemServerWorkspaceBridge.scene(context)
-        if (!landscapeCandidate(main) && scene?.taskId != main.taskId) return false
+        if (scene?.taskId != main.taskId || !scene.shouldPin(android.os.SystemClock.uptimeMillis(), playingMedia(main))) return false
         return pinTask(main.taskId)
+    }
+
+    private fun returnWideToMain() {
+        val index = wideSlotIndex ?: return
+        val task = wideTaskId
+        setWideLayout(null, null)
+        if ((slotCoordinator?.slotStates()?.getOrNull(index) as? SlotState.Occupied)?.taskId == task)
+            slotCoordinator?.onSlotClicked(index)
     }
 
     private fun pinTask(taskId: Int): Boolean {

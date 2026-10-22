@@ -9,17 +9,16 @@ import android.content.pm.LauncherApps
 import android.os.Process
 import android.provider.MediaStore
 import android.text.InputFilter
-import android.view.ContextThemeWrapper
 import android.view.Display
 import android.view.View
 import android.view.WindowManager
-import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import io.github.lujinxin.nextep.R
 import io.github.lujinxin.nextep.config.AppLanguage
+import io.github.lujinxin.nextep.config.SystemDialogs
 import io.github.lujinxin.nextep.logging.NeXtepLog
 import io.github.lujinxin.nextep.workspace.SidebarSide
 
@@ -42,8 +41,11 @@ internal class WorkbenchToolsController(
 ) {
     private var dialog: AlertDialog? = null
     private var searching = false
+    private var editorGeneration = 0
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
 
     fun dismiss() {
+        editorGeneration++
         val previous = dialog
         dialog = null
         if (searching) { searching = false; cancelSearch() }
@@ -52,32 +54,104 @@ internal class WorkbenchToolsController(
 
     fun showPayment() {
         dismiss()
-        val panel = column()
         val labels = listOf(R.string.workbench_wechat_scan, R.string.workbench_wechat_pay,
             R.string.workbench_alipay_scan, R.string.workbench_alipay_pay)
-        WorkbenchIntents.Payment.entries.chunked(2).forEach { actions ->
-            val row = LinearLayout(panel.context)
-            actions.forEach { action ->
-                row.addView(Button(panel.context).apply {
-                    text = string(labels[action.ordinal])
-                    setTextColor(appearance().text)
+        val adapter = object : android.widget.ArrayAdapter<String>(themedContext(),
+            android.R.layout.select_dialog_item, labels.map { string(it) }) {
+            override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup): View {
+                val action = WorkbenchIntents.Payment.entries[position]
+                return (super.getView(position, convertView, parent) as TextView).apply {
+                    val pkg = if (position < 2) "com.tencent.mm" else "com.eg.android.AlipayGphone"
+                    val icon = runCatching { context.packageManager.getApplicationIcon(pkg) }.getOrNull()
+                        ?: WorkbenchIcon(if (position % 2 == 0) WorkbenchIcon.Kind.SCAN else WorkbenchIcon.Kind.CODE,
+                            currentTextColor)
+                    icon.setBounds(0, 0, dp(32), dp(32))
+                    setCompoundDrawablesRelative(icon, null, null, null)
+                    compoundDrawablePadding = dp(16)
                     isEnabled = WorkbenchIntents.payment(action).any(::canOpen)
-                    setOnClickListener {
-                        val result = runCatching {
-                            if (!startPaymentShortcut(action)) {
-                                val intent = WorkbenchIntents.payment(action).firstOrNull(::canOpen)
-                                    ?: error("No supported payment entry")
-                                open(intent).getOrThrow()
-                            }
-                        }
-                        if (result.isSuccess) dismiss() else message(R.string.workbench_unavailable)
-                    }
-                }, LinearLayout.LayoutParams(0, dp(76), 1f).apply { setMargins(dp(3), dp(3), dp(3), dp(3)) })
+                    alpha = if (isEnabled) 1f else .45f
+                }
             }
-            panel.addView(row)
         }
-        show(builder().setTitle(string(R.string.workbench_payment)).setView(panel)
+        show(builder().setTitle(string(R.string.workbench_payment)).setAdapter(adapter) { _, position ->
+            val action = WorkbenchIntents.Payment.entries[position]
+            val result = runCatching {
+                if (!startPaymentShortcut(action)) {
+                    val intent = WorkbenchIntents.payment(action).firstOrNull(::canOpen)
+                        ?: error("No supported payment entry")
+                    open(intent).getOrThrow()
+                }
+            }
+            if (result.isSuccess) dismiss() else message(R.string.workbench_unavailable)
+        }
             .setNegativeButton(string(R.string.workbench_cancel), null).create())
+    }
+
+    fun showTopApps(current: List<String>) {
+        dismiss()
+        val loading = builder().setTitle(string(R.string.workbench_edit_apps))
+            .setMessage(string(R.string.workbench_loading_apps))
+            .setNegativeButton(string(R.string.workbench_cancel), null).create()
+        if (!show(loading)) return
+        val generation = editorGeneration
+        Thread({
+            val result = runCatching {
+                io.github.lujinxin.nextep.apps.LauncherAppRepository(context).load()
+                    .sortedBy { it.label.lowercase() }
+            }
+            handler.post {
+                if (generation != editorGeneration || dialog !== loading) return@post
+                result.onSuccess { entries ->
+                    val selected = current.filter { key -> entries.any { it.key == key } }.take(10).toMutableList()
+                    val adapter = object : android.widget.ArrayAdapter<String>(themedContext(),
+                        android.R.layout.select_dialog_multichoice, entries.map { it.label }) {
+                        override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup): View =
+                            (super.getView(position, convertView, parent) as android.widget.CheckedTextView).apply {
+                                val entry = entries[position]
+                                entry.icon.setBounds(0, 0, dp(32), dp(32))
+                                setCompoundDrawablesRelative(entry.icon, null, null, null)
+                                compoundDrawablePadding = dp(16)
+                                isChecked = entry.key in selected
+                            }
+                    }
+                    val list = android.widget.ListView(themedContext()).apply {
+                        choiceMode = android.widget.ListView.CHOICE_MODE_MULTIPLE
+                        this.adapter = adapter
+                        entries.forEachIndexed { index, entry -> setItemChecked(index, entry.key in selected) }
+                        setOnItemClickListener { _, _, index, _ ->
+                            val key = entries[index].key
+                            if (key in selected) selected.remove(key)
+                            else if (selected.size < 10) selected.add(key)
+                            else message(R.string.workbench_apps_limit)
+                            setItemChecked(index, key in selected)
+                        }
+                    }
+                    val editor = builder().setTitle(string(R.string.workbench_edit_apps))
+                        .setView(list).setNegativeButton(string(R.string.workbench_cancel), null)
+                        .setPositiveButton(string(R.string.workbench_save), null).create()
+                    if (!show(editor)) return@onSuccess
+                    editor.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        editor.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
+                        val keys = ArrayList(selected)
+                        Thread({
+                            val saved = runCatching {
+                                context.contentResolver.call(android.net.Uri.parse("content://io.github.lujinxin.nextep.workspace.config"),
+                                    "set_top_apps", null, android.os.Bundle().apply {
+                                        putStringArrayList(io.github.lujinxin.nextep.config.WorkspaceConfigContract.EXTRA_APPS, keys)
+                                    })?.getBoolean("saved") == true
+                            }.getOrDefault(false)
+                            handler.post {
+                                if (dialog !== editor) return@post
+                                if (saved) dismiss() else {
+                                    editor.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true
+                                    message(R.string.workbench_unavailable)
+                                }
+                            }
+                        }, "NeXtep-SaveFavorites").start()
+                    }
+                }.onFailure { dismiss(); message(R.string.workbench_unavailable) }
+            }
+        }, "NeXtep-Favorites").start()
     }
 
     fun showSearch() {
@@ -86,28 +160,24 @@ internal class WorkbenchToolsController(
         val panel = column()
         val targets = TextView(panel.context).apply {
             text = string(R.string.workbench_delivery_apps)
-            setTextColor(appearance().secondary)
             setPadding(0, dp(12), 0, dp(12))
         }
-        val buttons = LinearLayout(panel.context)
+        val buttons = android.widget.RadioGroup(panel.context).apply { orientation = LinearLayout.HORIZONTAL }
         WorkbenchIntents.Search.entries.forEach { choice ->
-            buttons.addView(Button(panel.context).apply {
+            buttons.addView(android.widget.RadioButton(panel.context).apply {
+                id = View.generateViewId()
                 text = string(if (choice == WorkbenchIntents.Search.DELIVERY) R.string.workbench_delivery else R.string.workbench_shopping)
-                setTextColor(appearance().text)
-                isSelected = choice == mode
+                isChecked = choice == mode
                 setOnClickListener {
                     mode = choice
-                    for (index in 0 until buttons.childCount) buttons.getChildAt(index).isSelected = index == choice.ordinal
                     targets.text = string(if (mode == WorkbenchIntents.Search.DELIVERY)
                         R.string.workbench_delivery_apps else R.string.workbench_shopping_apps)
                 }
-            }, LinearLayout.LayoutParams(0, dp(48), 1f))
+            }, android.widget.RadioGroup.LayoutParams(0, dp(48), 1f))
         }
         val query = EditText(panel.context).apply {
             hint = string(R.string.workbench_query)
             contentDescription = hint
-            setTextColor(appearance().text)
-            setHintTextColor(appearance().secondary)
             setSingleLine(true)
             filters = arrayOf(InputFilter.LengthFilter(200))
         }
@@ -243,7 +313,6 @@ internal class WorkbenchToolsController(
             value.window?.apply {
                 setType(checkNotNull(SystemUiWindowTypeResolver.resolve()))
                 if (!captureAllowed()) addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                setBackgroundDrawable(appearance().background(dp(22).toFloat(), dp(1)))
             }
             value.setOnDismissListener {
                 if (dialog === value) {
@@ -252,8 +321,6 @@ internal class WorkbenchToolsController(
                 }
             }
             value.show()
-            value.window?.setLayout(minOf(context.resources.displayMetrics.widthPixels - dp(24), dp(460)),
-                WindowManager.LayoutParams.WRAP_CONTENT)
             true
         }.onFailure {
             dismiss()
@@ -263,8 +330,7 @@ internal class WorkbenchToolsController(
     }
 
     private fun builder(): AlertDialog.Builder = AlertDialog.Builder(themedContext())
-    private fun themedContext() = ContextThemeWrapper(context, if (appearance() == WorkbenchAppearance.DARK)
-        android.R.style.Theme_DeviceDefault_Dialog_Alert else android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
+    private fun themedContext() = SystemDialogs.context(context, appearance() == WorkbenchAppearance.DARK)
     private fun column() = LinearLayout(themedContext()).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(20), dp(8), dp(20), dp(8))

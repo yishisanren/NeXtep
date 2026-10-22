@@ -63,7 +63,7 @@ class TopAppRepository(context: Context) {
     }.getOrDefault(emptyMap())
 
     private companion object {
-        const val MAX_VISIBLE_APPS = 36
+        const val MAX_VISIBLE_APPS = 10
         const val USAGE_WINDOW_MS = 7L * 24L * 60L * 60L * 1_000L
     }
 }

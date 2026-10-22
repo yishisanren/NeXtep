@@ -28,7 +28,7 @@
 
 # NeXtep
 
-This fork's `1.3.0-workbench.11` adds four live side slots, proportional app cards, protected swap animations, light/dark appearance, a pinned landscape app, top-right payment tools and multi-app product search. Dragging content into an occupied side slot expands that app in place and moves the other tasks to the opposite rail, retaining the native drag and its permission checks. Source and destination apps must support Android global content drag and drop; pinned-video mode does not trigger this expansion. It keeps the existing app selection, bottom-corner diagonal gestures, toolbar spacing and corner.3 performance work. [Custom APK](https://github.com/yishisanren/NeXtep/releases/tag/v1.3.0-workbench.11) · [Features and validation limits](docs/WORKBENCH.md) · [Earlier performance work](docs/PERFORMANCE.md). This is a prerelease for user device validation. Content transfer, app compatibility and smoothness still require user device acceptance. In-app updates still target upstream; installing an upstream build replaces this fork's features.
+This fork's `1.3.0-workbench.12` adds OneStep Workbench: ten favorite apps plus an editor, native ColorOS dialogs, modern tool icons, in-place slot expansion and landscape-fullscreen video pinning. Tapping an empty slot parks the current main app there before opening HOME; the next selected app opens in the main window. Native content drag and bottom-corner gestures remain available. [Custom APK](https://github.com/yishisanren/NeXtep/releases/tag/v1.3.0-workbench.12) · [Features and validation limits](docs/WORKBENCH.md) · [Earlier performance work](docs/PERFORMANCE.md). This is a prerelease; build and installation checks do not replace user device acceptance. In-app updates still target upstream; installing an upstream build replaces this fork's features.
 
 **NeXtep** is an **LSPosed module** that adds a **native side workspace** to ColorOS 16 / 17 while keeping the **stock launcher**. It provides **one main window and four live task slots**, with task switching, drag-and-drop, media controls, and customizable app shortcuts integrated into SystemUI.
 
@@ -44,8 +44,8 @@ The project primarily targets **OnePlus PLK110**, previously verified on **Andro
 
 - **Stock launcher:** keeps the ColorOS launcher without registering a replacement HOME app, with adaptations for launcher shortcut menus, desktop search, and the assistant panel.
 - **One main window and four live slots:** keep several app tasks visible together and move whole tasks between the main window and slots.
-- **Left and right layouts:** switch the slot sidebar using the layout buttons in the control area.
-- **Portrait and both landscape orientations:** controls stay at the phone's physical top. Landscape video/game requests can pin that task above the main window and three remaining side slots. The tools menu also provides a manual pin toggle.
+- **Left and right layouts:** switch through More. Tapping a slot expands it on its own side while the other tasks move to the opposite rail.
+- **Portrait and both landscape orientations:** controls stay at the phone's physical top. Only landscape fullscreen with active media playback pins above the main window and three remaining slots. Exiting fullscreen restores the app and toolbar. Silent players without a media session may not be detected.
 - **Navigation-button adaptation:** optionally fit the main window and slots around the system navigation bar. Enable it for three-button navigation and disable it for gesture navigation; after changing the system navigation mode, toggle the option again.
 - **Task retention:** restore eligible slot tasks that remain in the system when closing and reopening the workspace. Locking pauses slot output; unlocking restores the workspace with its tasks.
 - **System integration:** coexists with native floating windows above the workspace panels, and includes adaptations for keyboard focus, notification shade and Control Center interaction, brightness controls, and video-window sizing.
@@ -70,14 +70,12 @@ The optional **Park the previous main app when switching** setting moves the pre
 ### App strip and cloned apps
 
 - **Automatic ordering:** arrange app shortcuts by recent usage; this is the default mode.
-- **Manual ordering:** choose up to **36 apps**, remove shortcuts, and long-press selected entries to reorder them.
+- **Favorites editor:** show up to **10 apps** plus a trailing add icon. Select or replace installed apps and save; ordering remains available in Settings.
 - **System app clones:** show cloned apps in the app strip and manual selection list, with clone labels to distinguish them from the original apps.
 
-### Media controls
+### Top video
 
-- Display track artwork, title, and artist information from the active system media session, with **previous**, **play/pause**, and **next** controls as supported by the playback app.
-- Tap the artwork, title, or another area outside the playback buttons to open the playback app in the main window. If it occupies a slot, it exchanges with the main window.
-- Use a soft gradient drawn from the track artwork, retaining the colors while paused. With no media session or usable artwork, the card falls back to frosted wallpaper.
+Pinned video hides the title, date, app strip and tools. Use the player's own controls; exiting landscape fullscreen returns the app to the main window and restores the toolbar. There is no separate media control strip or media menu.
 
 ### Appearance and text
 

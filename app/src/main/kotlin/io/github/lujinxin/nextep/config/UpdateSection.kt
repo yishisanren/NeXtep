@@ -10,7 +10,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.github.lujinxin.nextep.R
 import java.util.concurrent.Executors
 
@@ -73,7 +72,7 @@ internal object UpdateSection {
                             downloadUrl = release.downloadUrl
                             download.text = activity.getString(R.string.update_download_version, release.version)
                             status.text = activity.getString(R.string.update_available_status, version, release.version)
-                            MaterialAlertDialogBuilder(activity)
+                            SystemDialogs.builder(activity)
                                 .setTitle(activity.getString(R.string.update_available_title, release.version))
                                 .setMessage(release.notes.ifBlank { activity.getString(R.string.update_notes_empty) } + activity.getString(R.string.update_install_hint))
                                 .setPositiveButton(activity.getString(R.string.update_download)) { _, _ -> openBrowser(activity, release.downloadUrl) }

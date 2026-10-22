@@ -1,5 +1,10 @@
 <resources>
-    <string name="workbench_title">Multitasking workspace</string>
+    <string name="workbench_title">One Step Workspace</string>
+    <string name="workbench_edit_apps">Favorite apps · up to 10</string>
+    <string name="workbench_loading_apps">Loading installed apps…</string>
+    <string name="workbench_apps_limit">Select up to 10 apps</string>
+    <string name="workbench_save">Save</string>
+    <string name="workbench_choose_main_app">Choose an app from the home screen to open in the main window</string>
     <string name="workbench_theme">Switch light / dark appearance</string>
     <string name="workbench_payment">Pay and scan</string>
     <string name="workbench_more">Workspace tools</string>

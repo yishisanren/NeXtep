@@ -1,5 +1,10 @@
 <resources>
-    <string name="workbench_title">多任务工作台</string>
+    <string name="workbench_title">一步工作台</string>
+    <string name="workbench_edit_apps">常用应用 · 最多 10 个</string>
+    <string name="workbench_loading_apps">正在读取已安装应用…</string>
+    <string name="workbench_apps_limit">最多选择 10 个应用</string>
+    <string name="workbench_save">保存</string>
+    <string name="workbench_choose_main_app">在桌面选择应用，将在大窗打开</string>
     <string name="workbench_theme">切换浅色／深色外观</string>
     <string name="workbench_payment">付款与扫一扫</string>
     <string name="workbench_more">工作台工具</string>

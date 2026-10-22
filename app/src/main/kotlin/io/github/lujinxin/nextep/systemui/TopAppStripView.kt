@@ -32,6 +32,7 @@ class TopAppStripView(
     private val onPaymentRequested: () -> Unit = {},
     private val onToolsRequested: () -> Unit = {},
     private val onCompareRequested: () -> Unit = {},
+    private val onEditAppsRequested: (List<String>) -> Unit = {},
 ) : FrameLayout(context) {
     private var landscape = false
     private var controlOnLeft = false
@@ -79,21 +80,18 @@ class TopAppStripView(
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(6), 0, dp(6), 0)
     }
-    private val compareButton = TextView(context).apply {
-        text = AppLanguage.string(context, R.string.workbench_compare_short)
-        contentDescription = AppLanguage.string(context, R.string.workbench_compare)
-        textSize = 14f
-        gravity = Gravity.CENTER
-        isFocusable = true
-        setOnClickListener { onCompareRequested() }
-    }
+    private val compareButton = toolButton(WorkbenchIcon.Kind.COMPARE, R.string.workbench_compare, onCompareRequested)
     private val appScroll = HorizontalScrollView(context).apply {
         isHorizontalScrollBarEnabled = false
         isFillViewport = true
         addView(appRow, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
     }
-    private val paymentButton = toolButton(AppLanguage.string(context, R.string.workbench_pay_short), R.string.workbench_payment, onPaymentRequested)
-    private val toolsButton = toolButton("•••", R.string.workbench_more, onToolsRequested)
+    private val paymentButton = toolButton(WorkbenchIcon.Kind.PAYMENT, R.string.workbench_payment, onPaymentRequested)
+    private val toolsButton = toolButton(WorkbenchIcon.Kind.MORE, R.string.workbench_more, onToolsRequested)
+    private var displayedAppKeys: List<String> = emptyList()
+    private val editAppsButton = toolButton(WorkbenchIcon.Kind.ADD, R.string.workbench_edit_apps) {
+        onEditAppsRequested(displayedAppKeys)
+    }.apply { layoutParams = LinearLayout.LayoutParams(dp(APP_TILE_WIDTH_DP), dp(ACTION_BUTTON_SIZE_DP)) }
     private var appearance = WorkbenchAppearance.DARK
     private val dividerPaint = Paint().apply { color = Color.argb(90, 255, 255, 255) }
     private var loading = false
@@ -177,10 +175,9 @@ class TopAppStripView(
     private fun updateTitle() {
         heading.text = AppLanguage.string(context, R.string.workbench_title)
         paymentButton.contentDescription = AppLanguage.string(context, R.string.workbench_payment)
-        paymentButton.text = AppLanguage.string(context, R.string.workbench_pay_short)
         toolsButton.contentDescription = AppLanguage.string(context, R.string.workbench_more)
-        compareButton.text = AppLanguage.string(context, R.string.workbench_compare_short)
         compareButton.contentDescription = AppLanguage.string(context, R.string.workbench_compare)
+        editAppsButton.contentDescription = AppLanguage.string(context, R.string.workbench_edit_apps)
         dismissHint.text = AppLanguage.string(context, R.string.window_drop_background)
         removeCallbacks(titleTick)
         titleTick.run()
@@ -303,18 +300,18 @@ class TopAppStripView(
         background = value.background()
         titleView.setTextColor(value.text)
         heading.setTextColor(value.text)
-        compareButton.setTextColor(value.accent)
-        compareButton.background = value.background(dp(12).toFloat(), dp(1))
-        listOf(paymentButton, compareButton, toolsButton).forEach {
-            it.setTextColor(value.accent)
-            it.background = value.background(dp(13).toFloat(), dp(1))
+        listOf(paymentButton, compareButton, toolsButton, editAppsButton).forEach {
+            it.imageTintList = android.content.res.ColorStateList.valueOf(value.accent)
+            it.background = android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(value.accent and 0x33ffffff),
+                value.background(dp(13).toFloat(), dp(1)), null)
         }
     }
 
-    private fun toolButton(glyph: String, label: Int, action: () -> Unit) = TextView(context).apply {
-        text = glyph
-        textSize = if (glyph.length > 1 && glyph != "•••") 14f else 23f
-        gravity = Gravity.CENTER
+    private fun toolButton(kind: WorkbenchIcon.Kind, label: Int, action: () -> Unit) = android.widget.ImageButton(context).apply {
+        setImageDrawable(WorkbenchIcon(kind, Color.WHITE))
+        scaleType = ImageView.ScaleType.FIT_CENTER
+        setPadding(dp(12), dp(12), dp(12), dp(12))
         contentDescription = AppLanguage.string(context, label)
         isFocusable = true
         setOnClickListener { action() }
@@ -348,7 +345,9 @@ class TopAppStripView(
         if (internalAppDragActive) { deferredApps = entries; return }
         val scrollX = appScroll.scrollX
         var structureChanged = false
-        val keys = entries.mapTo(hashSetOf()) { it.key }
+        val visible = entries.take(10)
+        displayedAppKeys = visible.map { it.key }
+        val keys = visible.mapTo(hashSetOf()) { it.key }
         val obsolete = appTiles.entries.iterator()
         while (obsolete.hasNext()) {
             val tile = obsolete.next()
@@ -358,12 +357,11 @@ class TopAppStripView(
                 structureChanged = true
             }
         }
-        if (entries.isEmpty()) {
+        if (visible.isEmpty()) {
             appRow.removeAllViews()
-            appRow.addView(messageView(AppLanguage.string(context, R.string.apps_none_available)))
         } else {
             if (appTiles.isEmpty()) appRow.removeAllViews()
-            entries.forEachIndexed { index, entry ->
+            visible.forEachIndexed { index, entry ->
                 val tile = appTiles.getOrPut(entry.key) { AppTile() }
                 tile.bind(entry)
                 if (appRow.getChildAt(index) !== tile) {
@@ -373,6 +371,8 @@ class TopAppStripView(
                 }
             }
         }
+        appRow.removeView(editAppsButton)
+        appRow.addView(editAppsButton)
         if (structureChanged) appScroll.post { appScroll.scrollTo(scrollX, 0) }
         NeXtepLog.info("top_apps", "Rendered ${entries.size} launcher activities")
     }

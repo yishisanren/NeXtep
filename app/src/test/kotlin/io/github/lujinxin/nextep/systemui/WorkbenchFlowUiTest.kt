@@ -56,9 +56,9 @@ class WorkbenchFlowUiTest {
         for (landscape in listOf(false, true)) {
             strip.setLandscape(landscape, landscape)
             layout(strip, (360 * density).toInt(), (142 * density).toInt())
-            val compare = field(strip, "compareButton") as TextView
-            val pay = field(strip, "paymentButton") as TextView
-            val more = field(strip, "toolsButton") as TextView
+            val compare = field(strip, "compareButton") as android.widget.ImageButton
+            val pay = field(strip, "paymentButton") as android.widget.ImageButton
+            val more = field(strip, "toolsButton") as android.widget.ImageButton
             val row = compare.parent as LinearLayout
             assertEquals(4, row.childCount) // Heading/date plus exactly three controls.
             assertSame(compare, row.getChildAt(1))
@@ -396,6 +396,31 @@ class WorkbenchFlowUiTest {
         assertNull(shadowOf(context).nextStartedActivity)
         coordinator.cancelApplicationLaunch()
         assertFalse(coordinator.launchingApps)
+    }
+
+    @Test fun afterPreservingTheOldMainDesktopSelectionLaunchesTheNewAppOnDisplayZero() {
+        exported(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), "test.launcher")
+        val slots = List(4) { io.github.lujinxin.nextep.display.VirtualDisplaySlot(context, it) }
+        val coordinator = io.github.lujinxin.nextep.display.SlotTaskCoordinator(context, slots,
+            io.github.lujinxin.nextep.task.MainTaskPresentationCoordinator(context),
+            { WorkspaceGeometry.forDisplay(360, 800, density = 1f) })
+        coordinator.javaClass.getDeclaredField("active").apply { isAccessible = true }.set(coordinator, true)
+        coordinator.onDisplayReady(0, 42)
+        coordinator.onSlotClicked(0)
+        shadowOf(context).nextStartedActivity
+        val record = (field(coordinator, "slotRecords") as List<*>)[0]!!
+        val preserved = SlotState.Occupied(42, 100, ComponentName("old.app", "old.app.Main"))
+        record.javaClass.getDeclaredField("state").apply { isAccessible = true }.set(record, preserved)
+        coordinator.javaClass.getDeclaredField("desktopParkedTask").apply { isAccessible = true }.set(coordinator, 100)
+        val app = Intent(Intent.ACTION_MAIN).setPackage("test.app")
+        val resolved = exported(app)
+        app.component = ComponentName("test.app", resolved.activityInfo.name)
+        assertTrue(coordinator.openFromLauncher(app).isSuccess)
+        val launched = shadowOf(context).nextStartedActivityForResult
+        assertEquals(app.component, launched.intent.component)
+        assertEquals(0, launched.options.getInt("android.activity.launchDisplayId", -1))
+        assertEquals(preserved, coordinator.slotStates()[0])
+        assertFalse(coordinator.selectingDesktopApp)
     }
 
     @Test fun desktopSelectionAndTileDropLaunchDirectlyOnTheRequestedDisplay() {

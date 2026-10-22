@@ -103,8 +103,10 @@ class SlotTaskCoordinator(
         var redirectedTask: Int? = null
     }
     private val desktopSelection = io.github.lujinxin.nextep.workspace.WorkspaceSlotSelection()
+    private var desktopParkedTask: Int? = null
     val selectingDesktopApp: Boolean get() = desktopSelection.target != null
     val launchingApps: Boolean get() = appLaunch.running
+    val movingTasks: Boolean get() = transitionInProgress
     private val appLaunch = io.github.lujinxin.nextep.workspace.WorkspaceLaunchSequence<LaunchRequest>(
         schedule = { delay, action -> handler.postDelayed({ action() }, delay) },
         start = ::startAppRequest, ready = ::observeAppRequest, commit = ::commitAppRequest,
@@ -126,6 +128,7 @@ class SlotTaskCoordinator(
             slots[index].view.showState(slotRecords[index].state)
         }
         desktopSelection.clear()
+        desktopParkedTask = null
     }
 
     private fun beginDesktopSelection(index: Int, displayId: Int?) {
@@ -134,11 +137,25 @@ class SlotTaskCoordinator(
         if (same) return
         val target = desktopSelection.toggle(index, displayId)
         try {
-            showHomeOnDefaultDisplay()
-            slots[index].view.showWaiting()
-            slots[index].view.setDropHighlighted(true)
-            showMessage(AppLanguage.string(applicationContext, R.string.workbench_choose_app, index + 1))
-            handler.postDelayed({ if (desktopSelection.target == target) clearDesktopSelection() }, 120_000L)
+            fun selectFromHome() {
+                if (!active || suspended || desktopSelection.target != target) return
+                showHomeOnDefaultDisplay()
+                slots[index].view.setDropHighlighted(true)
+                showMessage(AppLanguage.string(applicationContext, R.string.workbench_choose_main_app))
+                handler.postDelayed({ if (desktopSelection.target == target) clearDesktopSelection() }, 120_000L)
+            }
+            val main = taskRepository.foregroundTask()?.takeIf(::isExchangeableMainTask)
+            if (main != null) {
+                val ready = slotRecords[index].state as? SlotState.Ready
+                    ?: error("Destination is not ready; retaining main app")
+                desktopParkedTask = main.taskId
+                runTransition("preserve main for desktop selection slot=$index", completed = { result ->
+                    if (result.isSuccess) runCatching { selectFromHome() }.onFailure {
+                        clearDesktopSelection()
+                        NeXtepLog.warn("slot_picker", "Unable to show HOME after preserving main", it)
+                    } else clearDesktopSelection()
+                }) { parkMainTaskInSlot(index, ready, main) }.getOrThrow()
+            } else selectFromHome()
         } catch (error: Throwable) {
             clearDesktopSelection()
             showMessage(AppLanguage.string(applicationContext, R.string.workbench_launch_failed))
@@ -598,7 +615,10 @@ class SlotTaskCoordinator(
             if (existing != null) {
                 promoteExistingToMain(existing, ::minimizePreviousMain)
             } else {
-                UserTargetedActivityLauncher.start(applicationContext, normalized).getOrThrow()
+                val options = android.app.ActivityOptions.makeBasic().apply {
+                    setLaunchDisplayId(Display.DEFAULT_DISPLAY)
+                }
+                UserTargetedActivityLauncher.start(applicationContext, normalized, options.toBundle()).getOrThrow()
                 minimizePreviousMain()
                 val generation = mainSelectionGeneration
                 handler.postDelayed({
@@ -706,7 +726,13 @@ class SlotTaskCoordinator(
     fun openFromLauncher(sourceIntent: Intent): Result<Unit> {
         ensureMainThread()
         desktopSelection.target?.let { target ->
+            val parkedTask = desktopParkedTask
             clearDesktopSelection()
+            if (parkedTask != null) {
+                if ((slotRecords[target.index].state as? SlotState.Occupied)?.taskId != parkedTask)
+                    return Result.failure(IllegalStateException("Preserved app changed"))
+                return openInMain(sourceIntent, autoMinimizeCurrent = false)
+            }
             val display = slots[target.index].displayId()
             if (target.displayId != null && display != null && display != target.displayId ||
                 slotRecords[target.index].state is SlotState.Occupied) {

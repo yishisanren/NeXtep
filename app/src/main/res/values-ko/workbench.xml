@@ -1,5 +1,5 @@
 <resources>
-    <string name="workbench_title">멀티태스킹 작업 공간</string>
+    <string name="workbench_title">원스텝 작업 공간</string>
     <string name="workbench_theme">밝은 테마 / 어두운 테마 전환</string>
     <string name="workbench_payment">결제 및 스캔</string>
     <string name="workbench_more">작업 공간 도구</string>

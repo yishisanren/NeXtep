@@ -9,7 +9,6 @@ import android.widget.CheckedTextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.github.lujinxin.nextep.R
 import io.github.lujinxin.nextep.icons.LauncherIconManager
 import io.github.lujinxin.nextep.icons.LauncherIconStyle
@@ -52,7 +51,7 @@ internal object LauncherIconPreference {
                 if (key == LauncherIconManager.AUTOMATIC) activity.getString(R.string.launcher_icon_automatic)
                 else activity.getString(LauncherIconStyle.fromKey(key)!!.label)
             }
-            val adapter = object : ArrayAdapter<String>(activity,
+            val adapter = object : ArrayAdapter<String>(SystemDialogs.context(activity),
                 android.R.layout.select_dialog_singlechoice, labels) {
                 override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
                     val row = super.getView(position, convertView, parent) as CheckedTextView
@@ -64,7 +63,7 @@ internal object LauncherIconPreference {
                     return row
                 }
             }
-            MaterialAlertDialogBuilder(activity)
+            SystemDialogs.builder(activity)
                 .setTitle(R.string.launcher_icon_title)
                 .setSingleChoiceItems(adapter, choices.indexOf(LauncherIconManager.selection(activity))) { dialog, index ->
                     dialog.dismiss()

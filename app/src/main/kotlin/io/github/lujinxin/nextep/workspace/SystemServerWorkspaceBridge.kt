@@ -83,6 +83,10 @@ object SystemServerWorkspaceBridge {
         Settings.Global.getInt(context.contentResolver, WIDE_DISPLAY_KEY, -1) == displayId && isWorkspaceActive(context)
     }.getOrDefault(false)
 
+    internal fun hasWideDisplay(context: Context): Boolean = runCatching {
+        Settings.Global.getInt(context.contentResolver, WIDE_DISPLAY_KEY, -1) > 0 && isWorkspaceActive(context)
+    }.getOrDefault(false)
+
     fun publishLayout(context: Context, profile: WorkspaceLayoutProfile) {
         runCatching {
             Settings.Global.putString(context.contentResolver, "nextep_workspace_layout_profile_v2", profile.encode())

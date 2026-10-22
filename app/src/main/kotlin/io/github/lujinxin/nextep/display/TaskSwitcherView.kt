@@ -42,6 +42,7 @@ class TaskSwitcherView(
     private var captureAllowed = false
     private var outputWidth = 0
     private var outputHeight = 0
+    private var contentInput: SlotTouchForwarder? = null
 
     private val statusView = TextView(context).apply {
         setTextColor(Color.WHITE)
@@ -83,6 +84,7 @@ class TaskSwitcherView(
         showState(SlotState.Empty)
         setOnDragListener { _, event -> handleDrag(event) }
         setOnClickListener {
+            if (contentInput != null) return@setOnClickListener
             // The coordinator serializes exchanges and retains the latest selection.
             // Filtering busy taps here prevents that queue from ever receiving them.
             if (currentState is SlotState.Empty || currentState is SlotState.Ready || currentState is SlotState.Occupied ||
@@ -91,6 +93,7 @@ class TaskSwitcherView(
             }
         }
         setOnLongClickListener {
+            if (contentInput != null) return@setOnLongClickListener false
             val occupied = currentState as? SlotState.Occupied
                 ?: return@setOnLongClickListener false
             if (busy || waiting) return@setOnLongClickListener false
@@ -105,7 +108,12 @@ class TaskSwitcherView(
             started
         }
         setOnTouchListener { view, event ->
-            if (listener?.onSlotDragTouch(view, event) == true) {
+            if (contentInput != null) {
+                if (!busy && !waiting) contentInput?.touch(event, android.graphics.RectF(
+                    textureView.left.toFloat(), textureView.top.toFloat(),
+                    textureView.right.toFloat(), textureView.bottom.toFloat()), outputWidth, outputHeight)
+                true
+            } else if (listener?.onSlotDragTouch(view, event) == true) {
                 backgroundSwipe.cancel()
                 true
             } else backgroundSwipe.touch(event)
@@ -114,6 +122,13 @@ class TaskSwitcherView(
 
     fun setListener(listener: Listener) {
         this.listener = listener
+    }
+
+    internal fun setContentInput(value: SlotTouchForwarder?) {
+        if (contentInput === value) return
+        contentInput?.cancel()
+        backgroundSwipe.cancel()
+        contentInput = value
     }
 
     fun finishInternalDrag() = finishDrag()
@@ -165,6 +180,7 @@ class TaskSwitcherView(
 
     fun setBusy(isBusy: Boolean) {
         busy = isBusy
+        if (isBusy) contentInput?.cancel()
         if (isBusy) backgroundSwipe.cancel()
         if (!isBusy) {
             showState(currentState)
@@ -195,6 +211,7 @@ class TaskSwitcherView(
     fun setOutputSize(width: Int, height: Int) {
         require(width > 0 && height > 0)
         if (outputWidth == width && outputHeight == height) return
+        contentInput?.cancel()
         outputWidth = width
         outputHeight = height
         requestLayout()
@@ -238,6 +255,7 @@ class TaskSwitcherView(
     }
 
     override fun onDetachedFromWindow() {
+        contentInput?.cancel()
         backgroundSwipe.cancel()
         finishDrag()
         super.onDetachedFromWindow()
@@ -334,13 +352,16 @@ class TaskSwitcherView(
             textureView.scaleX = 1f
             textureView.scaleY = 1f
         }
-        statusView.text = "+"
-        statusView.textSize = 20f
-        statusView.setPadding(0, 0, 0, dp(2))
+        statusView.text = ""
+        statusView.setPadding(0, 0, 0, 0)
         statusView.layoutParams = LayoutParams(dp(30), dp(30), Gravity.CENTER)
         statusView.background = statusBackground(
             if (highlighted) Color.argb(210, 28, 112, 121) else Color.argb(158, 22, 40, 48),
         )
+        statusView.foreground = io.github.lujinxin.nextep.systemui.WorkbenchIcon(
+            io.github.lujinxin.nextep.systemui.WorkbenchIcon.Kind.ADD, statusView.currentTextColor).apply {
+                setBounds(0, 0, dp(22), dp(22))
+            }
         statusView.animate().cancel()
         // Empty slots remain actionable when a buffer or animation is interrupted.
         setStatusVisible(true)
@@ -393,6 +414,8 @@ class TaskSwitcherView(
     fun setAppearance(card: Int, outline: Int, text: Int) {
         (background as? GradientDrawable)?.apply { setColor(card); setStroke(dp(1), outline) }
         statusView.setTextColor(text)
+        statusView.foreground = io.github.lujinxin.nextep.systemui.WorkbenchIcon(
+            io.github.lujinxin.nextep.systemui.WorkbenchIcon.Kind.ADD, text)
     }
 
     private fun createSurfaceView(): SurfaceView = SurfaceView(context).apply {

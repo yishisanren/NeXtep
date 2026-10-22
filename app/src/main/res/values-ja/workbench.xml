@@ -1,5 +1,5 @@
 <resources>
-    <string name="workbench_title">マルチタスク</string>
+    <string name="workbench_title">ワンステップ</string>
     <string name="workbench_theme">ライト／ダーク表示を切り替え</string>
     <string name="workbench_payment">支払いとスキャン</string>
     <string name="workbench_more">ワークスペースのツール</string>

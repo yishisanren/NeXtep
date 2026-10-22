@@ -34,6 +34,19 @@ class VirtualDisplaySlot(
     private var freshSurfaceRequired = false
     private var surfaceGeneration = 1
     private var listener: Listener? = null
+    private val inputManager by lazy { applicationContext.getSystemService(android.hardware.input.InputManager::class.java) }
+    private val injectInput by lazy { inputManager.javaClass.getMethod("injectInputEvent",
+        android.view.InputEvent::class.java, Int::class.javaPrimitiveType) }
+    private val inputDisplay by lazy { android.view.InputEvent::class.java.getMethod("setDisplayId", Int::class.javaPrimitiveType) }
+    private val input = SlotTouchForwarder { event ->
+        val id = displayId()
+        if (!active || suspended || id == null || id <= 0) false else runCatching {
+            inputDisplay.invoke(event, id)
+            injectInput.invoke(inputManager, event, 0) == true
+        }.onFailure { NeXtepLog.warn("wide_input", "Player input unavailable", it) }.getOrDefault(false)
+    }
+
+    fun setInteractive(value: Boolean) { view.setContentInput(if (value) input else null) }
 
     init {
         view.textureView.holder.addCallback(this)
@@ -75,6 +88,7 @@ class VirtualDisplaySlot(
     }
 
     fun deactivate() {
+        input.cancel()
         active = false
         suspended = false
         pendingLaunch = null
@@ -84,6 +98,7 @@ class VirtualDisplaySlot(
 
     fun setSuspended(value: Boolean) {
         if (value) {
+            input.cancel()
             suspended = true
             // A null Surface turns the display off without removing its tasks/windows.
             // Keep our Surface alive so unlock can reconnect the same display.
