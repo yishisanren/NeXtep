@@ -65,9 +65,11 @@ class WorkbenchPolicyTest {
     @Test fun onlyFreshLandscapeFullscreenMediaCanEnterTheTopPlayer() {
         val request = WorkspaceSceneRequest(42, 0, 10_000, true, fullscreen = true)
         assertTrue(request.shouldPin(10_500, playingMedia = true))
-        assertFalse(request.copy(orientation = 1).shouldPin(10_500, true))
+        // Landscape fullscreen pins even when playback cannot be heard; a portrait fullscreen only with media.
+        assertTrue(request.shouldPin(10_500, playingMedia = false))
+        assertTrue(request.copy(orientation = 1).shouldPin(10_500, true))
+        assertFalse(request.copy(orientation = 1).shouldPin(10_500, false))
         assertFalse(request.copy(fullscreen = false).shouldPin(10_500, true))
-        assertFalse(request.shouldPin(10_500, playingMedia = false))
         assertFalse(request.shouldPin(13_001, playingMedia = true))
         assertFalse(request.copy(fullscreen = false).holdRotation(10_500))
         assertFalse(WorkspaceSceneRequest.decode("42,0,10000,1")!!.shouldPin(10_500, true))

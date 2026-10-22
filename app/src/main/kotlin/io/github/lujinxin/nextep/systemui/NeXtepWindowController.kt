@@ -937,8 +937,7 @@ class NeXtepWindowController(
         if (!workspaceVisible || suspended || contentDrag.active || slotCoordinator?.launchingApps == true ||
             slotCoordinator?.movingTasks == true) return
         val scene = SystemServerWorkspaceBridge.scene(context)
-        if (scene != null && scene.time > seenSceneTime && scene.taskId == wideTaskId &&
-            (!scene.fullscreen || !io.github.lujinxin.nextep.workspace.WorkspaceSceneRequest.landscape(scene.orientation))) {
+        if (scene != null && scene.time > seenSceneTime && scene.taskId == wideTaskId && !scene.fullscreen) {
             seenSceneTime = scene.time
             returnWideToMain()
             return
@@ -952,7 +951,8 @@ class NeXtepWindowController(
         }
         val main = tasks.firstOrNull { it.displayId == android.view.Display.DEFAULT_DISPLAY } ?: return
         if (scene != null && scene.time > seenSceneTime && scene.taskId == main.taskId &&
-            wideSlotIndex == null && scene.shouldPin(android.os.SystemClock.uptimeMillis(), true) && playingMedia(main)) {
+            wideSlotIndex == null && scene.fullscreen && scene.fresh(android.os.SystemClock.uptimeMillis()) &&
+            scene.shouldPin(android.os.SystemClock.uptimeMillis(), playingMedia(main))) {
             if (pinTask(main.taskId)) seenSceneTime = scene.time
         }
     }

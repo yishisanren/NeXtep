@@ -4,7 +4,9 @@ internal data class WorkspaceSceneRequest(val taskId: Int, val orientation: Int,
                                           val fullscreen: Boolean = false) {
     fun fresh(now: Long): Boolean = taskId >= 0 && now - time in 0..3_000L
     fun holdRotation(now: Long): Boolean = canHold && fullscreen && landscape(orientation) && fresh(now) && now - time <= 1_500L
-    fun shouldPin(now: Long, playingMedia: Boolean) = fullscreen && landscape(orientation) && fresh(now) && playingMedia
+    /** A fullscreen request pins the task to the wide slot; landscape alone is enough, a
+     * portrait player additionally has to be heard playing so games and readers stay put. */
+    fun shouldPin(now: Long, playingMedia: Boolean) = fullscreen && fresh(now) && (landscape(orientation) || playingMedia)
     fun encode() = "$taskId,$orientation,$time,${if (canHold) 1 else 0},${if (fullscreen) 1 else 0}"
 
     companion object {
