@@ -181,6 +181,7 @@ class NeXtepWindowController(
     }
 
     fun suspendForLock() {
+        runPendingDeactivate()
         setCaptureAllowed(false)
         tools.dismiss()
         suspended = true
@@ -221,7 +222,14 @@ class NeXtepWindowController(
         return geometry
     }
 
+    private var pendingDeactivate: Runnable? = null
+
+    private fun runPendingDeactivate() {
+        pendingDeactivate?.let { backdropHandler.removeCallbacks(it); it.run() }
+    }
+
     fun show(): WorkspaceGeometry {
+        runPendingDeactivate()
         capturePolicy.reset()
         initializeIfNeeded()
         check(records.size == EXPECTED_WINDOW_COUNT) { "SystemUI windows are unavailable" }
@@ -261,7 +269,14 @@ class NeXtepWindowController(
         cancelDragVisuals()
         suspended = false
         backdropGeneration.incrementAndGet()
-        slotCoordinator?.deactivate()
+        // Keep the four live slots on screen while the panels fade; parking the tasks and
+        // releasing their displays first blanked every slot a frame before the fade began.
+        runPendingDeactivate()
+        pendingDeactivate = Runnable {
+            pendingDeactivate = null
+            runCatching { slotCoordinator?.deactivate() }
+                .onFailure { NeXtepLog.warn("workspace", "Deferred slot deactivation failed; displays retained", it) }
+        }.also { backdropHandler.postDelayed(it, WORKSPACE_EXIT_DURATION_MS) }
         setWideLayout(null, null)
         SystemServerWorkspaceBridge.clearScene(context)
         topAppStrip?.setWorkspaceVisible(false)
