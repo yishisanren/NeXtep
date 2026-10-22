@@ -85,9 +85,10 @@ internal object WorkbenchTaskPolicyHook {
                 arrayOf(Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType))
         }
         val wmHandler = handler.read(owner) as? Handler
-        // Hold a portrait display briefly only if a native re-evaluation
-        // is guaranteed. A failed/unavailable pin never leaves it locked.
-        val scheduled = if (display == 0 && fullscreen && WorkspaceSceneRequest.landscape(orientation) &&
+        // Hold a portrait display briefly only if a native re-evaluation is guaranteed, so a
+        // landscape request pins to the wide slot instead of rotating the whole workspace.
+        // A failed/unavailable pin never leaves it locked.
+        val scheduled = if (display == 0 && WorkspaceSceneRequest.landscape(orientation) &&
             wm != null && update != null && wmHandler != null) {
             wmHandler.postDelayed({ runCatching { update.invoke(wm, false, false) } }, 1_800L)
         } else false

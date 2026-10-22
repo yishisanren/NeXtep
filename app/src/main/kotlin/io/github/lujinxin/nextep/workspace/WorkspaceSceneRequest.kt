@@ -3,10 +3,12 @@ package io.github.lujinxin.nextep.workspace
 internal data class WorkspaceSceneRequest(val taskId: Int, val orientation: Int, val time: Long, val canHold: Boolean,
                                           val fullscreen: Boolean = false) {
     fun fresh(now: Long): Boolean = taskId >= 0 && now - time in 0..3_000L
-    fun holdRotation(now: Long): Boolean = canHold && fullscreen && landscape(orientation) && fresh(now) && now - time <= 1_500L
-    /** A fullscreen request pins the task to the wide slot; landscape alone is enough, a
-     * portrait player additionally has to be heard playing so games and readers stay put. */
-    fun shouldPin(now: Long, playingMedia: Boolean) = fullscreen && fresh(now) && (landscape(orientation) || playingMedia)
+    fun holdRotation(now: Long): Boolean = canHold && landscape(orientation) && fresh(now) && now - time <= 1_500L
+    /** A landscape request from the main task pins it to the wide slot ("横向应用置顶"), whether or
+     * not it also hides the bars; a portrait fullscreen only when it is heard playing media. */
+    fun shouldPin(now: Long, playingMedia: Boolean) = fresh(now) && (landscape(orientation) || (fullscreen && playingMedia))
+    /** The pinned task asked for portrait again and shows its bars: give it the main window back. */
+    fun releasesWide(): Boolean = !landscape(orientation) && !fullscreen
     fun encode() = "$taskId,$orientation,$time,${if (canHold) 1 else 0},${if (fullscreen) 1 else 0}"
 
     companion object {

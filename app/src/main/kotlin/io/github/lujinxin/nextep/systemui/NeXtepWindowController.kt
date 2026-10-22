@@ -949,7 +949,7 @@ class NeXtepWindowController(
         if (!workspaceVisible || suspended || contentDrag.active || slotCoordinator?.launchingApps == true ||
             slotCoordinator?.movingTasks == true) return
         val scene = SystemServerWorkspaceBridge.scene(context)
-        if (scene != null && scene.time > seenSceneTime && scene.taskId == wideTaskId && !scene.fullscreen) {
+        if (scene != null && scene.time > seenSceneTime && scene.taskId == wideTaskId && scene.releasesWide()) {
             seenSceneTime = scene.time
             returnWideToMain()
             return
@@ -963,12 +963,14 @@ class NeXtepWindowController(
         }
         val main = tasks.firstOrNull { it.displayId == android.view.Display.DEFAULT_DISPLAY } ?: return
         if (scene != null && scene.time > seenSceneTime && scene.taskId == main.taskId &&
-            wideSlotIndex == null && scene.fullscreen && scene.fresh(android.os.SystemClock.uptimeMillis())) {
-            val pin = scene.shouldPin(android.os.SystemClock.uptimeMillis(), playingMedia(main))
-            NeXtepLog.info("workbench_scene", "Fullscreen scene task=${main.taskId} orientation=${scene.orientation} pin=$pin")
+            wideSlotIndex == null && scene.fresh(android.os.SystemClock.uptimeMillis())) {
+            val landscape = io.github.lujinxin.nextep.workspace.WorkspaceSceneRequest.landscape(scene.orientation)
+            val pin = scene.shouldPin(android.os.SystemClock.uptimeMillis(), !landscape && playingMedia(main))
+            NeXtepLog.info("workbench_scene", "Scene task=${main.taskId} orientation=${scene.orientation} " +
+                "fullscreen=${scene.fullscreen} pin=$pin")
             if (pin && pinTask(main.taskId)) seenSceneTime = scene.time
-        } else if (scene != null && scene.time > seenSceneTime && scene.fullscreen) {
-            NeXtepLog.info("workbench_scene", "Fullscreen scene ignored task=${scene.taskId} main=${main.taskId} wide=$wideSlotIndex")
+        } else if (scene != null && scene.time > seenSceneTime && scene.taskId != main.taskId) {
+            NeXtepLog.info("workbench_scene", "Scene ignored task=${scene.taskId} main=${main.taskId} wide=$wideSlotIndex")
         }
     }
 
