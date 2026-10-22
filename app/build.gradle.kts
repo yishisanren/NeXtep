@@ -14,8 +14,8 @@ android {
         applicationId = "io.github.lujinxin.nextep"
         minSdk = 35
         targetSdk = 36
-        versionCode = 41
-        versionName = "1.3.0-workbench.27"
+        versionCode = 42
+        versionName = "1.3.0-workbench.28"
 
     }
 

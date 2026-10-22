@@ -57,7 +57,10 @@ data class WorkspaceLayoutProfile(
         val g = normal.geometry
         val short = minOf(g.availableWidth, g.availableHeight)
         val long = maxOf(g.availableWidth, g.availableHeight)
-        val top = (short * 9 / 16 + statusInset).coerceIn(1, (long * .70).toInt())
+        // The control edge is the one height at which the main window stays proportional
+        // and three full-aspect rail cards fill the rail width: 4t = long + g(3·long/short − 2).
+        // A 16:9 player then letterboxes inside its own window; the layout itself has no slack.
+        val top = ((long + gapPixels * (3.0 * long / short - 2)) / 4).toInt().coerceIn(1, (long * .70).toInt())
         val rail = WorkspaceGeometry.proportionalRail(short, long, top).coerceAtLeast(gapPixels + 1)
         return normal.copy(geometry = g.copy(topHeight = top, sidebarWidth = rail), wideSlotIndex = index)
     }

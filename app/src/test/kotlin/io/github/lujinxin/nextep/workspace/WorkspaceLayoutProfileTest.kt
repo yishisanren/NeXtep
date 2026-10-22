@@ -17,8 +17,13 @@ class WorkspaceLayoutProfileTest {
                         if (wideIndex != null) {
                             val inset = (WorkspaceControlMetrics.STATUS_HEIGHT_DP * 476 / 160f).toInt()
                             assertEquals(g.topHeight - inset, profile.slots[wideIndex].height)
-                            assertEquals(minOf(g.availableWidth, g.availableHeight) * 9 / 16, profile.slots[wideIndex].height)
                             assertEquals(profile.slots[wideIndex].height, profile.canvas(wideIndex).height)
+                            // The three rail cards fill the rail width: no side slack beside the main window.
+                            profile.slots.filterIndexed { i, _ -> i != wideIndex }.forEach { slot ->
+                                assertTrue("rail card ${slot.width} in ${g.sidebarWidth}", slot.width >= g.sidebarWidth - profile.gapPixels - 1)
+                            }
+                            val railHeight = profile.slots.filterIndexed { i, _ -> i != wideIndex }.sumOf { it.height } + profile.gapPixels * 2
+                            assertTrue(railHeight >= g.sidebarLogicalHeight - 12)
                         }
                         assertEquals(normal, profile.withWideSlot(null))
                     }
@@ -32,8 +37,9 @@ class WorkspaceLayoutProfileTest {
             .let { legacyFourSlotRecord(it, "9") }
         old[24] = (1106 - (WorkspaceControlMetrics.COMPACT_HEIGHT_DP * 476 / 160f).toInt()).toString()
         val migrated = checkNotNull(WorkspaceLayoutProfile.decode(old.joinToString(",")))
-        assertEquals(684 + (WorkspaceControlMetrics.STATUS_HEIGHT_DP * 476 / 160f).toInt(), migrated.geometry.topHeight)
-        assertEquals(684, migrated.slots[1].height)
+        val fresh = WorkspaceLayoutProfile.create(1216, 2640, 476, WorkspaceNavigationInsets()).withWideSlot(1)
+        assertEquals(fresh.geometry.topHeight, migrated.geometry.topHeight)
+        assertEquals(migrated.geometry.topHeight - (WorkspaceControlMetrics.STATUS_HEIGHT_DP * 476 / 160f).toInt(), migrated.slots[1].height)
         assertEquals(migrated, WorkspaceLayoutProfile.decode(migrated.encode()))
         old[24] = "1"
         assertNull(WorkspaceLayoutProfile.decode(old.joinToString(",")))
@@ -261,9 +267,9 @@ class WorkspaceLayoutProfileTest {
             parts[21 + index * 3] = "607" // Previous 134dp header plus 16:9 wide window.
             val migrated = checkNotNull(WorkspaceLayoutProfile.decode(parts.joinToString(",")))
             assertEquals(index, migrated.wideSlotIndex)
-            // The migrated player keeps 16:9 below the status reserve.
-            assertEquals(607 + (WorkspaceControlMetrics.STATUS_HEIGHT_DP * 480 / 160f).toInt(), migrated.geometry.topHeight)
-            assertEquals(607, migrated.slots[index].height)
+            val fresh = WorkspaceLayoutProfile.create(1080, 2354, 480, WorkspaceNavigationInsets()).withWideSlot(index)
+            assertEquals(fresh.geometry.topHeight, migrated.geometry.topHeight)
+            assertEquals(migrated.geometry.topHeight - (WorkspaceControlMetrics.STATUS_HEIGHT_DP * 480 / 160f).toInt(), migrated.slots[index].height)
             parts[21 + index * 3] = "606"
             assertNull(WorkspaceLayoutProfile.decode(parts.joinToString(",")))
         }
