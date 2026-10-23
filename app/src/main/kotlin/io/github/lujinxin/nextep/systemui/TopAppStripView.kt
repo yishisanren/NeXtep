@@ -138,7 +138,8 @@ class TopAppStripView(
                 addView(
                     appScroll,
                     LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT,
-                        dp(WorkspaceControlMetrics.APP_ICON_SIZE_DP + WorkspaceControlMetrics.APP_BOTTOM_PADDING_DP)),
+                        dp(WorkspaceControlMetrics.APP_ICON_SIZE_DP + WorkspaceControlMetrics.APP_BOTTOM_PADDING_DP))
+                        .apply { topMargin = dp(WorkspaceControlMetrics.APP_ROW_GAP_DP) },
                 )
             },
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
@@ -395,8 +396,8 @@ class TopAppStripView(
             isClickable = true
             isLongClickable = true
             setPadding(dp(5), 0, dp(5), dp(WorkspaceControlMetrics.APP_BOTTOM_PADDING_DP))
-            // Adaptive icons keep a third of their canvas as transparent safe zone; zoom the
-            // view so the visible glyph nearly fills its 44 dp box, and let the tile clip the rest.
+            // Adaptive icons keep part of their canvas as transparent safe zone (a quarter on
+            // ColorOS); zoom the view so the visible glyph is about 38 dp inside its 44 dp box.
             icon.scaleX = APP_ICON_ZOOM
             icon.scaleY = APP_ICON_ZOOM
             addView(
@@ -475,7 +476,7 @@ class TopAppStripView(
 
     private companion object {
         const val APP_TILE_WIDTH_DP = 60
-        const val APP_ICON_ZOOM = 1.4f
+        const val APP_ICON_ZOOM = 1.15f
         const val ACTION_BUTTON_SIZE_DP = 40
         const val ACTION_BUTTON_GAP_DP = 8
         const val REFRESH_INTERVAL_MS = 15_000L
