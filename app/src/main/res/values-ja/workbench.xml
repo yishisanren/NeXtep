@@ -40,6 +40,7 @@
     <string name="workbench_state_unavailable">ワークスペースが応答しません。更新後は再起動してからお試しください。</string>
     <string name="workbench_command_failed">ワークスペースがこの変更を受け付けませんでした。</string>
     <string name="workbench_appearance">外観</string>
+    <string name="appearance_system">システムに従う</string>
     <string name="appearance_light">ライト</string>
     <string name="appearance_dark">ダーク</string>
     <string name="workbench_side">小ウィンドウの位置</string>

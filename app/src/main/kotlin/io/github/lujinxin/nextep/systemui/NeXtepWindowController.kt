@@ -87,9 +87,20 @@ class NeXtepWindowController(
     private val workbenchPreferences = runCatching {
         context.createDeviceProtectedStorageContext().getSharedPreferences("nextep_workbench_v1", Context.MODE_PRIVATE)
     }.getOrNull()
-    private var appearance = runCatching {
-        WorkbenchAppearance.valueOf(workbenchPreferences?.getString("appearance", "DARK") ?: "DARK")
-    }.getOrDefault(WorkbenchAppearance.DARK)
+    /** LIGHT, DARK, or SYSTEM (follow the device's night mode). */
+    private var appearanceMode = workbenchPreferences?.getString("appearance", APPEARANCE_SYSTEM) ?: APPEARANCE_SYSTEM
+    private var appearance = resolveAppearance()
+    private fun resolveAppearance(): WorkbenchAppearance = WorkbenchAppearance.entries.firstOrNull { it.name == appearanceMode }
+        ?: if (android.content.res.Resources.getSystem().configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES)
+            WorkbenchAppearance.DARK else WorkbenchAppearance.LIGHT
+    private val systemThemeCallbacks = object : android.content.ComponentCallbacks {
+        override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+            val resolved = resolveAppearance()
+            if (resolved != appearance) { appearance = resolved; applyAppearance() }
+        }
+        override fun onLowMemory() = Unit
+    }
     private var recentsHidden = workbenchPreferences?.getBoolean("hide_recents", false) ?: false
     private val capturePolicy = io.github.lujinxin.nextep.workspace.WorkspaceCapturePolicy()
     private var controlAtBottom = workbenchPreferences?.getBoolean("control_bottom", false) ?: false
@@ -102,7 +113,7 @@ class NeXtepWindowController(
 
     /** Settings-page view of the SystemUI-owned workbench preferences and session state. */
     fun workbenchState(): android.os.Bundle = android.os.Bundle().apply {
-        putString(TriggerBroadcastContract.EXTRA_APPEARANCE, appearance.name)
+        putString(TriggerBroadcastContract.EXTRA_APPEARANCE, appearanceMode)
         putString(TriggerBroadcastContract.EXTRA_SIDEBAR_SIDE, sidebarSide.name)
         putBoolean(TriggerBroadcastContract.EXTRA_HIDE_RECENTS, recentsHidden)
         putBoolean(TriggerBroadcastContract.EXTRA_CONTROL_BOTTOM, controlAtBottom)
@@ -111,13 +122,14 @@ class NeXtepWindowController(
 
     /** Commands arrive only through the signature-protected control receiver. */
     fun applyWorkbenchCommand(key: String, value: String?): Boolean = when (key) {
-        TriggerBroadcastContract.COMMAND_APPEARANCE -> runCatching { WorkbenchAppearance.valueOf(checkNotNull(value)) }
-            .map { selected ->
-                appearance = selected
-                workbenchPreferences?.edit()?.putString("appearance", selected.name)?.apply()
+        TriggerBroadcastContract.COMMAND_APPEARANCE ->
+            if (value != null && (value == APPEARANCE_SYSTEM || WorkbenchAppearance.entries.any { it.name == value })) {
+                appearanceMode = value
+                workbenchPreferences?.edit()?.putString("appearance", value)?.apply()
+                appearance = resolveAppearance()
                 applyAppearance()
                 true
-            }.getOrDefault(false)
+            } else false
         TriggerBroadcastContract.COMMAND_SIDEBAR_SIDE -> runCatching { SidebarSide.valueOf(checkNotNull(value)) }
             .map { side -> if (workspaceVisible && !suspended) onSidebarSideRequested(side) else { sidebarSide = side; true } }
             .getOrDefault(false)
@@ -171,6 +183,7 @@ class NeXtepWindowController(
     }
 
     init {
+        runCatching { context.registerComponentCallbacks(systemThemeCallbacks) }
         // Warm the cache before the first workspace entry, including after unlocking.
         // Window creation is deliberately lazy; wallpaper observation must not be.
         runCatching {
@@ -1097,6 +1110,7 @@ class NeXtepWindowController(
         const val BACKDROP_MAX_RETRIES = 8
         const val WORKSPACE_ENTER_DURATION_MS = 240L
         const val WORKSPACE_EXIT_DURATION_MS = 180L
+        const val APPEARANCE_SYSTEM = "SYSTEM"
         const val SIDEBAR_SWITCH_DURATION_MS = 220L
         const val ENTER_OFFSET_DP = 12
         const val EXIT_OFFSET_DP = 8

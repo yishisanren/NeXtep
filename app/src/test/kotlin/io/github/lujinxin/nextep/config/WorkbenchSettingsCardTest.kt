@@ -54,10 +54,14 @@ class WorkbenchSettingsCardTest {
         assertTrue(card.recents.isChecked)
         assertFalse(card.capture.isChecked)
         assertTrue(card.appearance.isEnabled && card.capture.isEnabled)
-        (card.appearance.getChildAt(1) as MaterialButton).performClick()
+        (card.appearance.getChildAt(2) as MaterialButton).performClick()
         assertEquals(listOf(TriggerBroadcastContract.COMMAND_APPEARANCE to "DARK"), sent)
         drain()
         assertEquals("DARK", checkedTag(card.appearance))
+        (card.appearance.getChildAt(0) as MaterialButton).performClick()
+        assertEquals(TriggerBroadcastContract.COMMAND_APPEARANCE to "SYSTEM", sent.last())
+        drain()
+        assertEquals("SYSTEM", checkedTag(card.appearance))
         // Tapping the first button while the second is checked: only one may stay highlighted.
         (card.position.getChildAt(0) as MaterialButton).performClick()
         assertEquals(TriggerBroadcastContract.COMMAND_CONTROL_BOTTOM to "false", sent.last())
@@ -65,11 +69,11 @@ class WorkbenchSettingsCardTest {
         assertFalse((card.position.getChildAt(1) as MaterialButton).isChecked)
         // A second tap before the reply is ignored, not queued.
         (card.position.getChildAt(1) as MaterialButton).performClick()
-        assertEquals(2, sent.size)
+        assertEquals(3, sent.size)
         drain()
         assertEquals("false", checkedTag(card.position))
         assertFalse((card.position.getChildAt(1) as MaterialButton).isChecked)
-        assertEquals(2, sent.size)
+        assertEquals(3, sent.size)
         // No reply: controls are disabled and the capture grant cannot be requested.
         card.apply(null)
         assertFalse(card.appearance.isEnabled)
@@ -78,6 +82,6 @@ class WorkbenchSettingsCardTest {
         assertEquals("LIGHT", checkedTag(card.appearance))
         assertTrue(card.capture.isChecked)
         assertFalse(card.capture.isEnabled)
-        assertEquals(2, sent.size)
+        assertEquals(3, sent.size)
     }
 }

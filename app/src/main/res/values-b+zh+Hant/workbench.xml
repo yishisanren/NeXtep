@@ -41,6 +41,7 @@
     <string name="workbench_state_unavailable">工作台未回應。更新後請先重新啟動手機再試。</string>
     <string name="workbench_command_failed">工作台未接受本次修改。</string>
     <string name="workbench_appearance">外觀</string>
+    <string name="appearance_system">跟隨系統</string>
     <string name="appearance_light">淺色</string>
     <string name="appearance_dark">深色</string>
     <string name="workbench_side">小窗位置</string>

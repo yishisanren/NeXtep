@@ -39,7 +39,8 @@ internal class WorkbenchSettingsCard(
         layout.addView(SettingsScreen.sectionTitle(activity, activity.getString(R.string.section_layout)), SettingsScreen.matchWidth())
         layout.addView(status, SettingsScreen.matchWidth())
         appearance = choice(layout, activity.getString(R.string.workbench_appearance), TriggerBroadcastContract.COMMAND_APPEARANCE,
-            listOf("LIGHT" to activity.getString(R.string.appearance_light), "DARK" to activity.getString(R.string.appearance_dark)))
+            listOf("SYSTEM" to activity.getString(R.string.appearance_system),
+                "LIGHT" to activity.getString(R.string.appearance_light), "DARK" to activity.getString(R.string.appearance_dark)))
         side = choice(layout, activity.getString(R.string.workbench_side), TriggerBroadcastContract.COMMAND_SIDEBAR_SIDE,
             listOf("LEFT" to activity.getString(R.string.window_side_left), "RIGHT" to activity.getString(R.string.window_side_right)))
         position = choice(layout, activity.getString(R.string.control_position), TriggerBroadcastContract.COMMAND_CONTROL_BOTTOM,

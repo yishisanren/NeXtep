@@ -40,6 +40,7 @@
     <string name="workbench_state_unavailable">작업 공간이 응답하지 않습니다. 업데이트 후 재부팅한 뒤 다시 시도하세요.</string>
     <string name="workbench_command_failed">작업 공간이 이 변경을 받아들이지 않았습니다.</string>
     <string name="workbench_appearance">외관</string>
+    <string name="appearance_system">시스템 설정 따름</string>
     <string name="appearance_light">밝게</string>
     <string name="appearance_dark">어둡게</string>
     <string name="workbench_side">작은 창 위치</string>
