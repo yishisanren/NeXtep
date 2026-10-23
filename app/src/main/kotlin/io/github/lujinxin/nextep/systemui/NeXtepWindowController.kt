@@ -166,7 +166,7 @@ class NeXtepWindowController(
                 }
                 else -> return
             }
-            if (!suspended) refreshWallpaperBackdrop()
+            if (!suspended && workspaceVisible) refreshWallpaperBackdrop()
         }
     }
 
@@ -185,7 +185,8 @@ class NeXtepWindowController(
                 Context.RECEIVER_EXPORTED,
             )
         }.onFailure { NeXtepLog.warn("wallpaper_backdrop", "Wallpaper change listener unavailable", it) }
-        backdropHandler.post { refreshWallpaperBackdrop() }
+        // The frame is captured on entry; holding a full-screen bitmap while the workspace
+        // is closed only costs SystemUI memory.
         runCatching {
             context.contentResolver.registerContentObserver(SystemServerWorkspaceBridge.sceneUri(), false, sceneObserver)
         }.onFailure { NeXtepLog.warn("workbench_scene", "Scene observer unavailable", it) }
@@ -309,6 +310,7 @@ class NeXtepWindowController(
     fun hide() {
         workspaceVisible = false
         panelGeneration++
+        releaseWallpaperAfterExit()
         tools.dismiss()
         setCaptureAllowed(false)
         publishPrivacy()
@@ -882,6 +884,7 @@ class NeXtepWindowController(
                     fitted?.recycle()
                     return@post
                 }
+                val replaced = wallpaperBitmap
                 if (bitmap != null) {
                     wallpaperBitmap = bitmap
                 } else if (fitted != null) {
@@ -889,6 +892,7 @@ class NeXtepWindowController(
                 }
                 // A failed capture or identity query must not erase a valid frame.
                 applyWallpaperBackdrop(geometry)
+                if (replaced != null && replaced !== wallpaperBitmap) replaced.recycle()
                 // A waking live engine can briefly expose its initial frame even
                 // when capture succeeds. Refresh again after it has started drawing.
                 if (attempt < BACKDROP_SETTLE_REFRESHES ||
@@ -902,6 +906,18 @@ class NeXtepWindowController(
                 }
             }
         }
+    }
+
+    /** The panels fade for 180 ms; afterwards the frame is dropped until the next entry. */
+    private fun releaseWallpaperAfterExit() {
+        backdropGeneration.incrementAndGet()
+        backdropHandler.postDelayed({
+            if (workspaceVisible) return@postDelayed
+            val released = wallpaperBitmap ?: return@postDelayed
+            wallpaperBitmap = null
+            applyWallpaperBackdrop(geometry())
+            released.recycle()
+        }, WORKSPACE_EXIT_DURATION_MS + 50)
     }
 
     private fun applyWallpaperBackdrop(geometry: WorkspaceGeometry) {

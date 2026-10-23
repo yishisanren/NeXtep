@@ -26,7 +26,7 @@
     <string name="app_add">添加 %1$s</string>
     <string name="apps_limit">最多选择 %1$d 个 App</string>
     <string name="app_strip_title">常用应用</string>
-    <string name="app_strip_summary">最多选择 10 个应用并拖动排序，顶栏只显示这份选择。</string>
+    <string name="app_strip_summary">最多选择 10 个应用并拖动排序。它们固定在顶栏最前面，其余位置按最近使用的应用补齐。</string>
     <string name="selected_apps">已选 App</string>
     <string name="all_apps">全部 App</string>
     <string name="app_drag_description">%1$s，长按拖动排序</string>

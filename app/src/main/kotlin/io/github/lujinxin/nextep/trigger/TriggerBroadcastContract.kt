@@ -111,14 +111,22 @@ object TriggerBroadcastContract {
             .putExtra(EXTRA_LAUNCHER_IDENTITY, identity)
     }
 
+    @Volatile private var homePackageCache: Pair<String, Long>? = null
+
+    /** The default HOME rarely changes; every reconcile pass asked PackageManager for it. */
     fun resolveHomePackage(context: Context): String? {
+        val now = android.os.SystemClock.uptimeMillis()
+        homePackageCache?.let { (name, at) -> if (now - at < HOME_PACKAGE_TTL_MS) return name }
         val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         return context.packageManager
             .resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
             ?.activityInfo
             ?.packageName
             ?.takeIf { it.isNotBlank() && it != "android" }
+            ?.also { homePackageCache = it to now }
     }
+
+    private const val HOME_PACKAGE_TTL_MS = 60_000L
 
     private fun targetIntent(action: String, targetPackage: String): Intent =
         Intent(action).setPackage(targetPackage)

@@ -26,7 +26,7 @@
     <string name="app_add">%1$s を追加</string>
     <string name="apps_limit">最大 %1$d 個のアプリを選択できます。</string>
     <string name="app_strip_title">よく使うアプリ</string>
-    <string name="app_strip_summary">最大 10 個のアプリを選んでドラッグで並べ替えます。バーにはこの選択だけが表示されます。</string>
+    <string name="app_strip_summary">最大 10 個のアプリを選んでドラッグで並べ替えます。選んだアプリはバーの先頭に固定され、残りは最近使ったアプリで埋まります。</string>
     <string name="selected_apps">選択したアプリ</string>
     <string name="all_apps">すべてのアプリ</string>
     <string name="app_drag_description">%1$s、長押ししてドラッグで並べ替え</string>

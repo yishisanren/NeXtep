@@ -28,7 +28,7 @@
     <string name="app_add">Add %1$s</string>
     <string name="apps_limit">Select up to %1$d apps.</string>
     <string name="app_strip_title">Favourite apps</string>
-    <string name="app_strip_summary">Choose up to 10 apps and drag to reorder. The strip shows exactly this selection.</string>
+    <string name="app_strip_summary">Choose up to 10 apps and drag to reorder. They stay at the front of the row; recently used apps fill the remaining places.</string>
     <string name="selected_apps">Selected apps</string>
     <string name="all_apps">All apps</string>
     <string name="app_drag_description">%1$s, long-press and drag to reorder</string>

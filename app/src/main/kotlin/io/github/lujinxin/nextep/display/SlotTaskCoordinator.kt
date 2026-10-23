@@ -399,6 +399,15 @@ class SlotTaskCoordinator(
             handler.postDelayed(this, FOREGROUND_RECONCILE_INTERVAL_MS)
         }
     }
+    // Shell's onTaskAppeared/InfoChanged/Vanished drive the foreground reconcile; several
+    // callbacks in one frame coalesce into a single pass.
+    private val taskChangeReconcile = Runnable {
+        if (active && !suspended && !transitionInProgress) reconcileForeground("task changed")
+    }
+    private fun onTaskChanged() {
+        handler.removeCallbacks(taskChangeReconcile)
+        handler.postDelayed(taskChangeReconcile, TASK_CHANGE_COALESCE_MS)
+    }
 
     init {
         require(slots.size == WORKSPACE_SLOT_COUNT) {
@@ -416,6 +425,7 @@ class SlotTaskCoordinator(
         validateExitedTasks()
         active = true
         reconciliationTick = 0
+        TaskSurfaceCompat.taskChangeListener = ::onTaskChanged
         slots.forEach(VirtualDisplaySlot::activate)
         handler.removeCallbacks(reconciliation)
         handler.postDelayed(reconciliation, FOREGROUND_RECONCILE_INTERVAL_MS)
@@ -432,6 +442,7 @@ class SlotTaskCoordinator(
         settlement.cancel()
         deferredMove = null
         active = false
+        TaskSurfaceCompat.taskChangeListener = null
         cancelPendingDragExchange()
         onSlotDragEnded()
         recentSelectionGeneration += 1
@@ -2176,8 +2187,9 @@ class SlotTaskCoordinator(
         const val SETTLE_DELAY_MS = 700L
         const val MAIN_LAUNCH_POLL_MS = 200L
         const val MAX_MAIN_LAUNCH_POLLS = 3
-        const val FOREGROUND_RECONCILE_INTERVAL_MS = 120L
-        const val FULL_RECONCILE_TICKS = 8
+        const val FOREGROUND_RECONCILE_INTERVAL_MS = 500L
+        const val FULL_RECONCILE_TICKS = 2
+        const val TASK_CHANGE_COALESCE_MS = 16L
         const val MAX_PENDING_POLLS = 4
         const val TASK_RESIZE_MODE_RESIZEABLE = 2
         const val WINDOWING_MODE_FULLSCREEN_FALLBACK = 1

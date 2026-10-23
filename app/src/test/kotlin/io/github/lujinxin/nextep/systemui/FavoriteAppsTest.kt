@@ -46,6 +46,18 @@ class FavoriteAppsTest {
         assertEquals(0, row.childCount)
     }
 
+    @Test fun chosenAppsLeadTheRowAndRecentlyUsedAppsFillTheRest() {
+        fun entry(key: String, used: Long) = TopAppRepository.AppEntry(key, key, ColorDrawable(Color.BLUE), Intent(), used)
+        val entries = listOf(entry("old", 10), entry("fresh", 30), entry("pinnedB", 20), entry("never", 0),
+            entry("pinnedA", 0), entry("mid", 25))
+        assertEquals(listOf("pinnedA", "pinnedB", "fresh", "mid", "old"),
+            TopAppRepository.arrange(entries, listOf("pinnedA", "pinnedB", "pinnedA")).map { it.key })
+        assertEquals(listOf("fresh", "mid", "pinnedB", "old"), TopAppRepository.arrange(entries, emptyList()).map { it.key })
+        val many = (0..14).map { entry("app$it", 100L - it) }
+        assertEquals(10, TopAppRepository.arrange(many, listOf("app14")).size)
+        assertEquals("app14", TopAppRepository.arrange(many, listOf("app14")).first().key)
+    }
+
     @Test fun savedSelectionKeepsOrderCapsAtTenAndAllowsAnExplicitEmptyList() {
         SettingsRepository(context).setTopApps((0..15).map { "app$it" })
         assertEquals((0..9).map { "app$it" }, SettingsRepository(context).topBarSettings().appComponents)

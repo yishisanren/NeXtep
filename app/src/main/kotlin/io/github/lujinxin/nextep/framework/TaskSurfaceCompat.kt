@@ -89,9 +89,13 @@ object TaskSurfaceCompat {
         activityManager = context.getSystemService(ActivityManager::class.java)
     }
 
+    /** Shell's task callbacks drive the coordinator; the periodic timer is only a fallback. */
+    @Volatile var taskChangeListener: (() -> Unit)? = null
+
     fun observeTaskInfo(info: ActivityManager.RunningTaskInfo, leash: Any? = null) {
         TaskInfoCompat.readWindowState(info)?.let { observeTaskState(info.taskId, it) }
         if (leash != null) observedLeashes[info.taskId] = leash
+        taskChangeListener?.invoke()
     }
 
     fun observeTaskState(taskId: Int, state: TaskInfoCompat.WindowState) {
@@ -107,6 +111,7 @@ object TaskSurfaceCompat {
         observedStates.remove(taskId)
         observedLeashes.remove(taskId)
         slotSurfaces.remove(taskId)
+        taskChangeListener?.invoke()
         // An OEM reparent may vanish/reappear with a replacement leash. Preserve
         // the target transform until reapply binds that leash or the owner restores
         // the task. Missing observed ownership prevents commits to the old surface.
@@ -543,7 +548,11 @@ object TaskSurfaceCompat {
         }
     }
 
-    private fun findTaskLeash(taskId: Int, requireMainDisplay: Boolean = true): Any? = runCatching {
+    private class OrganizerAccess(val tasks: Any, val lock: Any)
+    @Volatile private var organizerAccess: OrganizerAccess? = null
+
+    /** ShellTaskOrganizer is a Dagger singleton; resolve its task map and lock once. */
+    private fun organizerAccess(): OrganizerAccess = organizerAccess ?: run {
         val loader = hostClassLoader ?: error("SystemUI host class loader is unavailable")
         val factoryClass = loader.loadClass(SYSTEM_UI_FACTORY)
         val initializer = findField(factoryClass, INITIALIZER_FIELD).get(null)
@@ -563,9 +572,21 @@ object TaskSurfaceCompat {
                 }.getOrNull()
             }
             ?: organizer
-        val appearedInfo = synchronized(lock) {
-            invokeRequired(tasks, "get", taskId)
-        } ?: error("Task $taskId is absent from ShellTaskOrganizer")
+        OrganizerAccess(tasks, lock).also { organizerAccess = it }
+    }
+
+    private fun findTaskLeash(taskId: Int, requireMainDisplay: Boolean = true): Any? = runCatching {
+        // Steady state: Shell already told us the leash and the task's current window state.
+        observedLeashes[taskId]?.takeIf { leash ->
+            isValid(leash) && (!requireMainDisplay || observedStates[taskId]?.let { state ->
+                !state.vendorWindowed && state.displayId == Display.DEFAULT_DISPLAY &&
+                    state.windowingMode == WINDOWING_MODE_FULLSCREEN
+            } == true)
+        }?.let { return@runCatching it }
+        val access = organizerAccess()
+        val appearedInfo = synchronized(access.lock) {
+            invokeRequired(access.tasks, "get", taskId)
+        } ?: return@runCatching null // Shell has not reported the task yet: a normal transient state.
         // Shell's TaskAppearedInfo is delivered asynchronously. After a display move its
         // cached TaskInfo can still describe the slot, causing a successful promotion to
         // roll back. The same cache can also outlive a move into an OEM floating window.

@@ -26,7 +26,7 @@
     <string name="app_add">%1$s 추가</string>
     <string name="apps_limit">앱은 최대 %1$d개까지 선택할 수 있습니다.</string>
     <string name="app_strip_title">자주 쓰는 앱</string>
-    <string name="app_strip_summary">최대 10개의 앱을 선택하고 드래그로 순서를 바꿉니다. 막대에는 이 선택만 표시됩니다.</string>
+    <string name="app_strip_summary">최대 10개의 앱을 선택하고 드래그로 순서를 바꿉니다. 선택한 앱은 막대 앞쪽에 고정되고 나머지는 최근 사용한 앱으로 채워집니다.</string>
     <string name="selected_apps">선택한 앱</string>
     <string name="all_apps">모든 앱</string>
     <string name="app_drag_description">%1$s, 길게 누르고 드래그하여 순서 변경</string>
