@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipDescription
 import android.content.Intent
 import android.graphics.Rect
+import io.github.lujinxin.nextep.workspace.WorkspaceControlMetrics
 import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.view.SurfaceView
@@ -45,22 +46,20 @@ class WorkbenchUiTest {
         payment.getDrawingRect(bounds)
         view.offsetDescendantRectToMyCoords(payment, bounds)
         assertTrue(bounds.left > width / 2)
-        assertTrue(bounds.bottom <= (128 * context.resources.displayMetrics.density).toInt())
         val density = context.resources.displayMetrics.density
+        // The control row sits directly above the app row, which ends at the bar's bottom edge.
+        assertTrue(bounds.bottom <= height - (WorkspaceControlMetrics.APP_ICON_SIZE_DP * density).toInt())
         val heading = field(view, "heading") as View
         val headingBounds = Rect()
         heading.getDrawingRect(headingBounds)
         view.offsetDescendantRectToMyCoords(heading, headingBounds)
-        // The title sits below the status band, and the title+app block is centred under it.
+        // The title sits below the status band; the title+app block hugs the bottom edge
+        // so the favourites have no dead space under them.
         assertTrue(headingBounds.top >= (40 * density).toInt())
         val apps = field(view, "appScroll") as View
-        assertTrue(apps.height >= (43 * density).toInt())
-        val row = payment.parent as View
-        val rowBounds = Rect(); row.getDrawingRect(rowBounds); view.offsetDescendantRectToMyCoords(row, rowBounds)
+        assertTrue(apps.height >= (WorkspaceControlMetrics.APP_ICON_SIZE_DP * density).toInt())
         val appsBounds = Rect(); apps.getDrawingRect(appsBounds); view.offsetDescendantRectToMyCoords(apps, appsBounds)
-        val above = rowBounds.top - (40 * density).toInt()
-        val below = height - appsBounds.bottom
-        assertTrue("above=$above below=$below", kotlin.math.abs(above - below) <= (4 * density).toInt())
+        assertTrue("below=${height - appsBounds.bottom}", height - appsBounds.bottom <= (1 * density).toInt())
         // Three equal 40dp buttons separated by 8dp gaps.
         val compare = field(view, "compareButton") as View
         val tools = field(view, "toolsButton") as View

@@ -29,19 +29,21 @@ class WorkbenchIcon(private val kind: Kind, color: Int) : Drawable() {
         when (kind) {
             Kind.ADD -> { line(5f, 12f, 19f, 12f); line(12f, 5f, 12f, 19f) }
             Kind.SETTINGS -> {
-                canvas.drawCircle(12f, 12f, 3.2f, paint)
-                canvas.drawCircle(12f, 12f, 7.2f, paint)
-                for (step in 0 until 8) {
-                    val angle = Math.toRadians(step * 45.0)
-                    val dx = Math.cos(angle).toFloat()
-                    val dy = Math.sin(angle).toFloat()
-                    line(12f + 7.2f * dx, 12f + 7.2f * dy, 12f + 10f * dx, 12f + 10f * dy)
+                // Three sliders: each rail breaks around its knob.
+                listOf(7f to 15f, 12f to 9f, 17f to 14f).forEach { (y, knob) ->
+                    line(4f, y, knob - 3.2f, y); line(knob + 3.2f, y, 20f, y)
+                    canvas.drawCircle(knob, y, 2.1f, paint)
                 }
             }
             Kind.BACK -> { line(19f, 12f, 5f, 12f); line(5f, 12f, 11f, 6f); line(5f, 12f, 11f, 18f) }
             Kind.COMPARE -> {
-                canvas.drawCircle(10.5f, 10.5f, 6.5f, paint); line(15.5f, 15.5f, 21f, 21f)
-                line(7f, 9f, 14f, 9f); line(7f, 12f, 12f, 12f)
+                // Shopping cart: handle, basket, two wheels.
+                canvas.drawPath(Path().apply {
+                    moveTo(2.5f, 4f); lineTo(5.5f, 4f); lineTo(8f, 15f); lineTo(18.5f, 15f); lineTo(21f, 7.5f); lineTo(6.5f, 7.5f)
+                }, paint)
+                paint.style = Paint.Style.FILL
+                canvas.drawCircle(9.5f, 19.5f, 1.6f, paint); canvas.drawCircle(17f, 19.5f, 1.6f, paint)
+                paint.style = Paint.Style.STROKE
             }
             Kind.PAYMENT -> {
                 canvas.drawRoundRect(3f, 5f, 21f, 19f, 3f, 3f, paint)

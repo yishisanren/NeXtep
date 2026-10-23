@@ -171,7 +171,15 @@ class NeXtepWindowController(
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 // Sent by the system on every configuration change, including night mode.
-                Intent.ACTION_CONFIGURATION_CHANGED -> { followSystemAppearance(); return }
+                Intent.ACTION_CONFIGURATION_CHANGED -> {
+                    NeXtepLog.info("workspace", "Configuration changed uiMode global=" +
+                        "${io.github.lujinxin.nextep.framework.ActivityTaskManagerCompat.globalConfiguration()?.uiMode}" +
+                        " process=${context.resources.configuration.uiMode}")
+                    followSystemAppearance()
+                    // Both sources may still carry the previous night mode when this arrives.
+                    listOf(300L, 1500L).forEach { backdropHandler.postDelayed({ followSystemAppearance() }, it) }
+                    return
+                }
                 Intent.ACTION_WALLPAPER_CHANGED -> {
                     // Retain the displayed frame while the new wallpaper starts rendering.
                     // OEM live services may change content without changing component/id.
