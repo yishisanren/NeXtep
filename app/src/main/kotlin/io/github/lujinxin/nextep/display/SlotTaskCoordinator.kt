@@ -516,9 +516,11 @@ class SlotTaskCoordinator(
                 record.preview = if (recent == null) null else preview?.let { full ->
                     // Keep the card-sized copy only; the capture is half the task's size.
                     val card = slot.view
-                    val width = card.textureView.width.coerceAtLeast(1)
-                    val height = card.textureView.height.coerceAtLeast(1)
-                    android.graphics.Bitmap.createScaledBitmap(full, width, height, true)
+                    val width = card.textureView.width
+                    val height = card.textureView.height
+                    // An unmeasured view: keep the capture as is, the cover scales it to fit.
+                    if (width <= 0 || height <= 0) full
+                    else android.graphics.Bitmap.createScaledBitmap(full, width, height, true)
                         .also { if (it !== full) full.recycle() }
                 }
                 NeXtepLog.info("slot_retention", "Parked slot=$index task=${recent?.taskId} " +

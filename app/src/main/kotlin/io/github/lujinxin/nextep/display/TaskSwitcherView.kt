@@ -189,11 +189,13 @@ class TaskSwitcherView(
         coverView.alpha = 1f
         coverView.visibility = VISIBLE
         postDelayed(clearCover, COVER_FALLBACK_MS)
+        NeXtepLog.info("slot_cover", "Shown slot=$slotIndex ${bitmap.width}x${bitmap.height}")
     }
 
     private fun clearCover(fade: Boolean) {
         removeCallbacks(clearCover)
         if (coverView.visibility != VISIBLE) return
+        NeXtepLog.info("slot_cover", "Clearing slot=$slotIndex fade=$fade state=${currentState::class.simpleName}")
         coverView.animate().cancel()
         val release = Runnable {
             coverView.visibility = GONE

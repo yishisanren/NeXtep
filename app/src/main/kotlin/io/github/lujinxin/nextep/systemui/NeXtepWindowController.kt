@@ -406,9 +406,12 @@ class NeXtepWindowController(
         runPendingDeactivate()
         pendingDeactivate = Runnable {
             pendingDeactivate = null
-            setCaptureAllowed(false)
+            // Park (and capture each card's cover) before revoking capture: revoking replaces
+            // every card's output view, and parking would then read an unmeasured view.
+            // The next entry creates fresh output surfaces, which take the protection.
             runCatching { slotCoordinator?.deactivate() }
                 .onFailure { NeXtepLog.warn("workspace", "Deferred slot deactivation failed; displays retained", it) }
+            setCaptureAllowed(false)
         }.also { backdropHandler.postDelayed(it, WORKSPACE_EXIT_DURATION_MS) }
         setWideLayout(null, null)
         SystemServerWorkspaceBridge.clearScene(context)
