@@ -47,19 +47,23 @@ class WorkbenchUiTest {
         view.offsetDescendantRectToMyCoords(payment, bounds)
         assertTrue(bounds.left > width / 2)
         val density = context.resources.displayMetrics.density
-        // The control row sits directly above the app row, which ends at the bar's bottom edge.
+        // The control row sits directly above the app row.
         assertTrue(bounds.bottom <= height - (WorkspaceControlMetrics.APP_ICON_SIZE_DP * density).toInt())
         val heading = field(view, "heading") as View
         val headingBounds = Rect()
         heading.getDrawingRect(headingBounds)
         view.offsetDescendantRectToMyCoords(heading, headingBounds)
-        // The title sits below the status band; the title+app block hugs the bottom edge
-        // so the favourites have no dead space under them.
+        // The title sits below the status band, and the title+app block is centred under it:
+        // the space above the title equals the space under the app row within 4 dp.
         assertTrue(headingBounds.top >= (40 * density).toInt())
         val apps = field(view, "appScroll") as View
         assertTrue(apps.height >= (WorkspaceControlMetrics.APP_ICON_SIZE_DP * density).toInt())
+        val row = payment.parent as View
+        val rowBounds = Rect(); row.getDrawingRect(rowBounds); view.offsetDescendantRectToMyCoords(row, rowBounds)
         val appsBounds = Rect(); apps.getDrawingRect(appsBounds); view.offsetDescendantRectToMyCoords(apps, appsBounds)
-        assertTrue("below=${height - appsBounds.bottom}", height - appsBounds.bottom <= (1 * density).toInt())
+        val above = rowBounds.top - (40 * density).toInt()
+        val below = height - appsBounds.bottom
+        assertTrue("above=$above below=$below", below >= (6 * density).toInt() && kotlin.math.abs(above - below) <= (4 * density).toInt())
         // Three equal 40dp buttons separated by 8dp gaps.
         val compare = field(view, "compareButton") as View
         val tools = field(view, "toolsButton") as View

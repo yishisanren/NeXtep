@@ -91,13 +91,11 @@ class TopAppStripView(
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(6), 0, dp(6), 0)
-        clipChildren = false
     }
     private val compareButton = toolButton(WorkbenchIcon.Kind.COMPARE, R.string.workbench_compare, onCompareRequested)
     private val appScroll = HorizontalScrollView(context).apply {
         isHorizontalScrollBarEnabled = false
         isFillViewport = true
-        clipChildren = false
         addView(appRow, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
     }
     private val paymentButton = toolButton(WorkbenchIcon.Kind.PAYMENT, R.string.workbench_payment, onPaymentRequested)
@@ -130,8 +128,8 @@ class TopAppStripView(
             LinearLayout(context).apply {
                 controls = this
                 orientation = LinearLayout.VERTICAL
-                // Title row and app row sit as one block at the bottom; spare height goes under the status band.
-                gravity = Gravity.BOTTOM
+                // Title row and app row sit as one block, centred in the space below the status band.
+                gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(7), 0, dp(7), dp(WorkspaceControlMetrics.CONTENT_BOTTOM_PADDING_DP))
                 addView(
                     actionRow(),
@@ -397,9 +395,8 @@ class TopAppStripView(
             isClickable = true
             isLongClickable = true
             setPadding(dp(5), 0, dp(5), dp(WorkspaceControlMetrics.APP_BOTTOM_PADDING_DP))
-            // Adaptive icons keep about a quarter of their canvas as transparent safe zone;
-            // zoom the view so the visible glyph fills the tile instead of the padding.
-            clipChildren = false
+            // Adaptive icons keep a third of their canvas as transparent safe zone; zoom the
+            // view so the visible glyph nearly fills its 44 dp box, and let the tile clip the rest.
             icon.scaleX = APP_ICON_ZOOM
             icon.scaleY = APP_ICON_ZOOM
             addView(
@@ -478,7 +475,7 @@ class TopAppStripView(
 
     private companion object {
         const val APP_TILE_WIDTH_DP = 60
-        const val APP_ICON_ZOOM = 1.25f
+        const val APP_ICON_ZOOM = 1.4f
         const val ACTION_BUTTON_SIZE_DP = 40
         const val ACTION_BUTTON_GAP_DP = 8
         const val REFRESH_INTERVAL_MS = 15_000L
