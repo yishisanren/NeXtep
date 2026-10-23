@@ -72,6 +72,8 @@ class NeXtepWindowController(
     private var workspaceVisible = false
     private var wideSlotIndex: Int? = null
     private var wideTaskId: Int? = null
+    /** The Activity shown in the wide slot while its task's landscape request was fresh. */
+    private var wideComponent: android.content.ComponentName? = null
     private var pinPending = false
     private var seenSceneTime = -1L
     private var observedTasks: List<io.github.lujinxin.nextep.task.TaskRepository.TaskSnapshot> = emptyList()
@@ -1078,6 +1080,20 @@ class NeXtepWindowController(
             if (!pinPending && lost || wideTaskId != null && tasks.none { it.taskId == wideTaskId }) {
                 NeXtepLog.info("wide_layout", "Wide slot lost task=$wideTaskId state=$current pending=$pinPending")
                 setWideLayout(null, null)
+            } else if (!pinPending && current is SlotState.Occupied) {
+                // Leaving fullscreen: the task now shows another Activity and no fresh landscape
+                // request stands. system_server does not always publish the portrait request
+                // when the landscape Activity finishes, so this returns the task on its own.
+                val landscapeFresh = scene != null && scene.taskId == wideTaskId &&
+                    scene.shouldPin(android.os.SystemClock.uptimeMillis())
+                val known = wideComponent
+                if (known == null || landscapeFresh) {
+                    wideComponent = current.component
+                } else if (current.component != known) {
+                    NeXtepLog.info("wide_layout", "Wide slot left landscape ${known.className} -> ${current.component.className}")
+                    returnWideToMain()
+                    return
+                }
             }
         }
         val main = tasks.firstOrNull { it.displayId == android.view.Display.DEFAULT_DISPLAY } ?: return
@@ -1140,6 +1156,7 @@ class NeXtepWindowController(
         if (wideSlotIndex == index && wideTaskId == taskId) return
         NeXtepLog.info("wide_layout", "Wide layout index=$index task=$taskId display=${index?.let { slotWindows.getOrNull(it)?.displayId() }}")
         if (index == null) pinPending = false
+        wideComponent = null
         wideSlotIndex = index
         wideTaskId = taskId
         viewport.setWideSlot(index)
