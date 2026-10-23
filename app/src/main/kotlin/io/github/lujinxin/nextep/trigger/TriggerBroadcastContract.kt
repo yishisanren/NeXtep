@@ -12,6 +12,9 @@ object TriggerBroadcastContract {
     const val ACTION_QUERY_WORKSPACE = "io.github.yishisanren.panes.action.QUERY_WORKSPACE"
     const val ACTION_HOST_TOGGLE_REQUEST = "io.github.yishisanren.panes.action.HOST_TOGGLE_REQUEST"
     const val ACTION_HOST_SET_REQUEST = "io.github.yishisanren.panes.action.HOST_SET_REQUEST"
+    /** Open the workspace if needed, then restore the scene named in [EXTRA_SCENE]. */
+    const val ACTION_HOST_SCENE_REQUEST = "io.github.yishisanren.panes.action.HOST_SCENE_REQUEST"
+    const val EXTRA_SCENE = "io.github.yishisanren.panes.extra.SCENE"
     const val ACTION_SYSTEMUI_SET_WORKSPACE = "io.github.yishisanren.panes.action.SYSTEMUI_SET_WORKSPACE"
     const val ACTION_LAUNCH_SLOT_TEST = "io.github.yishisanren.panes.action.LAUNCH_SLOT_TEST"
     const val ACTION_LAUNCHER_APP_REQUEST = "io.github.yishisanren.panes.action.LAUNCHER_APP_REQUEST"
@@ -70,6 +73,11 @@ object TriggerBroadcastContract {
     fun workbenchCommandIntent(key: String, value: String): Intent =
         targetIntent(ACTION_WORKBENCH_COMMAND, SYSTEM_UI_PACKAGE)
             .putExtra(EXTRA_COMMAND_KEY, key).putExtra(EXTRA_COMMAND_VALUE, value)
+
+    fun hostSceneIntent(name: String): Intent = Intent(ACTION_HOST_SCENE_REQUEST)
+        .setComponent(ComponentName(MODULE_PACKAGE, WorkspaceControlBrokerReceiver::class.java.name))
+        .putExtra(EXTRA_SCENE, name)
+        .addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
 
     fun hostSetIntent(active: Boolean): Intent = Intent(ACTION_HOST_SET_REQUEST)
         .setComponent(

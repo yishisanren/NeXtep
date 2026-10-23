@@ -143,6 +143,36 @@ object TriggerCoordinator {
     fun workbenchCommand(context: Context, key: String, value: String, onResult: (RequestResult) -> Unit) =
         send(context, TriggerBroadcastContract.workbenchCommandIntent(key, value), onResult)
 
+    /**
+     * Open the workspace when it is closed, then apply the named scene. Runs from the broker,
+     * never from an Activity of ours: a translucent Activity in the foreground has no task
+     * surface for SystemUI to present, and the entry would fail.
+     */
+    fun restoreScene(context: Context, name: String, onResult: (RequestResult) -> Unit) {
+        val handler = Handler(Looper.getMainLooper())
+        fun apply(attempt: Int) {
+            workbenchCommand(context, TriggerBroadcastContract.COMMAND_SCENE_APPLY, name) { result ->
+                // Right after entry the slots are still coming up and the command is refused.
+                if (result is RequestResult.Ready || attempt >= SCENE_APPLY_ATTEMPTS) onResult(result)
+                else handler.postDelayed({ apply(attempt + 1) }, SCENE_APPLY_RETRY_MS)
+            }
+        }
+        queryWorkbench(context) { state ->
+            when {
+                state !is RequestResult.Ready -> onResult(state)
+                state.active -> apply(1)
+                else -> requestSet(context, true, TriggerSource.SYSTEM_RECOVERY) { entered ->
+                    if (entered is RequestResult.Ready && entered.active) handler.postDelayed({ apply(1) }, SCENE_ENTRY_SETTLE_MS)
+                    else onResult(entered)
+                }
+            }
+        }
+    }
+
+    private const val SCENE_ENTRY_SETTLE_MS = 1500L
+    private const val SCENE_APPLY_RETRY_MS = 1000L
+    private const val SCENE_APPLY_ATTEMPTS = 5
+
     fun requestSet(
         context: Context,
         active: Boolean,
