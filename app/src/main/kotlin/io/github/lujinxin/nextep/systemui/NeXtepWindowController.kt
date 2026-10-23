@@ -703,12 +703,12 @@ class NeXtepWindowController(
                 params.height = geometry.screenHeight
                 params.x = 0
                 params.y = 0
+                // The main pane's rectangle; under a wide picture the app fills it width-fit.
                 contentHighlightView?.layoutParams = FrameLayout.LayoutParams(
-                    (geometry.availableWidth * geometry.contentScale).toInt(),
-                    (geometry.availableHeight * geometry.contentScale).toInt(), Gravity.TOP or Gravity.LEFT,
+                    geometry.contentWidth, geometry.contentHeight, Gravity.TOP or Gravity.LEFT,
                 ).apply {
-                    leftMargin = (geometry.availableLeft * geometry.contentScale + geometry.contentTranslationX).toInt()
-                    topMargin = (geometry.availableTop * geometry.contentScale + geometry.contentTranslationY).toInt()
+                    leftMargin = geometry.contentLeft
+                    topMargin = geometry.contentTop
                 }
             }
         }

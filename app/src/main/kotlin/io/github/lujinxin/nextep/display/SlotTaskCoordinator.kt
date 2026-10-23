@@ -1511,10 +1511,13 @@ class SlotTaskCoordinator(
         val mainOriginal = mainTask?.toLayout()
         val canvas = checkNotNull(slots[slotIndex].geometry())
         val slotBounds = Rect(0, 0, canvas.width, canvas.height)
-        val mainBounds = geometryProvider().let { Rect(0, 0, it.screenWidth, it.screenHeight) }
+        val mainBounds = mainPaneBounds()
+        // The main pane's (possibly shortened) bounds travel in the move itself, so the
+        // promoted app lays out once instead of at the screen size and then again.
         fun move(task: TaskRepository.TaskSnapshot, display: Int, layout: TaskLayout) =
             WindowContainerTransactionCompat.TaskMove(checkNotNull(task.token), display,
-                if (layout.windowingMode == fullscreenWindowingMode()) Rect() else layout.bounds,
+                if (layout.windowingMode != fullscreenWindowingMode()) layout.bounds
+                else if (display == Display.DEFAULT_DISPLAY) mainPaneOverride() else Rect(),
                 layout.densityDpi, layout.windowingMode)
         val sideLayout = TaskLayout(slotBounds, canvas.densityDpi, fullscreenWindowingMode(),
             TASK_RESIZE_MODE_RESIZEABLE)
@@ -2086,9 +2089,7 @@ class SlotTaskCoordinator(
         val current = taskRepository.findTask(task.taskId)
         val mainFullscreen = current?.displayId == Display.DEFAULT_DISPLAY &&
             layout.windowingMode == fullscreenWindowingMode()
-        val expectedBounds = if (mainFullscreen) geometryProvider().let {
-            Rect(0, 0, it.screenWidth, it.screenHeight)
-        } else layout.bounds
+        val expectedBounds = if (mainFullscreen) mainPaneBounds() else layout.bounds
         if (mainFullscreen &&
             current?.bounds == expectedBounds && current.densityDpi == layout.densityDpi &&
             current.windowingMode == layout.windowingMode) {
@@ -2101,7 +2102,7 @@ class SlotTaskCoordinator(
         // restoring a saved resolved Rect and clearing it again adds another layout.
         WindowContainerTransactionCompat.applyTaskLayout(
             token = token,
-            bounds = if (mainFullscreen) Rect() else layout.bounds,
+            bounds = if (mainFullscreen) mainPaneOverride() else layout.bounds,
             densityDpi = layout.densityDpi,
             windowingMode = layout.windowingMode,
         ).getOrThrow()
@@ -2136,6 +2137,16 @@ class SlotTaskCoordinator(
         // inherits the destination's current rotation/size, not a saved landscape Rect.
         // ColorOS floating tasks can report fullscreen; retain their native bounds.
         return if (!vendorWindowed && windowingMode == fullscreenWindowingMode()) Rect() else Rect(bounds)
+    }
+
+    /** Bounds a fullscreen task resolves to in the main pane: the shortened wide-picture canvas, else the screen. */
+    private fun mainPaneBounds(): Rect = geometryProvider().let {
+        Rect(0, 0, it.screenWidth, if (it.mainTaskHeight > 0) it.mainTaskHeight else it.screenHeight)
+    }
+
+    /** The override to apply for the main pane: inherit the display unless the canvas is shortened. */
+    private fun mainPaneOverride(): Rect = geometryProvider().let {
+        if (it.mainTaskHeight > 0) Rect(0, 0, it.screenWidth, it.mainTaskHeight) else Rect()
     }
 
     private fun defaultMainLayout(resizeMode: Int?): TaskLayout {

@@ -124,14 +124,15 @@ class MainTaskPresentationCoordinator(context: Context) {
         }
     }
 
+    /** The move that follows sets the task's bounds itself; clearing them first would lay the app out twice. */
     fun restoreForMove(taskId: Int): Result<Unit> {
         if (presentedTaskId != taskId) return Result.success(Unit)
-        return restoreForeground()
+        return restoreForeground(clearBounds = false)
     }
 
     fun currentTaskId(): Int? = presentedTaskId
 
-    fun restoreForeground(animated: Boolean = false): Result<Unit> {
+    fun restoreForeground(animated: Boolean = false, clearBounds: Boolean = true): Result<Unit> {
         val taskId = presentedTaskId ?: return Result.success(Unit)
         val presenter = activePresenter ?: return Result.success(Unit)
         return presenter.restore(taskId, animated).mapCatching {
@@ -139,7 +140,7 @@ class MainTaskPresentationCoordinator(context: Context) {
             // unless the app was laid out on the shortened wide-picture canvas.
             if (shortenedTaskId == taskId) {
                 shortenedTaskId = null
-                taskRepository.findTask(taskId)?.let { task ->
+                if (clearBounds) taskRepository.findTask(taskId)?.let { task ->
                     task.token?.let { token -> WindowContainerTransactionCompat.applyTaskBounds(token, Rect()) }
                         ?: ActivityTaskManagerCompat.resizeTask(taskId, Rect())
                 }
@@ -163,8 +164,12 @@ class MainTaskPresentationCoordinator(context: Context) {
             if (shortenedTaskId == task.taskId) shortenedTaskId = null
             return clearFullscreenBounds(task)
         }
-        if (shortenedTaskId == task.taskId && task.bounds.height() == height) return Result.success(Unit)
         if (task.vendorWindowed || task.displayId != Display.DEFAULT_DISPLAY) return Result.success(Unit)
+        // A move into the main pane carries these bounds already.
+        if (task.bounds.width() == geometry.screenWidth && task.bounds.height() == height) {
+            shortenedTaskId = task.taskId
+            return Result.success(Unit)
+        }
         NeXtepLog.info("main_task_bounds", "Laying out taskId=${task.taskId} at ${geometry.screenWidth}x$height for the wide picture")
         val bounds = Rect(0, 0, geometry.screenWidth, height)
         return (task.token?.let { WindowContainerTransactionCompat.applyTaskBounds(it, bounds) }
