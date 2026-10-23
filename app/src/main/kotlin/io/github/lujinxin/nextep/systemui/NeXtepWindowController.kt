@@ -90,15 +90,19 @@ class NeXtepWindowController(
     /** LIGHT, DARK, or SYSTEM (follow the device's night mode). */
     private var appearanceMode = workbenchPreferences?.getString("appearance", APPEARANCE_SYSTEM) ?: APPEARANCE_SYSTEM
     private var appearance = resolveAppearance()
-    private fun resolveAppearance(): WorkbenchAppearance = WorkbenchAppearance.entries.firstOrNull { it.name == appearanceMode }
-        ?: if (android.content.res.Resources.getSystem().configuration.uiMode and
-            android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES)
-            WorkbenchAppearance.DARK else WorkbenchAppearance.LIGHT
+    private fun resolveAppearance(config: android.content.res.Configuration = context.resources.configuration): WorkbenchAppearance =
+        WorkbenchAppearance.entries.firstOrNull { it.name == appearanceMode }
+            ?: if (config.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK ==
+                android.content.res.Configuration.UI_MODE_NIGHT_YES) WorkbenchAppearance.DARK else WorkbenchAppearance.LIGHT
+    private fun followSystemAppearance(config: android.content.res.Configuration = context.resources.configuration) {
+        val resolved = resolveAppearance(config)
+        if (resolved == appearance) return
+        appearance = resolved
+        applyAppearance()
+        NeXtepLog.info("workspace", "Appearance follows the system: ${resolved.name}")
+    }
     private val systemThemeCallbacks = object : android.content.ComponentCallbacks {
-        override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
-            val resolved = resolveAppearance()
-            if (resolved != appearance) { appearance = resolved; applyAppearance() }
-        }
+        override fun onConfigurationChanged(newConfig: android.content.res.Configuration) = followSystemAppearance(newConfig)
         override fun onLowMemory() = Unit
     }
     private var recentsHidden = workbenchPreferences?.getBoolean("hide_recents", false) ?: false
@@ -183,7 +187,8 @@ class NeXtepWindowController(
     }
 
     init {
-        runCatching { context.registerComponentCallbacks(systemThemeCallbacks) }
+        // Window/display contexts may not forward configuration changes; the application does.
+        runCatching { (context.applicationContext ?: context).registerComponentCallbacks(systemThemeCallbacks) }
         // Warm the cache before the first workspace entry, including after unlocking.
         // Window creation is deliberately lazy; wallpaper observation must not be.
         runCatching {
@@ -264,6 +269,7 @@ class NeXtepWindowController(
         capturePolicy.reset()
         initializeIfNeeded()
         check(records.size == EXPECTED_WINDOW_COUNT) { "SystemUI windows are unavailable" }
+        followSystemAppearance()
         workspaceVisible = true
         publishPrivacy()
         val geometry = reconfigure().getOrThrow()
