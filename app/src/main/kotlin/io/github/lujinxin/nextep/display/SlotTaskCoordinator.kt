@@ -519,7 +519,8 @@ class SlotTaskCoordinator(
                     android.graphics.Bitmap.createScaledBitmap(full, width, height, true)
                         .also { if (it !== full) full.recycle() }
                 }
-                NeXtepLog.info("slot_retention", "Parked slot=$index task=${recent?.taskId}")
+                NeXtepLog.info("slot_retention", "Parked slot=$index task=${recent?.taskId} " +
+                    "preview=${record.preview?.let { "${it.width}x${it.height}" }}")
             }.onFailure {
                 NeXtepLog.warn("slot_retention", "Could not retain slot=$index task=${task.taskId}", it)
             }

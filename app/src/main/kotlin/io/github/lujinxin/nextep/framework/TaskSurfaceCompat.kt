@@ -205,12 +205,20 @@ object TaskSurfaceCompat {
 
     /** Transient exchange preview, using only this task's layers. Secure layers
      * remain excluded by ScreenCapture's defaults; failure just omits the preview. */
-    fun capturePreview(taskId: Int): android.graphics.Bitmap? = runCatching {
+    fun capturePreview(taskId: Int, sourceCrop: android.graphics.Rect? = null): android.graphics.Bitmap? = runCatching {
         val leash = findTaskLeash(taskId, requireMainDisplay = false) ?: return@runCatching null
         val surfaceType = Class.forName("android.view.SurfaceControl")
         val captureType = Class.forName("android.window.ScreenCaptureInternal")
         val builderType = Class.forName("android.window.ScreenCaptureInternal\$LayerCaptureArgs\$Builder")
         val builder = builderType.getConstructor(surfaceType).newInstance(leash)
+        // A task leash has no bounds of its own; without a crop SurfaceFlinger rejects the
+        // capture ("Boundless layer", EINVAL). The task's bounds on its display are the crop.
+        val crop = sourceCrop ?: observedStates[taskId]?.bounds?.takeIf { !it.isEmpty }
+            ?: findLiveTaskState(taskId)?.bounds?.takeIf { !it.isEmpty }
+        if (crop != null) {
+            builderType.getMethod("setSourceCrop", android.graphics.Rect::class.java)
+                .invoke(builder, android.graphics.Rect(0, 0, crop.width(), crop.height()))
+        }
         builderType.getMethod("setFrameScale", Float::class.javaPrimitiveType).invoke(builder, 0.5f)
         builderType.getMethod("setChildrenOnly", Boolean::class.javaPrimitiveType).invoke(builder, true)
         val args = builderType.getMethod("build").invoke(builder)
