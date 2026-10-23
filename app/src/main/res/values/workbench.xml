@@ -49,7 +49,7 @@
     <string name="control_top">Top</string>
     <string name="control_bottom">Bottom</string>
     <string name="workbench_hide_recents_summary">Only while the workspace is open; tasks are not removed.</string>
-    <string name="workbench_capture_summary">Allowed until exit, lock, Home or Recents; never saved.</string>
+    <string name="workbench_capture_summary">Allowed until exit or lock; never saved.</string>
     <string name="workbench_export_summary">Saves recent event metadata of this module to Downloads.</string>
     <string name="workbench_export_action">Export</string>
     <string name="workbench_exit_summary">Returns every app to its normal window.</string>

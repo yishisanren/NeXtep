@@ -232,10 +232,9 @@ class NeXtepWindowController(
                 Intent.ACTION_USER_PRESENT -> Unit
                 Intent.ACTION_SCREEN_OFF -> { setCaptureAllowed(false); tools.dismiss(); return }
                 Intent.ACTION_CLOSE_SYSTEM_DIALOGS -> {
-                    if (intent.getStringExtra("reason") in setOf("homekey", "recentapps")) {
-                        setCaptureAllowed(false)
-                        tools.dismiss()
-                    }
+                    // Home/recents keep the session's capture permission: revoking it rebuilds
+                    // every slot's output layer, which blanked the four cards on each Home press.
+                    if (intent.getStringExtra("reason") in setOf("homekey", "recentapps")) tools.dismiss()
                     return
                 }
                 else -> return
@@ -397,16 +396,17 @@ class NeXtepWindowController(
         slotCoordinator?.pauseReconciliation()
         releaseWallpaperAfterExit()
         tools.dismiss()
-        setCaptureAllowed(false)
         publishPrivacy()
         cancelDragVisuals()
         suspended = false
         backdropGeneration.incrementAndGet()
         // Keep the four live slots on screen while the panels fade; parking the tasks and
         // releasing their displays first blanked every slot a frame before the fade began.
+        // Revoking capture rebuilds the slots' output layers, so it waits for the fade too.
         runPendingDeactivate()
         pendingDeactivate = Runnable {
             pendingDeactivate = null
+            setCaptureAllowed(false)
             runCatching { slotCoordinator?.deactivate() }
                 .onFailure { NeXtepLog.warn("workspace", "Deferred slot deactivation failed; displays retained", it) }
         }.also { backdropHandler.postDelayed(it, WORKSPACE_EXIT_DURATION_MS) }
@@ -1037,7 +1037,7 @@ class NeXtepWindowController(
 
     private fun setCaptureAllowed(allowed: Boolean) {
         if (allowed && (!workspaceVisible || suspended)) return
-        // Home/recents/lock reset an already protected session; rebuilding every
+        // Lock and exit reset an already protected session; rebuilding every
         // output layer again would blank the slots for nothing.
         if (!allowed && !capturePolicy.captureAllowed) return
         if (allowed) capturePolicy.allowForSession() else capturePolicy.reset()

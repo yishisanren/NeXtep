@@ -49,7 +49,7 @@
     <string name="control_top">頂部</string>
     <string name="control_bottom">底部</string>
     <string name="workbench_hide_recents_summary">僅工作台開啟期間生效，不會結束任務。</string>
-    <string name="workbench_capture_summary">退出、鎖屏、回桌面或最近任務後恢復保護，不會儲存。</string>
+    <string name="workbench_capture_summary">退出或鎖屏後恢復保護，不會儲存。</string>
     <string name="workbench_export_summary">把本模組最近的事件中繼資料儲存到下載目錄。</string>
     <string name="workbench_export_action">匯出</string>
     <string name="workbench_exit_summary">所有應用回到普通視窗。</string>

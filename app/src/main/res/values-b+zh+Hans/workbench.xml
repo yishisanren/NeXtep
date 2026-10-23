@@ -49,7 +49,7 @@
     <string name="control_top">顶部</string>
     <string name="control_bottom">底部</string>
     <string name="workbench_hide_recents_summary">仅工作台打开期间生效，不会结束任务。</string>
-    <string name="workbench_capture_summary">退出、锁屏、回桌面或最近任务后恢复保护，不会保存。</string>
+    <string name="workbench_capture_summary">退出或锁屏后恢复保护，不会保存。</string>
     <string name="workbench_export_summary">把本模块最近的事件元数据保存到下载目录。</string>
     <string name="workbench_export_action">导出</string>
     <string name="workbench_exit_summary">所有应用回到普通窗口。</string>

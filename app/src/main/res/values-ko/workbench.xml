@@ -48,7 +48,7 @@
     <string name="control_top">위</string>
     <string name="control_bottom">아래</string>
     <string name="workbench_hide_recents_summary">작업 공간이 열려 있는 동안만 적용되며 작업을 종료하지 않습니다.</string>
-    <string name="workbench_capture_summary">종료, 잠금, 홈, 최근 작업 후 보호가 복원됩니다. 저장되지 않습니다.</string>
+    <string name="workbench_capture_summary">종료, 잠금 후 보호가 복원됩니다. 저장되지 않습니다.</string>
     <string name="workbench_export_summary">이 모듈의 최근 이벤트 메타데이터를 다운로드에 저장합니다.</string>
     <string name="workbench_export_action">내보내기</string>
     <string name="workbench_exit_summary">모든 앱을 일반 창으로 되돌립니다.</string>

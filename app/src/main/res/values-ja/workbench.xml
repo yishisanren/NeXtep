@@ -48,7 +48,7 @@
     <string name="control_top">上</string>
     <string name="control_bottom">下</string>
     <string name="workbench_hide_recents_summary">ワークスペース表示中のみ有効。タスクは終了しません。</string>
-    <string name="workbench_capture_summary">終了・ロック・ホーム・最近のタスクで保護に戻ります。保存されません。</string>
+    <string name="workbench_capture_summary">終了・ロックで保護に戻ります。保存されません。</string>
     <string name="workbench_export_summary">このモジュールの最近のイベント情報をダウンロードに保存します。</string>
     <string name="workbench_export_action">書き出す</string>
     <string name="workbench_exit_summary">すべてのアプリを通常のウィンドウに戻します。</string>
