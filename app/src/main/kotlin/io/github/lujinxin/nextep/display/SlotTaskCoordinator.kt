@@ -373,6 +373,7 @@ class SlotTaskCoordinator(
     }
 
     private var active = false
+    private var activatedAt = 0L
     private var suspended = false
     private var transitionInProgress = false
     private var recentSelectionPending = false
@@ -439,6 +440,7 @@ class SlotTaskCoordinator(
             record.preview = null
         }
         active = true
+        activatedAt = SystemClock.uptimeMillis()
         reconcilePaused = false
         reconciliationTick = 0
         TaskSurfaceCompat.taskChangeListener = ::onTaskChanged
@@ -920,6 +922,19 @@ class SlotTaskCoordinator(
         setState(slotIndex, SlotState.Ready(displayId), "display ready")
         val retainedTaskId = slotRecords[slotIndex].retainedTaskId
         if (retainedTaskId != null) {
+            // Rebinding blocks the main thread for ~150 ms per slot (display move and layout
+            // waits). Run it after the entry animation, behind the card's cover, one slot per
+            // message so frames get through between them.
+            val delay = (REBIND_AFTER_ENTRY_MS - (SystemClock.uptimeMillis() - activatedAt)).coerceAtLeast(0L)
+            handler.postDelayed({ rebindRetained(slotIndex, displayId, retainedTaskId) }, delay)
+        }
+        handler.postDelayed({ reconcile("display ready") }, SETTLE_DELAY_MS)
+    }
+
+    private fun rebindRetained(slotIndex: Int, displayId: Int, retainedTaskId: Int) {
+        if (!active || slotRecords[slotIndex].state != SlotState.Ready(displayId) ||
+            slotRecords[slotIndex].retainedTaskId != retainedTaskId) return
+        run {
             val exited = slotRecords[slotIndex].exitTask
             if (exited != null && taskRepository.findTask(retainedTaskId) == null) {
                 taskRepository.restoreRecentTask(retainedTaskId, displayId).onFailure {
@@ -964,7 +979,6 @@ class SlotTaskCoordinator(
                     }
             }
         }
-        handler.postDelayed({ reconcile("display ready") }, SETTLE_DELAY_MS)
     }
 
     override fun onDisplayReleased(slotIndex: Int, displayId: Int?, reason: String) {
@@ -2278,6 +2292,8 @@ class SlotTaskCoordinator(
 
     private companion object {
         const val SETTLE_DELAY_MS = 700L
+        /** The rail's entry animation is 240 ms; retained tasks come back once it has settled. */
+        const val REBIND_AFTER_ENTRY_MS = 320L
         const val MAIN_LAUNCH_POLL_MS = 200L
         const val MAX_MAIN_LAUNCH_POLLS = 3
         const val FOREGROUND_RECONCILE_INTERVAL_MS = 500L
