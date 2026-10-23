@@ -70,23 +70,34 @@ internal object WorkbenchTaskPolicyHook {
      * then applies a fixed-rotation transform before SystemUI can pin the task.
      */
     fun reportOrientationSource(source: Any?, orientation: Int) {
-        val activity = source ?: return
+        val activity = source ?: return skipped("no orientation source", orientation)
         runCatching {
             // Only an ActivityRecord belongs to a task; magnification or dream sources are ignored.
-            if (task.read(activity) == null) return
+            if (task.read(activity) == null) return skipped("source ${activity.javaClass.simpleName} has no task", orientation)
+            NeXtepLog.info("workbench_scene", "Landscape request from orientation source ${activity.javaClass.simpleName}")
             reportScene(activity, orientation, mainWindow.read(activity))
         }.onFailure { NeXtepLog.warn("workbench_scene", "Orientation source unavailable", it) }
     }
 
+    @Volatile private var lastSkip = ""
+    @Volatile private var lastSkipAt = 0L
+    private fun skipped(reason: String, orientation: Int) {
+        // Rate-limited: this path runs for every visibility change; log a new reason or every 2 s.
+        val now = SystemClock.uptimeMillis()
+        if (reason == lastSkip && now - lastSkipAt < 2_000L) return
+        lastSkip = reason; lastSkipAt = now
+        NeXtepLog.info("workbench_scene", "Scene skipped reason=$reason orientation=$orientation")
+    }
+
     private fun reportScene(activity: Any, orientation: Int, window: Any?) {
-        val owner = service.read(activity) ?: return
-        val ctx = context.read(owner) as? Context ?: return
+        val owner = service.read(activity) ?: return skipped("no service", orientation)
+        val ctx = context.read(owner) as? Context ?: return skipped("no context", orientation)
         // RAM checks only: this runs for every requested-visibility change on every window.
-        if (!SystemServerWorkspaceBridge.observedActive(ctx)) return
-        val display = displayId.read(activity) as? Int ?: return
-        if (display != 0 && !SystemServerWorkspaceBridge.isWideDisplay(ctx, display)) return
-        if (display == 0 && SystemServerWorkspaceBridge.hasWideDisplay(ctx)) return
-        val id = task.read(activity)?.let { taskId.read(it) as? Int } ?: return
+        if (!SystemServerWorkspaceBridge.observedActive(ctx)) return skipped("inactive", orientation)
+        val display = displayId.read(activity) as? Int ?: return skipped("no display", orientation)
+        if (display != 0 && !SystemServerWorkspaceBridge.isWideDisplay(ctx, display)) return skipped("other display $display", orientation)
+        if (display == 0 && SystemServerWorkspaceBridge.hasWideDisplay(ctx)) return skipped("wide display exists", orientation)
+        val id = task.read(activity)?.let { taskId.read(it) as? Int } ?: return skipped("no task", orientation)
         val attrs = window?.let(attributes::read) as? android.view.WindowManager.LayoutParams
         val types = window?.let(visibleTypes::read) as? Int
         val fullscreen = (types != null && types and android.view.WindowInsets.Type.statusBars() == 0) ||

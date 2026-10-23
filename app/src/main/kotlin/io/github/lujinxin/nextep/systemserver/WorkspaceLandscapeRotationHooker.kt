@@ -29,8 +29,10 @@ class WorkspaceLandscapeRotationHooker : XposedInterface.Hooker {
             if (!held()) WorkbenchTaskPolicyHook.reportOrientationSource(field(display, "mLastOrientationSource"), orientation)
             // A pinned wide video keeps the workspace portrait; a fresh landscape request is held
             // briefly while SystemUI decides whether to pin it.
-            if (held()) last else null
-        }.getOrNull()
+            val hold = held()
+            NeXtepLog.info("workspace_landscape_rotation", "Landscape orientation=$orientation last=$last held=$hold")
+            if (hold) last else null
+        }.onFailure { NeXtepLog.warn("workspace_landscape_rotation", "Hold check failed", it) }.getOrNull()
         if (heldRotation != null) return heldRotation
         val allowBothDirections = runCatching {
             if (chain.getArg(0) != ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) return@runCatching false
