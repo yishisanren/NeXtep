@@ -166,6 +166,8 @@ class NeXtepWindowController(
     private val wallpaperReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
+                // Sent by the system on every configuration change, including night mode.
+                Intent.ACTION_CONFIGURATION_CHANGED -> { followSystemAppearance(); return }
                 Intent.ACTION_WALLPAPER_CHANGED -> {
                     // Retain the displayed frame while the new wallpaper starts rendering.
                     // OEM live services may change content without changing component/id.
@@ -196,6 +198,7 @@ class NeXtepWindowController(
                 wallpaperReceiver,
                 IntentFilter().apply {
                     addAction(Intent.ACTION_WALLPAPER_CHANGED)
+                    addAction(Intent.ACTION_CONFIGURATION_CHANGED)
                     addAction(Intent.ACTION_USER_PRESENT)
                     addAction(Intent.ACTION_SCREEN_OFF)
                     addAction(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
