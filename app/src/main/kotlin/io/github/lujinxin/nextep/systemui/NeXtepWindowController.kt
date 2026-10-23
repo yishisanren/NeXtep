@@ -90,11 +90,15 @@ class NeXtepWindowController(
     /** LIGHT, DARK, or SYSTEM (follow the device's night mode). */
     private var appearanceMode = workbenchPreferences?.getString("appearance", APPEARANCE_SYSTEM) ?: APPEARANCE_SYSTEM
     private var appearance = resolveAppearance()
-    private fun resolveAppearance(config: android.content.res.Configuration = context.resources.configuration): WorkbenchAppearance =
+    // ACTION_CONFIGURATION_CHANGED reaches SystemUI before its own Resources carry the new
+    // night mode, and this ROM's SystemUI never forwards ComponentCallbacks; ask the system.
+    private fun systemConfiguration() = io.github.lujinxin.nextep.framework.ActivityTaskManagerCompat.globalConfiguration()
+        ?: context.resources.configuration
+    private fun resolveAppearance(config: android.content.res.Configuration = systemConfiguration()): WorkbenchAppearance =
         WorkbenchAppearance.entries.firstOrNull { it.name == appearanceMode }
             ?: if (config.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK ==
                 android.content.res.Configuration.UI_MODE_NIGHT_YES) WorkbenchAppearance.DARK else WorkbenchAppearance.LIGHT
-    private fun followSystemAppearance(config: android.content.res.Configuration = context.resources.configuration) {
+    private fun followSystemAppearance(config: android.content.res.Configuration = systemConfiguration()) {
         val resolved = resolveAppearance(config)
         if (resolved == appearance) return
         appearance = resolved
@@ -332,6 +336,8 @@ class NeXtepWindowController(
     fun hide() {
         workspaceVisible = false
         panelGeneration++
+        // The main app is growing back; a task-change reconcile during the fade re-shrank it.
+        slotCoordinator?.pauseReconciliation()
         releaseWallpaperAfterExit()
         tools.dismiss()
         setCaptureAllowed(false)

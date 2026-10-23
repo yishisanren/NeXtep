@@ -385,9 +385,18 @@ class SlotTaskCoordinator(
     private var promotedRecoveryDeadline = 0L
     private var promotedRecoveryAttempts = 0
 
+    private var reconcilePaused = false
+
+    /** Stop foreground fitting while the workspace exits; the deferred deactivate follows. */
+    fun pauseReconciliation() {
+        reconcilePaused = true
+        handler.removeCallbacks(taskChangeReconcile)
+        handler.removeCallbacks(reconciliation)
+    }
+
     private val reconciliation = object : Runnable {
         override fun run() {
-            if (!active || suspended) return
+            if (!active || suspended || reconcilePaused) return
             if (!transitionInProgress) {
                 reconcileForeground("periodic")
                 reconciliationTick += 1
@@ -402,7 +411,7 @@ class SlotTaskCoordinator(
     // Shell's onTaskAppeared/InfoChanged/Vanished drive the foreground reconcile; several
     // callbacks in one frame coalesce into a single pass.
     private val taskChangeReconcile = Runnable {
-        if (active && !suspended && !transitionInProgress) reconcileForeground("task changed")
+        if (active && !suspended && !reconcilePaused && !transitionInProgress) reconcileForeground("task changed")
     }
     private fun onTaskChanged() {
         handler.removeCallbacks(taskChangeReconcile)
@@ -424,6 +433,7 @@ class SlotTaskCoordinator(
         if (active) return
         validateExitedTasks()
         active = true
+        reconcilePaused = false
         reconciliationTick = 0
         TaskSurfaceCompat.taskChangeListener = ::onTaskChanged
         slots.forEach(VirtualDisplaySlot::activate)

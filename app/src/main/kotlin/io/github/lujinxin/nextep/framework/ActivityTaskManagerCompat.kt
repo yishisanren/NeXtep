@@ -15,6 +15,11 @@ object ActivityTaskManagerCompat {
         }.getOrNull()
     }
 
+    /** The global configuration as the system holds it now; a process's own Resources lag behind it. */
+    fun globalConfiguration(): android.content.res.Configuration? = runCatching {
+        service?.javaClass?.getMethod("getConfiguration")?.invoke(service) as? android.content.res.Configuration
+    }.getOrNull()
+
     fun resizeTask(taskId: Int, bounds: Rect): Result<Unit> = invokeTaskMethod(
         names = listOf("resizeTask"),
         taskId = taskId,

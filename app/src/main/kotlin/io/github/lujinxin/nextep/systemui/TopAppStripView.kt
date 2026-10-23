@@ -470,7 +470,7 @@ class TopAppStripView(
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private companion object {
-        const val APP_TILE_WIDTH_DP = 50
+        const val APP_TILE_WIDTH_DP = 60
         const val ACTION_BUTTON_SIZE_DP = 40
         const val ACTION_BUTTON_GAP_DP = 8
         const val REFRESH_INTERVAL_MS = 15_000L
