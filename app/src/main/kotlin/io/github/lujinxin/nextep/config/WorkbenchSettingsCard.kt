@@ -148,6 +148,15 @@ internal class WorkbenchSettingsCard(
                     setOnClickListener { command(TriggerBroadcastContract.COMMAND_SCENE_APPLY, scene.name) }
                 })
                 addView(SettingsRowButton.create(activity).apply {
+                    text = activity.getString(R.string.scene_shortcut_action)
+                    setOnClickListener {
+                        if (!SceneShortcutActivity.pin(activity, scene.name)) {
+                            Toast.makeText(activity, R.string.scene_shortcut_unsupported, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                    .apply { marginStart = SettingsScreen.dp(activity, 8) })
+                addView(SettingsRowButton.create(activity).apply {
                     text = activity.getString(R.string.scene_delete_action)
                     setOnClickListener { command(TriggerBroadcastContract.COMMAND_SCENE_DELETE, scene.name) }
                 }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)

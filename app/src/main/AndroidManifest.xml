@@ -62,6 +62,13 @@
             android:label="@string/app_strip_title" />
 
         <activity
+            android:name=".config.SceneShortcutActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <activity
             android:name=".config.ShareToPaneActivity"
             android:exported="true"
             android:excludeFromRecents="true"

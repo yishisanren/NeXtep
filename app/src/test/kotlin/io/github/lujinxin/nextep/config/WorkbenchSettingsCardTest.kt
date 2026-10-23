@@ -3,6 +3,7 @@ package io.github.lujinxin.nextep.config
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
+import io.github.lujinxin.nextep.R
 import io.github.lujinxin.nextep.trigger.TriggerBroadcastContract
 import io.github.lujinxin.nextep.trigger.TriggerCoordinator
 import org.junit.Assert.*
@@ -83,5 +84,38 @@ class WorkbenchSettingsCardTest {
         assertTrue(card.capture.isChecked)
         assertFalse(card.capture.isEnabled)
         assertEquals(3, sent.size)
+    }
+
+    @Test fun scenesAreListedWithRestoreHomeAndDeleteAndRestoreNeedsAnOpenWorkspace() {
+        val activity = Robolectric.buildActivity(AppCompatActivity::class.java).create().get()
+        activity.setTheme(com.google.android.material.R.style.Theme_MaterialComponents_DayNight_NoActionBar)
+        val scenes = io.github.lujinxin.nextep.workspace.WorkbenchScene.encode(listOf(
+            io.github.lujinxin.nextep.workspace.WorkbenchScene("工作", "com.a.mail", listOf("com.a.chat", null, null, null))))
+        fun withScenes(active: Boolean) = state("LIGHT", "LEFT", false, false, false, active).apply {
+            putString(TriggerBroadcastContract.EXTRA_SCENES, scenes)
+        }
+        val sent = mutableListOf<Pair<String, String>>()
+        val card = WorkbenchSettingsCard(activity, { done -> done(ready(withScenes(true))) }) { key, value, done ->
+            sent += key to value; done(ready(withScenes(true)))
+        }
+        fun buttons(): List<MaterialButton> {
+            val found = mutableListOf<MaterialButton>()
+            fun walk(view: android.view.View) {
+                if (view is MaterialButton) found += view
+                if (view is android.view.ViewGroup) (0 until view.childCount).forEach { walk(view.getChildAt(it)) }
+            }
+            walk(card.scenesCard); return found
+        }
+        val labels = buttons().map { it.text.toString() }
+        assertEquals(listOf(activity.getString(R.string.scene_save_action), activity.getString(R.string.scene_apply_action),
+            activity.getString(R.string.scene_shortcut_action), activity.getString(R.string.scene_delete_action)), labels)
+        buttons()[1].performClick()
+        assertEquals(listOf(TriggerBroadcastContract.COMMAND_SCENE_APPLY to "工作"), sent)
+        buttons()[3].performClick()
+        assertEquals(TriggerBroadcastContract.COMMAND_SCENE_DELETE to "工作", sent.last())
+        card.apply(withScenes(false))
+        assertFalse(buttons()[0].isEnabled)
+        assertFalse(buttons()[1].isEnabled)
+        assertTrue(buttons()[3].isEnabled)
     }
 }

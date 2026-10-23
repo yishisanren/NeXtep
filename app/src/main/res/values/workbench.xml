@@ -71,4 +71,8 @@
     <string name="pane_slot">Small pane %1$d</string>
     <string name="share_workspace_closed">The workspace is not open. Open it, then share again.</string>
     <string name="share_unsupported">No app can open this content.</string>
+    <string name="scene_shortcut_action">Home</string>
+    <string name="scene_shortcut_label">Panes scene: %1$s</string>
+    <string name="scene_shortcut_unsupported">This launcher does not accept pinned shortcuts.</string>
+    <string name="scene_shortcut_failed">Could not restore the scene: the workspace did not open or the scene no longer exists.</string>
 </resources>

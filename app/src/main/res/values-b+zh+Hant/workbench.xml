@@ -71,4 +71,8 @@
     <string name="pane_slot">小視窗 %1$d</string>
     <string name="share_workspace_closed">工作台沒有開啟，先開啟再分享。</string>
     <string name="share_unsupported">沒有應用程式能開啟這段內容。</string>
+    <string name="scene_shortcut_action">桌面</string>
+    <string name="scene_shortcut_label">格窗場景：%1$s</string>
+    <string name="scene_shortcut_unsupported">目前的桌面不支援新增捷徑。</string>
+    <string name="scene_shortcut_failed">場景沒有恢復：工作台沒能開啟，或場景已被刪除。</string>
 </resources>

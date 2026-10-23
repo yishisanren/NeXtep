@@ -71,4 +71,8 @@
     <string name="pane_slot">小窗 %1$d</string>
     <string name="share_workspace_closed">工作台没有打开，先打开再分享。</string>
     <string name="share_unsupported">没有应用能打开这段内容。</string>
+    <string name="scene_shortcut_action">桌面</string>
+    <string name="scene_shortcut_label">格窗场景：%1$s</string>
+    <string name="scene_shortcut_unsupported">当前桌面不支持添加快捷方式。</string>
+    <string name="scene_shortcut_failed">场景没有恢复：工作台没能打开，或场景已被删除。</string>
 </resources>

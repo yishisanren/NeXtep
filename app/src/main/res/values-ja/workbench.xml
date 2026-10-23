@@ -70,4 +70,8 @@
     <string name="pane_slot">小ウィンドウ %1$d</string>
     <string name="share_workspace_closed">ワークスペースが開いていません。開いてから再度共有してください。</string>
     <string name="share_unsupported">この内容を開けるアプリがありません。</string>
+    <string name="scene_shortcut_action">ホーム</string>
+    <string name="scene_shortcut_label">Panes シーン：%1$s</string>
+    <string name="scene_shortcut_unsupported">このランチャーはショートカットの追加に対応していません。</string>
+    <string name="scene_shortcut_failed">シーンを復元できませんでした。ワークスペースが開かないか、シーンが削除されています。</string>
 </resources>

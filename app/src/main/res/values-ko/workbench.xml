@@ -70,4 +70,8 @@
     <string name="pane_slot">작은 창 %1$d</string>
     <string name="share_workspace_closed">작업 공간이 열려 있지 않습니다. 먼저 연 뒤 다시 공유하세요.</string>
     <string name="share_unsupported">이 내용을 열 수 있는 앱이 없습니다.</string>
+    <string name="scene_shortcut_action">홈 화면</string>
+    <string name="scene_shortcut_label">Panes 장면: %1$s</string>
+    <string name="scene_shortcut_unsupported">이 런처는 바로가기 추가를 지원하지 않습니다.</string>
+    <string name="scene_shortcut_failed">장면을 복원하지 못했습니다. 작업 공간이 열리지 않았거나 장면이 삭제되었습니다.</string>
 </resources>
