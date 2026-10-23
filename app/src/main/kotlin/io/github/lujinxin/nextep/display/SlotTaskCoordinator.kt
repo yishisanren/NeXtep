@@ -64,6 +64,8 @@ class SlotTaskCoordinator(
         var state: SlotState = SlotState.Empty,
         var retainedTaskId: Int? = null,
         var exitTask: TaskRepository.RetainedTask? = null,
+        /** Last frame of the retained task, shown over the slot while the task comes back. */
+        var preview: android.graphics.Bitmap? = null,
         var pendingComponent: ComponentName? = null,
         var pendingAttempts: Int = 0,
         var originalLayout: TaskLayout? = null,
@@ -432,6 +434,10 @@ class SlotTaskCoordinator(
         ensureMainThread()
         if (active) return
         validateExitedTasks()
+        slotRecords.forEachIndexed { index, record ->
+            record.preview?.let { if (record.retainedTaskId != null) slots[index].view.showCover(it) else it.recycle() }
+            record.preview = null
+        }
         active = true
         reconcilePaused = false
         reconciliationTick = 0
@@ -486,7 +492,11 @@ class SlotTaskCoordinator(
             record.exitTask = null
             val task = tasks.firstOrNull { it.displayId == slot.displayId() }
             record.retainedTaskId = null
+            record.preview?.recycle()
+            record.preview = null
             if (task == null || !saved.add(task.taskId)) return@forEachIndexed
+            // Taken while the task still draws on its slot; the next entry shows it until the app redraws.
+            val preview = slot.view.captureProtectedPreview()
             runCatching {
                 val layout = record.originalLayout ?: defaultMainLayout(task.resizeMode)
                 WindowContainerTransactionCompat.parkInDefaultDisplay(
@@ -500,6 +510,15 @@ class SlotTaskCoordinator(
                     .firstOrNull { it.taskId == task.taskId }
                 record.exitTask = recent
                 record.retainedTaskId = recent?.taskId
+                record.preview?.recycle()
+                record.preview = if (recent == null) null else preview?.let { full ->
+                    // Keep the card-sized copy only; the capture is half the task's size.
+                    val card = slot.view
+                    val width = card.textureView.width.coerceAtLeast(1)
+                    val height = card.textureView.height.coerceAtLeast(1)
+                    android.graphics.Bitmap.createScaledBitmap(full, width, height, true)
+                        .also { if (it !== full) full.recycle() }
+                }
                 NeXtepLog.info("slot_retention", "Parked slot=$index task=${recent?.taskId}")
             }.onFailure {
                 NeXtepLog.warn("slot_retention", "Could not retain slot=$index task=${task.taskId}", it)
@@ -533,6 +552,8 @@ class SlotTaskCoordinator(
                 record.exitTask = null
                 record.retainedTaskId = null
                 record.originalLayout = null
+                record.preview?.recycle()
+                record.preview = null
                 NeXtepLog.info("slot_retention", "Discarded changed/removed task=${saved.taskId}")
             }
         }

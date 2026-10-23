@@ -45,6 +45,13 @@ class TaskSwitcherView(
 
     private var appearance = WorkbenchAppearance.DARK
     private val statusView = View(context).apply { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
+    // The last frame of a retained task, shown over the fresh (black) output until the app draws.
+    private val coverView = android.widget.ImageView(context).apply {
+        scaleType = android.widget.ImageView.ScaleType.FIT_XY
+        visibility = GONE
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+    private val clearCover = Runnable { clearCover(fade = true) }
     private var listener: Listener? = null
     private var busy = false
     private var currentState: SlotState = SlotState.Empty
@@ -74,6 +81,7 @@ class TaskSwitcherView(
         addView(textureView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
         addView(statusView, LayoutParams(dp(WorkbenchAppearance.BADGE_SIZE_DP),
             dp(WorkbenchAppearance.BADGE_SIZE_DP), Gravity.CENTER))
+        addView(coverView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
         showState(SlotState.Empty)
         setOnDragListener { _, event -> handleDrag(event) }
         setOnClickListener {
@@ -159,6 +167,41 @@ class TaskSwitcherView(
             }
             is SlotState.Failed -> showReady(animated = previousState is SlotState.Occupied)
         }
+        if (coverView.visibility == VISIBLE) {
+            removeCallbacks(clearCover)
+            when (state) {
+                // shortcut: no first-frame signal from a SurfaceView; the rebound app has drawn
+                // within this delay on the test phone. Replace with a frame callback if it shows black.
+                is SlotState.Occupied -> postDelayed(clearCover, COVER_REVEAL_DELAY_MS)
+                // The display is up; the retained task is on its way back, or never comes.
+                is SlotState.Ready -> postDelayed(clearCover, COVER_FALLBACK_MS)
+                else -> clearCover(fade = false)
+            }
+        }
+    }
+
+    /** Cover the output with [bitmap] until the slot's next occupant has drawn; the view owns the bitmap. */
+    fun showCover(bitmap: Bitmap) {
+        removeCallbacks(clearCover)
+        (coverView.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.takeIf { it !== bitmap }?.recycle()
+        coverView.setImageBitmap(bitmap)
+        coverView.animate().cancel()
+        coverView.alpha = 1f
+        coverView.visibility = VISIBLE
+        postDelayed(clearCover, COVER_FALLBACK_MS)
+    }
+
+    private fun clearCover(fade: Boolean) {
+        removeCallbacks(clearCover)
+        if (coverView.visibility != VISIBLE) return
+        coverView.animate().cancel()
+        val release = Runnable {
+            coverView.visibility = GONE
+            (coverView.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.recycle()
+            coverView.setImageBitmap(null)
+        }
+        if (fade) coverView.animate().alpha(0f).setDuration(COVER_FADE_MS).withEndAction(release).start()
+        else release.run()
     }
 
     fun showWaiting() {
@@ -224,8 +267,10 @@ class TaskSwitcherView(
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
         if (outputWidth <= 0 || outputHeight <= 0) return
         val scale = minOf(measuredWidth.toFloat() / outputWidth, measuredHeight.toFloat() / outputHeight)
-        textureView.measure(MeasureSpec.makeMeasureSpec((outputWidth * scale).toInt().coerceAtLeast(1), MeasureSpec.EXACTLY),
-            MeasureSpec.makeMeasureSpec((outputHeight * scale).toInt().coerceAtLeast(1), MeasureSpec.EXACTLY))
+        val widthSpec = MeasureSpec.makeMeasureSpec((outputWidth * scale).toInt().coerceAtLeast(1), MeasureSpec.EXACTLY)
+        val heightSpec = MeasureSpec.makeMeasureSpec((outputHeight * scale).toInt().coerceAtLeast(1), MeasureSpec.EXACTLY)
+        textureView.measure(widthSpec, heightSpec)
+        coverView.measure(widthSpec, heightSpec)
     }
 
     fun capturePreview(): Bitmap? = if (captureAllowed) captureProtectedPreview() else null
@@ -422,6 +467,9 @@ class TaskSwitcherView(
     private companion object {
         const val TRANSITION_OUT_DURATION_MS = 120L
         const val TRANSITION_IN_DURATION_MS = 220L
+        const val COVER_REVEAL_DELAY_MS = 600L
+        const val COVER_FALLBACK_MS = 2_500L
+        const val COVER_FADE_MS = 200L
         const val CONTENT_ENTER_SCALE = 0.96f
         const val CONTENT_EXIT_SCALE = 0.98f
     }
