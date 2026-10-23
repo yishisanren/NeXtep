@@ -20,6 +20,7 @@ internal object WorkbenchTaskPolicyHook {
     private val handler = CachedMember(listOf("mH"))
     private val windowManager = CachedMember(listOf("mWindowManager"))
     private val mainWindow = CachedMember(emptyList(), listOf("findMainWindow"))
+    private val topActivity = CachedMember(emptyList(), listOf("getTopNonFinishingActivity", "topRunningActivity", "getTopMostActivity"))
     private val activityRecord = CachedMember(listOf("mActivityRecord"))
     private val requestedOrientation = CachedMember(emptyList(), listOf("getRequestedOrientation", "getOverrideOrientation"))
     private val visibleTypes = CachedMember(listOf("mRequestedVisibleTypes"), listOf("getRequestedVisibleTypes"))
@@ -70,11 +71,13 @@ internal object WorkbenchTaskPolicyHook {
      * then applies a fixed-rotation transform before SystemUI can pin the task.
      */
     fun reportOrientationSource(source: Any?, orientation: Int) {
-        val activity = source ?: return skipped("no orientation source", orientation)
+        val container = source ?: return skipped("no orientation source", orientation)
         runCatching {
-            // Only an ActivityRecord belongs to a task; magnification or dream sources are ignored.
-            if (task.read(activity) == null) return skipped("source ${activity.javaClass.simpleName} has no task", orientation)
-            NeXtepLog.info("workbench_scene", "Landscape request from orientation source ${activity.javaClass.simpleName}")
+            // The source is an ActivityRecord, or the Task that carries it; anything else
+            // (magnification, dreams) is ignored.
+            val activity = if (task.read(container) != null) container else topActivity.read(container)
+                ?: return skipped("source ${container.javaClass.simpleName} has no task", orientation)
+            NeXtepLog.info("workbench_scene", "Landscape request from orientation source ${container.javaClass.simpleName}")
             reportScene(activity, orientation, mainWindow.read(activity))
         }.onFailure { NeXtepLog.warn("workbench_scene", "Orientation source unavailable", it) }
     }

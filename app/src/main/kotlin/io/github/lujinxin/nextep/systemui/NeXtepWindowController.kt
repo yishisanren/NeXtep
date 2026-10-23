@@ -239,6 +239,8 @@ class NeXtepWindowController(
     init {
         // Window/display contexts may not forward configuration changes; the application does.
         runCatching { (context.applicationContext ?: context).registerComponentCallbacks(systemThemeCallbacks) }
+        // Nothing is pinned when SystemUI starts; drop whatever the previous process left behind.
+        SystemServerWorkspaceBridge.publishWideDisplay(context, null)
         // Warm the cache before the first workspace entry, including after unlocking.
         // Window creation is deliberately lazy; wallpaper observation must not be.
         runCatching {
@@ -319,6 +321,9 @@ class NeXtepWindowController(
         runPendingDeactivate()
         capturePolicy.reset()
         initializeIfNeeded()
+        // system_server reads the wide display id from Settings; a session that ended without
+        // clearing it (or a reboot) would otherwise hold every landscape request without pinning.
+        SystemServerWorkspaceBridge.publishWideDisplay(context, wideSlotIndex?.let { slotWindows.getOrNull(it)?.displayId() })
         check(records.size == EXPECTED_WINDOW_COUNT) { "SystemUI windows are unavailable" }
         followSystemAppearance()
         workspaceVisible = true
