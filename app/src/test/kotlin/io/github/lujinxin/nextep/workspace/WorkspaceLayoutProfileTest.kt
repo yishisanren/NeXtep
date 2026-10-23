@@ -18,12 +18,20 @@ class WorkspaceLayoutProfileTest {
                             val inset = (WorkspaceControlMetrics.STATUS_HEIGHT_DP * 476 / 160f).toInt()
                             assertEquals(g.topHeight - inset, profile.slots[wideIndex].height)
                             assertEquals(profile.slots[wideIndex].height, profile.canvas(wideIndex).height)
-                            // The three rail cards fill the rail width: no side slack beside the main window.
+                            // The picture spans the full width at 16:9; the rail cards fit inside the rail,
+                            // centred with side slack, and the main window stays proportional.
+                            val wide = profile.canvas(wideIndex)
+                            assertEquals(16.0 / 9, wide.width.toDouble() / wide.height, 0.02)
                             profile.slots.filterIndexed { i, _ -> i != wideIndex }.forEach { slot ->
-                                assertTrue("rail card ${slot.width} in ${g.sidebarWidth}", slot.width >= g.sidebarWidth - profile.gapPixels - 1)
+                                assertTrue("rail card ${slot.width} in ${g.sidebarWidth}", slot.width <= g.sidebarWidth - profile.gapPixels)
+                                assertTrue(slot.width > 0 && slot.height > 0)
                             }
                             val railHeight = profile.slots.filterIndexed { i, _ -> i != wideIndex }.sumOf { it.height } + profile.gapPixels * 2
-                            assertTrue(railHeight >= g.sidebarLogicalHeight - 12)
+                            assertTrue(railHeight <= g.sidebarLogicalHeight)
+                            val narrower = normal.withWideSlot(wideIndex, 2.4)
+                            assertTrue(narrower.geometry.topHeight < g.topHeight)
+                            assertEquals(2.4, narrower.canvas(wideIndex).let { it.width.toDouble() / it.height }, 0.02)
+                            assertEquals(narrower, narrower.withControlAtBottom(true).withControlAtBottom(false))
                         }
                         assertEquals(normal, profile.withWideSlot(null))
                     }

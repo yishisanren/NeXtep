@@ -59,6 +59,7 @@ internal class WorkspaceViewport(
     private var profile: WorkspaceLayoutProfile? = null
     private var baseProfile: WorkspaceLayoutProfile? = null
     private var wideSlotIndex: Int? = null
+    private var wideAspect = WorkspaceLayoutProfile.DEFAULT_WIDE_ASPECT
     private var controlAtBottom = false
     private val notifyChanged = Runnable { onChanged() }
     private val displayManager = context.getSystemService(DisplayManager::class.java)
@@ -93,7 +94,7 @@ internal class WorkspaceViewport(
         if (bottom == controlAtBottom) return
         controlAtBottom = bottom
         val recorded = baseProfile ?: return
-        profile = recorded.withWideSlot(wideSlotIndex).withControlAtBottom(bottom)
+        profile = recorded.withWideSlot(wideSlotIndex, wideAspect).withControlAtBottom(bottom)
         SystemServerWorkspaceBridge.publishLayout(context, checkNotNull(profile))
     }
 
@@ -123,11 +124,12 @@ internal class WorkspaceViewport(
         }
     }
 
-    fun setWideSlot(index: Int?) {
-        if (index == wideSlotIndex) return
+    fun setWideSlot(index: Int?, aspect: Double = WorkspaceLayoutProfile.DEFAULT_WIDE_ASPECT) {
+        if (index == wideSlotIndex && (index == null || aspect == wideAspect)) return
         wideSlotIndex = index
+        wideAspect = aspect
         val recorded = baseProfile ?: layout().withWideSlot(null).withControlAtBottom(false)
-        profile = recorded.withWideSlot(index).withControlAtBottom(controlAtBottom)
+        profile = recorded.withWideSlot(index, aspect).withControlAtBottom(controlAtBottom)
         SystemServerWorkspaceBridge.publishLayout(context, checkNotNull(profile))
         handler.removeCallbacks(notifyChanged)
         handler.post(notifyChanged)
@@ -186,7 +188,7 @@ internal class WorkspaceViewport(
         if (cached != snapshot || profile == null) {
             baseProfile = saved ?: WorkspaceLayoutProfile.create(snapshot.width, snapshot.height,
                 (snapshot.density * 160).roundToInt(), snapshot.navigationInsets, snapshot.displayRotation)
-            profile = checkNotNull(baseProfile).withWideSlot(wideSlotIndex).withControlAtBottom(controlAtBottom)
+            profile = checkNotNull(baseProfile).withWideSlot(wideSlotIndex, wideAspect).withControlAtBottom(controlAtBottom)
             SystemServerWorkspaceBridge.publishLayout(context, checkNotNull(profile))
         }
         cached = snapshot

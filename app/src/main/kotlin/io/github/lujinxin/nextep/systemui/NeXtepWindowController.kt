@@ -74,6 +74,14 @@ class NeXtepWindowController(
     private var wideTaskId: Int? = null
     /** The Activity shown in the wide slot while its task's landscape request was fresh. */
     private var wideComponent: android.content.ComponentName? = null
+    private val wideAspectSampler = WideAspectSampler(backdropHandler,
+        { wideSlotIndex?.let { slotWindows.getOrNull(it)?.view?.textureView } }) { aspect ->
+        val index = wideSlotIndex ?: return@WideAspectSampler
+        viewport.setWideSlot(index, aspect)
+        val geometry = geometry()
+        applyWindowGeometry(geometry)
+        sidebarView?.let { applySlotLayout(it, geometry) }
+    }
     private var pinPending = false
     private var seenSceneTime = -1L
     private var observedTasks: List<io.github.lujinxin.nextep.task.TaskRepository.TaskSnapshot> = emptyList()
@@ -1164,7 +1172,9 @@ class NeXtepWindowController(
         wideComponent = null
         wideSlotIndex = index
         wideTaskId = taskId
+        // Each pin starts at 16:9; the sampler narrows the slot once the picture shows its bars.
         viewport.setWideSlot(index)
+        if (index == null) wideAspectSampler.stop() else wideAspectSampler.start()
         SystemServerWorkspaceBridge.publishWideDisplay(context, index?.let { slotWindows.getOrNull(it)?.displayId() })
         val geometry = geometry()
         applyWindowGeometry(geometry)

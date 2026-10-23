@@ -9,6 +9,8 @@ data class WorkspaceLayoutProfile(
     val densityDpi: Int,
     val gapPixels: Int,
     val wideSlotIndex: Int? = null,
+    /** Width/height of the wide slot's picture; 16:9 fills the width for any common video. */
+    val wideAspect: Double = DEFAULT_WIDE_ASPECT,
 ) {
     data class Slot(val width: Int, val height: Int, val top: Int)
     data class Source(val left: Int, val top: Int, val right: Int, val bottom: Int) {
@@ -21,6 +23,7 @@ data class WorkspaceLayoutProfile(
         require(densityDpi > 0 && gapPixels > 0)
         require(geometry.sidebarWidth > gapPixels)
         require(wideSlotIndex == null || wideSlotIndex in 0 until WORKSPACE_SLOT_COUNT)
+        require(wideAspect in MIN_WIDE_ASPECT..MAX_WIDE_ASPECT)
     }
 
     private val leftGeometry = geometry.copy(sidebarSide = SidebarSide.LEFT)
@@ -53,23 +56,23 @@ data class WorkspaceLayoutProfile(
     fun withControlAtBottom(bottom: Boolean): WorkspaceLayoutProfile {
         if (bottom == geometry.controlAtBottom) return this
         return create(geometry.screenWidth, geometry.screenHeight, densityDpi, geometry.navigationInsets,
-            geometry.displayRotation, bottom, statusInset).withWideSlot(wideSlotIndex)
+            geometry.displayRotation, bottom, statusInset).withWideSlot(wideSlotIndex, wideAspect)
     }
 
-    fun withWideSlot(index: Int?): WorkspaceLayoutProfile {
+    fun withWideSlot(index: Int?, aspect: Double = DEFAULT_WIDE_ASPECT): WorkspaceLayoutProfile {
         if (index == null && wideSlotIndex == null) return this
         val normal = create(geometry.screenWidth, geometry.screenHeight, densityDpi,
             geometry.navigationInsets, geometry.displayRotation, geometry.controlAtBottom, geometry.statusInset)
         if (index == null) return normal
+        val clamped = aspect.coerceIn(MIN_WIDE_ASPECT, MAX_WIDE_ASPECT)
         val g = normal.geometry
         val short = minOf(g.availableWidth, g.availableHeight)
         val long = maxOf(g.availableWidth, g.availableHeight)
-        // The control edge is the one height at which the main window stays proportional
-        // and three full-aspect rail cards fill the rail width: 4t = long + g(3·long/short − 2).
-        // A 16:9 player then letterboxes inside its own window; the layout itself has no slack.
-        val top = ((long + gapPixels * (3.0 * long / short - 2)) / 4).toInt().coerceIn(1, (long * .70).toInt())
+        // The picture spans the full width at its aspect; the main window below stays
+        // proportional, so the three rail cards shrink to fit and sit centred with side slack.
+        val top = (statusInset + short / clamped).toInt().coerceIn(1, (long * .70).toInt())
         val rail = WorkspaceGeometry.proportionalRail(short, long, top).coerceAtLeast(gapPixels + 1)
-        return normal.copy(geometry = g.copy(topHeight = top, sidebarWidth = rail), wideSlotIndex = index)
+        return normal.copy(geometry = g.copy(topHeight = top, sidebarWidth = rail), wideSlotIndex = index, wideAspect = clamped)
     }
 
     private fun slotBounds(count: Int, fit: Boolean = true): List<Slot> {
@@ -114,6 +117,10 @@ data class WorkspaceLayoutProfile(
         geometry.displayRotation) + if (wideSlotIndex == null) emptyList() else listOf(wideSlotIndex)).joinToString(",")
 
     companion object {
+        const val DEFAULT_WIDE_ASPECT = 16.0 / 9
+        const val MIN_WIDE_ASPECT = 16.0 / 9
+        const val MAX_WIDE_ASPECT = 2.4
+
         fun create(width: Int, height: Int, densityDpi: Int, insets: WorkspaceNavigationInsets,
             displayRotation: Int = 0, controlAtBottom: Boolean = false, statusInset: Int = 0) =
             WorkspaceLayoutProfile(WorkspaceGeometry.forDisplay(width, height, density = densityDpi / 160f,
