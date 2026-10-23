@@ -96,7 +96,7 @@ internal object WorkbenchTaskPolicyHook {
         val owner = service.read(activity) ?: return skipped("no service", orientation)
         val ctx = context.read(owner) as? Context ?: return skipped("no context", orientation)
         // RAM checks only: this runs for every requested-visibility change on every window.
-        if (!SystemServerWorkspaceBridge.observedActive(ctx)) return skipped("inactive", orientation)
+        if (!SystemServerWorkspaceBridge.observedActive(ctx)) return
         val display = displayId.read(activity) as? Int ?: return skipped("no display", orientation)
         if (display != 0 && !SystemServerWorkspaceBridge.isWideDisplay(ctx, display)) return skipped("other display $display", orientation)
         if (display == 0 && SystemServerWorkspaceBridge.hasWideDisplay(ctx)) return skipped("wide display exists", orientation)

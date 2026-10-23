@@ -21,9 +21,10 @@ class WorkspaceLandscapeRotationHooker : XposedInterface.Hooker {
             val portrait = field(target, "mPortraitRotation") as? Int ?: return@runCatching null
             val last = chain.getArg(1) as? Int ?: return@runCatching null
             if (last != portrait) return@runCatching null
-            val now = android.os.SystemClock.uptimeMillis()
+            // Read the clock inside: a scene published below carries a later timestamp, and a
+            // freshness check against an earlier "now" would call it stale.
             fun held() = SystemServerWorkspaceBridge.hasWideDisplay(context) ||
-                SystemServerWorkspaceBridge.scene(context)?.holdRotation(now) == true
+                SystemServerWorkspaceBridge.scene(context)?.holdRotation(android.os.SystemClock.uptimeMillis()) == true
             // A manifest-declared landscape Activity reaches rotation policy before any hook has
             // published its request; publish it from the orientation source so the hold applies now.
             if (!held()) WorkbenchTaskPolicyHook.reportOrientationSource(field(display, "mLastOrientationSource"), orientation)
