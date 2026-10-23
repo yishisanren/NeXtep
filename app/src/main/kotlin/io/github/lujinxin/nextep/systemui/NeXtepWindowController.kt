@@ -90,15 +90,11 @@ class NeXtepWindowController(
     /** LIGHT, DARK, or SYSTEM (follow the device's night mode). */
     private var appearanceMode = workbenchPreferences?.getString("appearance", APPEARANCE_SYSTEM) ?: APPEARANCE_SYSTEM
     private var appearance = resolveAppearance()
-    // ACTION_CONFIGURATION_CHANGED reaches SystemUI before its own Resources carry the new
-    // night mode, and this ROM's SystemUI never forwards ComponentCallbacks; ask the system.
-    private fun systemConfiguration() = io.github.lujinxin.nextep.framework.ActivityTaskManagerCompat.globalConfiguration()
-        ?: context.resources.configuration
-    private fun resolveAppearance(config: android.content.res.Configuration = systemConfiguration()): WorkbenchAppearance =
+    private fun resolveAppearance(config: android.content.res.Configuration = context.resources.configuration): WorkbenchAppearance =
         WorkbenchAppearance.entries.firstOrNull { it.name == appearanceMode }
             ?: if (config.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK ==
                 android.content.res.Configuration.UI_MODE_NIGHT_YES) WorkbenchAppearance.DARK else WorkbenchAppearance.LIGHT
-    private fun followSystemAppearance(config: android.content.res.Configuration = systemConfiguration()) {
+    private fun followSystemAppearance(config: android.content.res.Configuration = context.resources.configuration) {
         val resolved = resolveAppearance(config)
         if (resolved == appearance) return
         appearance = resolved
@@ -172,11 +168,11 @@ class NeXtepWindowController(
             when (intent.action) {
                 // Sent by the system on every configuration change, including night mode.
                 Intent.ACTION_CONFIGURATION_CHANGED -> {
-                    NeXtepLog.info("workspace", "Configuration changed uiMode global=" +
-                        "${io.github.lujinxin.nextep.framework.ActivityTaskManagerCompat.globalConfiguration()?.uiMode}" +
-                        " process=${context.resources.configuration.uiMode}")
+                    NeXtepLog.info("workspace", "Configuration changed uiMode=${context.resources.configuration.uiMode}")
                     followSystemAppearance()
-                    // Both sources may still carry the previous night mode when this arrives.
+                    // SystemUI's Resources still carry the previous night mode when this arrives
+                    // (observed: updated within 300 ms), and its Application never forwards
+                    // ComponentCallbacks, so re-check shortly after.
                     listOf(300L, 1500L).forEach { backdropHandler.postDelayed({ followSystemAppearance() }, it) }
                     return
                 }
