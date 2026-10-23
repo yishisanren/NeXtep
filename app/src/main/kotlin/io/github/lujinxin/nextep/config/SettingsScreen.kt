@@ -83,6 +83,7 @@ object SettingsScreen {
                 }, matchWidth())
             }, card())
 
+            addView(workbench.scenesCard, card())
             addView(workbench.layoutCard, card())
 
             val addTileButton = SettingsRowButton.create(activity).apply {

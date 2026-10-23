@@ -45,6 +45,12 @@ object TriggerBroadcastContract {
     const val COMMAND_CONTROL_BOTTOM = "control_bottom"
     const val COMMAND_CAPTURE = "capture"
     const val COMMAND_EXPORT_DIAGNOSTICS = "export_diagnostics"
+    const val EXTRA_SCENES = "io.github.yishisanren.panes.extra.WORKBENCH_SCENES"
+    const val COMMAND_SCENE_SAVE = "scene_save"
+    const val COMMAND_SCENE_APPLY = "scene_apply"
+    const val COMMAND_SCENE_DELETE = "scene_delete"
+    /** Value: "<slot index or -1 for the main pane>|<intent URI>". */
+    const val COMMAND_OPEN_IN_PANE = "open_in_pane"
     const val RUNTIME_PROTOCOL_VERSION = 51
     const val RESULT_HANDLED = 0x4E58
     const val RESULT_NOT_READY = 0

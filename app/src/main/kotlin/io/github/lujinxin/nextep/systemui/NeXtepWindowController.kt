@@ -24,6 +24,7 @@ import io.github.lujinxin.nextep.task.MainTaskPresentationCoordinator
 import io.github.lujinxin.nextep.trigger.TriggerBroadcastContract
 import io.github.lujinxin.nextep.workspace.SidebarSide
 import io.github.lujinxin.nextep.workspace.SystemServerWorkspaceBridge
+import io.github.lujinxin.nextep.workspace.WorkbenchScene
 import io.github.lujinxin.nextep.workspace.WorkspaceGeometry
 
 class NeXtepWindowController(
@@ -122,7 +123,40 @@ class NeXtepWindowController(
         putBoolean(TriggerBroadcastContract.EXTRA_HIDE_RECENTS, recentsHidden)
         putBoolean(TriggerBroadcastContract.EXTRA_CONTROL_BOTTOM, controlAtBottom)
         putBoolean(TriggerBroadcastContract.EXTRA_CAPTURE_ALLOWED, capturePolicy.captureAllowed)
+        putString(TriggerBroadcastContract.EXTRA_SCENES, WorkbenchScene.encode(scenes))
     }
+
+    private var scenes = WorkbenchScene.decode(workbenchPreferences?.getString("scenes", null))
+    private fun storeScenes(updated: List<WorkbenchScene>) {
+        scenes = updated
+        workbenchPreferences?.edit()?.putString("scenes", WorkbenchScene.encode(updated))?.apply()
+    }
+
+    private fun sceneCommand(key: String, name: String): Boolean = when (key) {
+        TriggerBroadcastContract.COMMAND_SCENE_SAVE -> {
+            val (main, slots) = slotCoordinator?.takeIf { workspaceVisible }?.scenePackages() ?: return false
+            storeScenes(WorkbenchScene.save(scenes, WorkbenchScene(name, main, slots)))
+            true
+        }
+        TriggerBroadcastContract.COMMAND_SCENE_DELETE -> {
+            storeScenes(scenes.filterNot { it.name == name }); true
+        }
+        else -> {
+            val scene = scenes.firstOrNull { it.name == name } ?: return false
+            slotCoordinator?.takeIf { workspaceVisible }?.applyScene(scene.main, scene.slots) { result ->
+                result.onFailure { NeXtepLog.warn("workspace", "Scene '$name' did not fully apply", it) }
+            }?.isSuccess == true
+        }
+    }
+
+    /** "<slot index or -1>|<intent URI>": a link or search handed over from the share sheet. */
+    private fun openInPane(value: String): Boolean = runCatching {
+        val coordinator = slotCoordinator?.takeIf { workspaceVisible } ?: return false
+        val index = value.substringBefore('|').toInt()
+        val intent = Intent.parseUri(value.substringAfter('|'), Intent.URI_INTENT_SCHEME)
+        (if (index < 0) coordinator.openExternalInMain(intent) else coordinator.openExternalInSlot(intent, index)).getOrThrow()
+        true
+    }.onFailure { NeXtepLog.warn("workspace", "Open in pane failed", it) }.getOrDefault(false)
 
     /** Commands arrive only through the signature-protected control receiver. */
     fun applyWorkbenchCommand(key: String, value: String?): Boolean = when (key) {
@@ -152,6 +186,10 @@ class NeXtepWindowController(
             capturePolicy.captureAllowed == value.toBoolean()
         }
         TriggerBroadcastContract.COMMAND_EXPORT_DIAGNOSTICS -> tools.exportDiagnostics()
+        TriggerBroadcastContract.COMMAND_SCENE_SAVE, TriggerBroadcastContract.COMMAND_SCENE_APPLY,
+        TriggerBroadcastContract.COMMAND_SCENE_DELETE ->
+            value?.trim()?.takeIf { it.isNotEmpty() }?.let { sceneCommand(key, it) } ?: false
+        TriggerBroadcastContract.COMMAND_OPEN_IN_PANE -> value?.let(::openInPane) ?: false
         else -> false
     }
 

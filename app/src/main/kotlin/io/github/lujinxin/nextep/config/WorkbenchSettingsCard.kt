@@ -12,6 +12,7 @@ import io.github.lujinxin.nextep.R
 import io.github.lujinxin.nextep.trigger.TriggerBroadcastContract
 import io.github.lujinxin.nextep.trigger.TriggerCoordinator
 import io.github.lujinxin.nextep.trigger.TriggerSource
+import io.github.lujinxin.nextep.workspace.WorkbenchScene
 
 /** SystemUI keeps the workbench preferences; these cards only mirror its reply and send commands. */
 internal class WorkbenchSettingsCard(
@@ -33,8 +34,22 @@ internal class WorkbenchSettingsCard(
     val layoutCard: View
     val privacyCard: View
     val supportCard: View
+    val scenesCard: View
+    private val scenesList = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
+    private val saveScene = SettingsRowButton.create(activity).apply {
+        text = activity.getString(R.string.scene_save_action)
+        setOnClickListener { askSceneName() }
+    }
+    private var workspaceActive = false
 
     init {
+        val scenes = SettingsScreen.sectionContent(activity)
+        scenes.addView(SettingsScreen.sectionTitle(activity, activity.getString(R.string.section_scenes)), SettingsScreen.matchWidth())
+        scenes.addView(row(activity.getString(R.string.section_scenes), activity.getString(R.string.scenes_summary), saveScene),
+            SettingsScreen.matchWidth())
+        scenes.addView(scenesList, SettingsScreen.matchWidth())
+        scenesCard = SettingsScreen.sectionCard(activity).apply { addView(scenes) }
+
         val layout = SettingsScreen.sectionContent(activity)
         layout.addView(SettingsScreen.sectionTitle(activity, activity.getString(R.string.section_layout)), SettingsScreen.matchWidth())
         layout.addView(status, SettingsScreen.matchWidth())
@@ -105,7 +120,58 @@ internal class WorkbenchSettingsCard(
             // Capture is a session grant; it needs a visible workspace to take effect.
             capture.isEnabled = state.getBoolean(TriggerBroadcastContract.EXTRA_ACTIVE)
         }
+        workspaceActive = state?.getBoolean(TriggerBroadcastContract.EXTRA_ACTIVE) == true
+        // Saving and restoring act on the live panes, so both need an open workspace.
+        saveScene.isEnabled = workspaceActive
+        renderScenes(WorkbenchScene.decode(state?.getString(TriggerBroadcastContract.EXTRA_SCENES)))
         syncing = false
+    }
+
+    private fun renderScenes(scenes: List<WorkbenchScene>) {
+        scenesList.removeAllViews()
+        if (scenes.isEmpty()) {
+            scenesList.addView(SettingsScreen.sectionDescription(activity, activity.getString(R.string.scenes_empty))
+                .apply { setPadding(SettingsScreen.dp(activity, 16), 0, SettingsScreen.dp(activity, 16), SettingsScreen.dp(activity, 12)) },
+                SettingsScreen.matchWidth())
+            return
+        }
+        val manager = activity.packageManager
+        fun label(pkg: String) = runCatching { manager.getApplicationLabel(manager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
+        scenes.forEach { scene ->
+            val apps = (listOfNotNull(scene.main) + scene.slots.filterNotNull()).map(::label)
+            val summary = if (apps.isEmpty()) activity.getString(R.string.scene_apps_none) else apps.joinToString("、")
+            val buttons = LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(SettingsRowButton.create(activity).apply {
+                    text = activity.getString(R.string.scene_apply_action)
+                    isEnabled = workspaceActive
+                    setOnClickListener { command(TriggerBroadcastContract.COMMAND_SCENE_APPLY, scene.name) }
+                })
+                addView(SettingsRowButton.create(activity).apply {
+                    text = activity.getString(R.string.scene_delete_action)
+                    setOnClickListener { command(TriggerBroadcastContract.COMMAND_SCENE_DELETE, scene.name) }
+                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                    .apply { marginStart = SettingsScreen.dp(activity, 8) })
+            }
+            scenesList.addView(row(scene.name, summary, buttons), SettingsScreen.matchWidth())
+        }
+    }
+
+    private fun askSceneName() {
+        val input = android.widget.EditText(activity).apply {
+            hint = activity.getString(R.string.scene_name_hint)
+            isSingleLine = true
+            filters = arrayOf(android.text.InputFilter.LengthFilter(20))
+        }
+        val margin = SettingsScreen.dp(activity, 20)
+        SystemDialogs.builder(activity)
+            .setTitle(R.string.scene_save_action)
+            .setView(android.widget.FrameLayout(activity).apply { setPadding(margin, 0, margin, 0); addView(input) })
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                input.text.toString().trim().takeIf { it.isNotEmpty() }?.let { command(TriggerBroadcastContract.COMMAND_SCENE_SAVE, it) }
+            }
+            .show()
     }
 
     private fun command(key: String, value: String) {

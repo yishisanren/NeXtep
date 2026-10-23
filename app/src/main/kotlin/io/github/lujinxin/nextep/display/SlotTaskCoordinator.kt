@@ -580,6 +580,50 @@ class SlotTaskCoordinator(
         return launchApplicationInSlot(slotIndex, intent)
     }
 
+    /** The main pane's package (null for HOME/SystemUI) and one package or null per slot. */
+    fun scenePackages(): Pair<String?, List<String?>> {
+        ensureMainThread()
+        val main = taskRepository.foregroundTask()?.component?.packageName?.takeIf {
+            it != TriggerBroadcastContract.resolveHomePackage(applicationContext) &&
+                it != TriggerBroadcastContract.SYSTEM_UI_PACKAGE && it != TriggerBroadcastContract.MODULE_PACKAGE
+        }
+        return main to slotRecords.map { (it.state as? SlotState.Occupied)?.component?.packageName }
+    }
+
+    /** Launch every slot's app into its slot, then the main app; slots without a package keep what they have. */
+    fun applyScene(main: String?, slots: List<String?>, complete: (Result<Unit>) -> Unit): Result<Unit> = runCatching {
+        ensureMainThread()
+        check(active && !suspended && !transitionInProgress && !recentSelectionPending && !appLaunch.running)
+        fun launcher(pkg: String) = packageManager.getLaunchIntentForPackage(pkg)?.let(::normalizeLaunchIntent)
+        val requests = slots.withIndex().mapNotNull { (index, pkg) ->
+            pkg?.let(::launcher)?.takeIf { validActiveSlot(index) }?.let { LaunchRequest(it, index, slots(index)) }
+        }
+        val mainIntent = main?.let(::launcher)
+        fun openMain(result: Result<Unit>) {
+            complete(result.mapCatching { mainIntent?.let { openInMain(it).getOrThrow() } ?: Unit })
+        }
+        clearDesktopSelection()
+        if (requests.isEmpty()) openMain(Result.success(Unit)) else appLaunch.begin(requests, ::openMain).getOrThrow()
+    }
+
+    /** Open external content (a link, a search) in one slot, resolved like the compare searches. */
+    fun openExternalInSlot(source: Intent, index: Int): Result<Unit> = runCatching {
+        ensureMainThread()
+        check(validActiveSlot(index) && !recentSelectionPending && !appLaunch.running)
+        val normalized = checkNotNull(normalizeExternalIntent(source)) { "External content has no Activity" }
+        clearDesktopSelection()
+        appLaunch.begin(listOf(LaunchRequest(normalized, index, slots(index)))) { result ->
+            result.onFailure {
+                if (it !is java.util.concurrent.CancellationException) {
+                    NeXtepLog.warn("app_launch", "Unable to open content in slot=$index", it)
+                    showMessage(AppLanguage.string(applicationContext, R.string.workbench_launch_failed))
+                }
+            }
+        }.getOrThrow()
+    }
+
+    private fun slots(index: Int): Int? = slots.getOrNull(index)?.displayId()
+
     fun openInMain(sourceIntent: Intent, autoMinimizeCurrent: Boolean = false): Result<Unit> {
         ensureMainThread()
         if (!active || suspended || appLaunch.running) {

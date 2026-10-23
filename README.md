@@ -24,6 +24,8 @@ Panes is an LSPosed module that adds a side workspace to the stock ColorOS 16 la
 - **One main pane, four small panes.** The small panes are real running apps on their own virtual displays, not snapshots. Tap one and it swaps with the main pane in place; long-press and drag to reorder or send to the background.
 - **A control bar on top:** title and date, up to ten favourite apps (recently used apps appear automatically; apps pinned in Settings come first), four pay/scan entries (WeChat scan, WeChat payment code, Alipay scan, Alipay payment code), price comparison (one product searched in several delivery or shopping apps, each in its own pane), and a gear that opens Settings.
 - **Landscape video moves up.** When the main app asks for landscape (for example a fullscreen player), it moves into a 16:9 pane at the top while the main pane stays usable; leaving fullscreen brings it back.
+- **Scenes:** save the main pane and the four small panes as a set and restore it from Settings in one tap.
+- **Open in Panes:** share a link or text from any app and pick the pane that opens it.
 - **Light, dark or follow the system, panes left or right, controls top or bottom**, applied immediately.
 - **Privacy:** hide workspace apps from Recents while the workspace is open; screenshots are blocked unless allowed for the current session.
 
@@ -50,7 +52,7 @@ Panes is an LSPosed module that adds a side workspace to the stock ColorOS 16 la
 
 ## Settings
 
-One page, six groups: favourite apps, layout, opening, privacy, troubleshooting (export diagnostics, exit) and about (update check against this repository's Releases).
+One page, seven groups: favourite apps, scenes, layout, opening, privacy, troubleshooting (export diagnostics, exit) and about (update check against this repository's Releases).
 
 ## Build
 

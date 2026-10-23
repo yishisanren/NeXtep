@@ -56,4 +56,18 @@
     <string name="favorite_apps_edit">편집</string>
     <string name="favorite_apps_summary">%2$d개 중 %1$d개 선택됨</string>
     <string name="workbench_compare_hint">같은 상품을 여러 앱에서 동시에 검색하고 각각 작은 창으로 엽니다.</string>
+    <string name="section_scenes">장면</string>
+    <string name="scenes_summary">메인 창과 작은 창 네 개를 한 세트로 저장하고 한 번에 복원합니다.</string>
+    <string name="scene_save_action">현재 저장</string>
+    <string name="scene_name_hint">장면 이름</string>
+    <string name="scene_apply_action">복원</string>
+    <string name="scene_delete_action">삭제</string>
+    <string name="scenes_empty">저장된 장면이 없습니다. 작업 공간을 연 뒤 여기서 현재 배치를 저장하세요.</string>
+    <string name="scene_apps_none">빈 배치</string>
+    <string name="share_target_label">Panes에서 열기</string>
+    <string name="share_pane_title">어느 창에서 열까요?</string>
+    <string name="pane_main">메인 창</string>
+    <string name="pane_slot">작은 창 %1$d</string>
+    <string name="share_workspace_closed">작업 공간이 열려 있지 않습니다. 먼저 연 뒤 다시 공유하세요.</string>
+    <string name="share_unsupported">이 내용을 열 수 있는 앱이 없습니다.</string>
 </resources>

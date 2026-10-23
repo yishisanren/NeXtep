@@ -56,4 +56,18 @@
     <string name="favorite_apps_edit">編集</string>
     <string name="favorite_apps_summary">%2$d 個まで選択可能（現在 %1$d 個）</string>
     <string name="workbench_compare_hint">同じ商品を複数のアプリで同時に検索し、それぞれ小ウィンドウで開きます。</string>
+    <string name="section_scenes">シーン</string>
+    <string name="scenes_summary">メインと 4 つの小ウィンドウの組み合わせを保存し、ワンタップで復元します。</string>
+    <string name="scene_save_action">現在を保存</string>
+    <string name="scene_name_hint">シーン名</string>
+    <string name="scene_apply_action">復元</string>
+    <string name="scene_delete_action">削除</string>
+    <string name="scenes_empty">保存したシーンはまだありません。ワークスペースを開いてから、ここで現在の配置を保存してください。</string>
+    <string name="scene_apps_none">空の配置</string>
+    <string name="share_target_label">Panes で開く</string>
+    <string name="share_pane_title">どのウィンドウで開きますか？</string>
+    <string name="pane_main">メイン</string>
+    <string name="pane_slot">小ウィンドウ %1$d</string>
+    <string name="share_workspace_closed">ワークスペースが開いていません。開いてから再度共有してください。</string>
+    <string name="share_unsupported">この内容を開けるアプリがありません。</string>
 </resources>

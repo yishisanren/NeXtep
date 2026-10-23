@@ -47,6 +47,19 @@
             android:exported="false"
             android:label="@string/app_strip_title" />
 
+        <activity
+            android:name=".config.ShareToPaneActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="@string/share_target_label"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".trigger.NeXtepTileService"
             android:exported="true"

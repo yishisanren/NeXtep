@@ -57,4 +57,18 @@
     <string name="favorite_apps_edit">編輯</string>
     <string name="favorite_apps_summary">已選 %1$d 個，最多 %2$d 個</string>
     <string name="workbench_compare_hint">同一件商品，同時在幾個應用程式裡搜尋，各開一個小視窗。</string>
+    <string name="section_scenes">工作場景</string>
+    <string name="scenes_summary">把目前的大視窗和四個小視窗存成一套，隨時一鍵恢復。</string>
+    <string name="scene_save_action">儲存目前</string>
+    <string name="scene_name_hint">場景名稱</string>
+    <string name="scene_apply_action">恢復</string>
+    <string name="scene_delete_action">刪除</string>
+    <string name="scenes_empty">還沒有儲存的場景。開啟工作台後，在這裡儲存目前佈局。</string>
+    <string name="scene_apps_none">空佈局</string>
+    <string name="share_target_label">傳到格窗</string>
+    <string name="share_pane_title">開啟到哪個視窗？</string>
+    <string name="pane_main">大視窗</string>
+    <string name="pane_slot">小視窗 %1$d</string>
+    <string name="share_workspace_closed">工作台沒有開啟，先開啟再分享。</string>
+    <string name="share_unsupported">沒有應用程式能開啟這段內容。</string>
 </resources>

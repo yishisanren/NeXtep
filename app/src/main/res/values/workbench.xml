@@ -57,4 +57,18 @@
     <string name="favorite_apps_edit">Edit</string>
     <string name="favorite_apps_summary">Selected %1$d of up to %2$d apps</string>
     <string name="workbench_compare_hint">Search one product in several apps at once, each in its own pane.</string>
+    <string name="section_scenes">Scenes</string>
+    <string name="scenes_summary">Save the main pane and the four small panes as a set and bring it back in one tap.</string>
+    <string name="scene_save_action">Save current</string>
+    <string name="scene_name_hint">Scene name</string>
+    <string name="scene_apply_action">Restore</string>
+    <string name="scene_delete_action">Delete</string>
+    <string name="scenes_empty">No scenes yet. Open the workspace, then save the current layout here.</string>
+    <string name="scene_apps_none">Empty layout</string>
+    <string name="share_target_label">Open in Panes</string>
+    <string name="share_pane_title">Open in which pane?</string>
+    <string name="pane_main">Main pane</string>
+    <string name="pane_slot">Small pane %1$d</string>
+    <string name="share_workspace_closed">The workspace is not open. Open it, then share again.</string>
+    <string name="share_unsupported">No app can open this content.</string>
 </resources>

@@ -19,12 +19,12 @@ class MainActivityTest {
     private fun descendants(view: View): Sequence<View> = sequenceOf(view) +
         ((view as? ViewGroup)?.let { group -> (0 until group.childCount).asSequence().flatMap { descendants(group.getChildAt(it)) } } ?: emptySequence())
 
-    @Test fun thePageHasSixGroupsAndNoUpstreamOnlyControls() {
+    @Test fun thePageHasSevenGroupsAndNoUpstreamOnlyControls() {
         val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
         val root = activity.findViewById<ViewGroup>(android.R.id.content)
         val texts = descendants(root).filterIsInstance<TextView>().map { it.text.toString() }.toSet()
-        assertEquals(6, descendants(root).count { it is MaterialCardView })
-        for (title in listOf(R.string.app_strip_title, R.string.section_layout, R.string.section_open, R.string.section_privacy,
+        assertEquals(7, descendants(root).count { it is MaterialCardView })
+        for (title in listOf(R.string.app_strip_title, R.string.section_scenes, R.string.section_layout, R.string.section_open, R.string.section_privacy,
                 R.string.section_support, R.string.navigation_about, R.string.about_based_on, R.string.about_tagline)) {
             assertTrue(activity.getString(title), activity.getString(title) in texts)
         }
