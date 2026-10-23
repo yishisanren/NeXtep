@@ -54,7 +54,7 @@ object TriggerBroadcastContract {
     const val COMMAND_SCENE_DELETE = "scene_delete"
     /** Value: "<slot index or -1 for the main pane>|<intent URI>". */
     const val COMMAND_OPEN_IN_PANE = "open_in_pane"
-    const val RUNTIME_PROTOCOL_VERSION = 51
+    const val RUNTIME_PROTOCOL_VERSION = 52
     const val RESULT_HANDLED = 0x4E58
     const val RESULT_NOT_READY = 0
 

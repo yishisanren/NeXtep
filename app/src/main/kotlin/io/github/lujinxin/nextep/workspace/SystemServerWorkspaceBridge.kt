@@ -122,7 +122,7 @@ object SystemServerWorkspaceBridge {
                     it.screenWidth, it.screenHeight, it.topHeight, it.sidebarWidth, it.sidebarSide.name,
                     it.navigationInsets.left, it.navigationInsets.top,
                     it.navigationInsets.right, it.navigationInsets.bottom, it.displayRotation,
-                    if (it.controlAtBottom) 1 else 0, it.statusInset,
+                    if (it.controlAtBottom) 1 else 0, it.statusInset, it.mainCanvasHeight,
                 ).joinToString(","))
             }
             Settings.Global.putInt(resolver, ACTIVE_KEY, if (active) 1 else 0)
@@ -211,7 +211,7 @@ object SystemServerWorkspaceBridge {
 
     private fun decodeGeometry(encoded: String): WorkspaceGeometry? = runCatching {
         val fields = encoded.split(',')
-        if (fields.size !in 9..12) return@runCatching null
+        if (fields.size !in 9..13) return@runCatching null
         WorkspaceGeometry(
             screenWidth = fields[0].toInt(),
             screenHeight = fields[1].toInt(),
@@ -223,7 +223,8 @@ object SystemServerWorkspaceBridge {
             ),
             displayRotation = if (fields.size >= 10) fields[9].toInt() else 0,
             controlAtBottom = fields.size >= 11 && fields[10] == "1",
-            statusInset = if (fields.size == 12) fields[11].toInt() else 0,
+            statusInset = if (fields.size >= 12) fields[11].toInt() else 0,
+            mainCanvasHeight = if (fields.size >= 13) fields[12].toInt() else 0,
         )
     }.getOrNull()
 }

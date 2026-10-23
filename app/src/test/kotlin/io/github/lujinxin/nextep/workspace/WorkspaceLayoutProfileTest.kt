@@ -12,8 +12,17 @@ class WorkspaceLayoutProfileTest {
                     for (wideIndex in listOf(null, 0, 3)) {
                         val profile = normal.withWideSlot(wideIndex)
                         val g = profile.geometry
-                        assertEquals(g.contentHeight.toFloat(), g.availableHeight * g.contentScale, 1f)
-                        assertEquals(g.contentWidth.toFloat(), g.availableWidth * g.contentScale, 1f)
+                        // The common fit (Launcher, shade) is height-limited under a wide picture and leaves
+                        // a strip on the right; without one it matches the main window exactly.
+                        val sharedAspect = wideIndex != null && !g.isLandscape
+                        if (!sharedAspect) {
+                            assertEquals(g.contentHeight.toFloat(), g.availableHeight * g.contentScale, 1f)
+                            assertEquals(g.contentWidth.toFloat(), g.availableWidth * g.contentScale, 1f)
+                            assertEquals(0, g.mainCanvasHeight)
+                        } else {
+                            assertEquals(g.contentHeight.toFloat(), g.availableHeight * g.contentScale, 1f)
+                            assertTrue(g.availableWidth * g.contentScale <= g.contentWidth + 1f)
+                        }
                         if (wideIndex != null) {
                             val inset = (WorkspaceControlMetrics.STATUS_HEIGHT_DP * 476 / 160f).toInt()
                             assertEquals(g.topHeight - inset, profile.slots[wideIndex].height)
@@ -31,6 +40,16 @@ class WorkspaceLayoutProfileTest {
                             }
                             val railHeight = profile.slots.filterIndexed { i, _ -> i != wideIndex }.sumOf { it.height } + profile.gapPixels * 2
                             assertTrue(railHeight <= g.sidebarLogicalHeight)
+                            // Main window and rail cards share one aspect; the main app's shortened canvas
+                            // fills the main window at the width-fit scale, so swaps keep the layout.
+                            if (sharedAspect) {
+                                val card = profile.slots.first { it.width != profile.slots[wideIndex].width }
+                                assertEquals(card.width.toDouble() / card.height, g.contentWidth.toDouble() / g.contentHeight, 0.02)
+                                assertTrue(g.mainCanvasHeight > 0)
+                                assertEquals(g.contentHeight.toFloat(), g.mainCanvasHeight * g.mainScale, 2f)
+                                assertEquals(g.contentWidth.toFloat(), g.availableWidth * g.mainScale, 1f)
+                            }
+                            assertEquals(0, normal.geometry.mainCanvasHeight)
                             val narrower = normal.withWideSlot(wideIndex, 2.4)
                             assertTrue(narrower.geometry.topHeight < g.topHeight)
                             assertEquals(2.4, narrower.canvas(wideIndex).let { it.width.toDouble() / it.height }, 0.02)

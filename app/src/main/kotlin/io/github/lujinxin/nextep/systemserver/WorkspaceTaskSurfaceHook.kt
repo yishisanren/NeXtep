@@ -101,10 +101,10 @@ internal object WorkspaceTaskSurfaceHook {
         val service = field(task, "mAtmService") ?: return
         val context = field(service, "mContext") as? Context ?: return
         val geometry = SystemServerWorkspaceBridge.activeGeometry(context) ?: return
-        setMatrix.invoke(transaction, leash, geometry.contentScale, 0f, 0f, geometry.contentScale)
+        setMatrix.invoke(transaction, leash, geometry.mainScale, 0f, 0f, geometry.mainScale)
         transaction.setCrop(leash, Rect(geometry.availableLeft, geometry.availableTop,
             geometry.availableRight, geometry.availableBottom))
-        transaction.setPosition(leash, geometry.contentTranslationX, geometry.contentTranslationY)
+        transaction.setPosition(leash, geometry.mainTranslationX, geometry.mainTranslationY)
     }
 
     private fun isSlotDisplay(display: Any): Boolean {

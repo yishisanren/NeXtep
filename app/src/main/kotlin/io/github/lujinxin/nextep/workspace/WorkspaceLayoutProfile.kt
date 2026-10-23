@@ -75,11 +75,22 @@ data class WorkspaceLayoutProfile(
         val g = normal.geometry
         val short = minOf(g.availableWidth, g.availableHeight)
         val long = maxOf(g.availableWidth, g.availableHeight)
-        // The picture spans the full width at its aspect; the main window below stays
-        // proportional, so the three rail cards shrink to fit and sit centred with side slack.
+        // The picture spans the full width at its aspect. Below it the main window and the three
+        // rail cards share one aspect so an app keeps its layout when it swaps between them:
+        // main = R·A, card = (R − 2g)/3 · A, main + card + g = short  ⇒  A = 3(short − g)/(4R − 2g).
         val top = (statusInset + short / clamped).toInt().coerceIn(1, (long * .70).toInt())
-        val rail = WorkspaceGeometry.proportionalRail(short, long, top).coerceAtLeast(gapPixels + 1)
-        return normal.copy(geometry = g.copy(topHeight = top, sidebarWidth = rail), wideSlotIndex = index, wideAspect = clamped)
+        if (g.isLandscape) {
+            // Landscape keeps the proportional rail; the shared-aspect solve is a portrait layout.
+            val rail = WorkspaceGeometry.proportionalRail(short, long, top).coerceAtLeast(gapPixels + 1)
+            return normal.copy(geometry = g.copy(topHeight = top, sidebarWidth = rail), wideSlotIndex = index, wideAspect = clamped)
+        }
+        val remaining = long - top
+        val shared = 3.0 * (short - gapPixels) / (4.0 * remaining - 2 * gapPixels)
+        val main = (remaining * shared).toInt().coerceIn(1, short - gapPixels - 1)
+        val rail = (short - main).coerceAtLeast(gapPixels + 1)
+        return normal.copy(geometry = g.copy(topHeight = top, sidebarWidth = rail,
+            mainCanvasHeight = wideMainCanvasHeight(g.copy(topHeight = top, sidebarWidth = rail))),
+            wideSlotIndex = index, wideAspect = clamped)
     }
 
     private fun slotBounds(count: Int, fit: Boolean = true): List<Slot> {
@@ -124,6 +135,10 @@ data class WorkspaceLayoutProfile(
         geometry.displayRotation) + if (wideSlotIndex == null) emptyList() else listOf(wideSlotIndex)).joinToString(",")
 
     companion object {
+        /** The main canvas height that fills the main window at the width-fit scale. */
+        internal fun wideMainCanvasHeight(g: WorkspaceGeometry): Int =
+            (g.contentHeight.toDouble() * g.availableWidth / g.contentWidth).toInt().coerceAtLeast(1)
+
         const val DEFAULT_WIDE_ASPECT = 16.0 / 9
         const val MIN_WIDE_ASPECT = 16.0 / 9
         const val MAX_WIDE_ASPECT = 2.4
@@ -178,7 +193,9 @@ data class WorkspaceLayoutProfile(
                 expected[19] = oldCanvas.height.toString()
             }
             if (expected.joinToString(",") != encoded) return@runCatching null
-            if (version == "12" || version == "13") profile else {
+            if (version == "13") profile.copy(geometry = profile.geometry.copy(mainCanvasHeight =
+                if (profile.geometry.isLandscape) 0 else wideMainCanvasHeight(profile.geometry)))
+            else if (version == "12") profile else {
                 // Recalculate the old slot proportions once using the already
                 // recorded display and navigation mode; never resample metrics.
                 create(profile.geometry.screenWidth, profile.geometry.screenHeight,

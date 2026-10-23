@@ -60,13 +60,13 @@ class MainTaskPresentationCoordinator(context: Context) {
         }
 
         if (presentedTaskId == task.taskId && activePresenter === surfacePresenter) {
-            return surfacePresenter.reapply(task.taskId, geometry)
+            return applyMainBounds(task, geometry).mapCatching { surfacePresenter.reapply(task.taskId, geometry).getOrThrow() }
         }
 
         // Fullscreen tasks inherit display bounds. Explicit screen-sized bounds survive
         // rotation and can leave a portrait Activity confined to the old landscape area.
         homePresented = false
-        val surfaceResult = clearFullscreenBounds(task).mapCatching {
+        val surfaceResult = applyMainBounds(task, geometry).mapCatching {
             surfacePresenter.present(task.taskId, geometry).getOrThrow()
         }
         if (surfaceResult.isSuccess) {
@@ -135,12 +135,40 @@ class MainTaskPresentationCoordinator(context: Context) {
         val taskId = presentedTaskId ?: return Result.success(Unit)
         val presenter = activePresenter ?: return Result.success(Unit)
         return presenter.restore(taskId, animated).mapCatching {
-            // The entry cleared bounds already; release must not start another layout change.
+            // The entry cleared bounds already; release must not start another layout change,
+            // unless the app was laid out on the shortened wide-picture canvas.
+            if (shortenedTaskId == taskId) {
+                shortenedTaskId = null
+                taskRepository.findTask(taskId)?.let { task ->
+                    task.token?.let { token -> WindowContainerTransactionCompat.applyTaskBounds(token, Rect()) }
+                        ?: ActivityTaskManagerCompat.resizeTask(taskId, Rect())
+                }
+            }
             if (presentedTaskId == taskId && activePresenter === presenter) {
                 presentedTaskId = null
                 activePresenter = null
             }
         }
+    }
+
+    private var shortenedTaskId: Int? = null
+
+    /**
+     * Under a wide picture the main app is laid out at the shortened canvas so it shares the rail
+     * cards' aspect; otherwise any override is cleared as before.
+     */
+    private fun applyMainBounds(task: TaskRepository.TaskSnapshot, geometry: WorkspaceGeometry): Result<Unit> {
+        val height = geometry.mainTaskHeight
+        if (height <= 0) {
+            if (shortenedTaskId == task.taskId) shortenedTaskId = null
+            return clearFullscreenBounds(task)
+        }
+        if (shortenedTaskId == task.taskId && task.bounds.height() == height) return Result.success(Unit)
+        if (task.vendorWindowed || task.displayId != Display.DEFAULT_DISPLAY) return Result.success(Unit)
+        NeXtepLog.info("main_task_bounds", "Laying out taskId=${task.taskId} at ${geometry.screenWidth}x$height for the wide picture")
+        val bounds = Rect(0, 0, geometry.screenWidth, height)
+        return (task.token?.let { WindowContainerTransactionCompat.applyTaskBounds(it, bounds) }
+            ?: ActivityTaskManagerCompat.resizeTask(task.taskId, bounds)).onSuccess { shortenedTaskId = task.taskId }
     }
 
     private fun notifyHomePresented() {

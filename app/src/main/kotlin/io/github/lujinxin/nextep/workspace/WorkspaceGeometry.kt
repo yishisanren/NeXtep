@@ -21,6 +21,11 @@ data class WorkspaceGeometry(
     val controlAtBottom: Boolean = false,
     /** Portrait-bottom only: the status bar band above the rail and main window; both start below it. */
     val statusInset: Int = 0,
+    /**
+     * Under a wide picture the main app is laid out at the available width and this height, so it
+     * shares the rail cards' aspect and fills the main window edge to edge; 0 keeps the native canvas.
+     */
+    val mainCanvasHeight: Int = 0,
 ) {
     val isLandscape: Boolean get() = screenWidth > screenHeight
     // Surface rotations are quarter turns from the phone's natural portrait axes.
@@ -98,6 +103,14 @@ data class WorkspaceGeometry(
     val contentTranslationY: Float
         // The control and rail proportions preserve the source aspect ratio.
         get() = contentTop - availableTop * contentScale
+
+    // The main app's own transform: width-fit on a shortened canvas, otherwise the common fit.
+    // Windows that cannot re-lay out (Launcher, SystemUI's shade) keep contentScale.
+    val mainScale: Float get() = if (mainCanvasHeight > 0) contentWidth.toFloat() / availableWidth else contentScale
+    val mainTranslationX: Float get() = if (mainCanvasHeight > 0) contentLeft - availableLeft * mainScale else contentTranslationX
+    val mainTranslationY: Float get() = if (mainCanvasHeight > 0) contentTop - availableTop * mainScale else contentTranslationY
+    /** Task bounds height that lays the main app out at [mainCanvasHeight] below the usual insets; 0 = native. */
+    val mainTaskHeight: Int get() = if (mainCanvasHeight > 0) mainCanvasHeight + availableTop + (screenHeight - availableBottom) else 0
 
     companion object {
         const val TOP_HEIGHT_FRACTION = 0.265f

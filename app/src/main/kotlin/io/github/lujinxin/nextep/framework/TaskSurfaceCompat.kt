@@ -162,8 +162,8 @@ object TaskSurfaceCompat {
         check(isValid(leash)) { "Invalid promotion leash taskId=$taskId" }
         preparedPresentations[taskId] = ActivePresentation(
             taskId, leash,
-            geometry.contentScale, geometry.contentScale,
-            geometry.contentTranslationX, geometry.contentTranslationY,
+            geometry.mainScale, geometry.mainScale,
+            geometry.mainTranslationX, geometry.mainTranslationY,
             SystemClock.uptimeMillis() + REAPPLY_WINDOW_MS, 0L,
             crop = sourceCrop(geometry),
         )
@@ -238,7 +238,7 @@ object TaskSurfaceCompat {
             ?: error("WM Shell task leash unavailable for taskId=$taskId")
         check(isValid(leash)) { "WM Shell task leash is invalid for taskId=$taskId" }
 
-        val scaleX = geometry.contentScale
+        val scaleX = geometry.mainScale
         val scaleY = scaleX
         val now = SystemClock.uptimeMillis()
         val presentation = ActivePresentation(
@@ -246,8 +246,8 @@ object TaskSurfaceCompat {
             leash = leash,
             scaleX = scaleX,
             scaleY = scaleY,
-            positionX = geometry.contentTranslationX,
-            positionY = geometry.contentTranslationY,
+            positionX = geometry.mainTranslationX,
+            positionY = geometry.mainTranslationY,
             reapplyUntil = now + REAPPLY_WINDOW_MS,
             lastAppliedAt = now,
             crop = sourceCrop(geometry),
@@ -279,13 +279,13 @@ object TaskSurfaceCompat {
         val previous = activePresentations[taskId]
             ?: error("No active surface presentation for taskId=$taskId")
         val now = SystemClock.uptimeMillis()
-        val scaleX = geometry.contentScale
+        val scaleX = geometry.mainScale
         val scaleY = scaleX
         val crop = sourceCrop(geometry)
         val geometryChanged = previous.scaleX != scaleX ||
             previous.scaleY != scaleY ||
-            previous.positionX != geometry.contentTranslationX ||
-            previous.positionY != geometry.contentTranslationY || previous.crop != crop
+            previous.positionX != geometry.mainTranslationX ||
+            previous.positionY != geometry.mainTranslationY || previous.crop != crop
         if (!geometryChanged && now - previous.lastAppliedAt < MIN_REAPPLY_INTERVAL_MS) {
             return@runCatching
         }
@@ -306,8 +306,8 @@ object TaskSurfaceCompat {
                 leash = currentLeash,
                 scaleX = scaleX,
                 scaleY = scaleY,
-                positionX = geometry.contentTranslationX,
-                positionY = geometry.contentTranslationY,
+                positionX = geometry.mainTranslationX,
+                positionY = geometry.mainTranslationY,
                 reapplyUntil = now + REAPPLY_WINDOW_MS,
                 lastAppliedAt = 0L,
                 crop = crop,
