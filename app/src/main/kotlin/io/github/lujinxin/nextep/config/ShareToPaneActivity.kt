@@ -1,5 +1,6 @@
 package io.github.lujinxin.nextep.config
 
+import android.app.Activity
 import android.app.SearchManager
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -7,7 +8,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.util.Patterns
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
 import io.github.lujinxin.nextep.R
 import io.github.lujinxin.nextep.display.WORKSPACE_SLOT_COUNT
 import io.github.lujinxin.nextep.trigger.TriggerBroadcastContract
@@ -17,7 +17,7 @@ import io.github.lujinxin.nextep.trigger.TriggerCoordinator
  * Share-sheet target: a link opens in the chosen pane with the default browser, any other
  * text becomes a web search there. SystemUI places the resolved Activity; this only picks.
  */
-class ShareToPaneActivity : AppCompatActivity() {
+class ShareToPaneActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val text = intent.getStringExtra(Intent.EXTRA_TEXT)?.trim().orEmpty()
@@ -42,7 +42,7 @@ class ShareToPaneActivity : AppCompatActivity() {
             .show()
     }
 
-    /** SystemUI resolves only intents that name a package, so pick the default handler here. */
+    /** SystemUI only places intents with an explicit Activity, so pick the default handler here. */
     private fun resolve(text: String): Intent? {
         val url = text.lines().firstOrNull { Patterns.WEB_URL.matcher(it.trim()).matches() }?.trim()
         val source = if (url != null) {
@@ -52,10 +52,10 @@ class ShareToPaneActivity : AppCompatActivity() {
         }
         val manager = packageManager
         val candidates = manager.queryIntentActivities(source, PackageManager.MATCH_DEFAULT_ONLY)
-            .mapNotNull { it.activityInfo?.packageName }.filter { it != packageName }
-        val preferred = manager.resolveActivity(source, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
-            ?.takeIf { it in candidates }
+            .mapNotNull { it.activityInfo }.filter { it.packageName != packageName }
+        val preferred = manager.resolveActivity(source, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo
+            ?.let { info -> candidates.firstOrNull { it.packageName == info.packageName } }
         val chosen = preferred ?: candidates.firstOrNull() ?: return null
-        return source.setPackage(chosen)
+        return source.setClassName(chosen.packageName, chosen.name)
     }
 }

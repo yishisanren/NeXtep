@@ -595,14 +595,18 @@ class SlotTaskCoordinator(
         ensureMainThread()
         check(active && !suspended && !transitionInProgress && !recentSelectionPending && !appLaunch.running)
         fun launcher(pkg: String) = packageManager.getLaunchIntentForPackage(pkg)?.let(::normalizeLaunchIntent)
+        clearDesktopSelection()
         val requests = slots.withIndex().mapNotNull { (index, pkg) ->
-            pkg?.let(::launcher)?.takeIf { validActiveSlot(index) }?.let { LaunchRequest(it, index, slots(index)) }
+            val intent = pkg?.let(::launcher)?.takeIf { validActiveSlot(index) } ?: return@mapNotNull null
+            // A slot already showing this app stays; any other occupant is parked first, as searches do.
+            if ((slotRecords[index].state as? SlotState.Occupied)?.component?.packageName == pkg) return@mapNotNull null
+            replaceSearchDestination(index, intent)
+            LaunchRequest(intent, index, slots(index))
         }
         val mainIntent = main?.let(::launcher)
         fun openMain(result: Result<Unit>) {
             complete(result.mapCatching { mainIntent?.let { openInMain(it).getOrThrow() } ?: Unit })
         }
-        clearDesktopSelection()
         if (requests.isEmpty()) openMain(Result.success(Unit)) else appLaunch.begin(requests, ::openMain).getOrThrow()
     }
 
