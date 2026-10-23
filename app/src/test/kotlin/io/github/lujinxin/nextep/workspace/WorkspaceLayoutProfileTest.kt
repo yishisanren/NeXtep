@@ -18,13 +18,16 @@ class WorkspaceLayoutProfileTest {
                             val inset = (WorkspaceControlMetrics.STATUS_HEIGHT_DP * 476 / 160f).toInt()
                             assertEquals(g.topHeight - inset, profile.slots[wideIndex].height)
                             assertEquals(profile.slots[wideIndex].height, profile.canvas(wideIndex).height)
-                            // The picture spans the full width at 16:9; the rail cards fit inside the rail,
-                            // centred with side slack, and the main window stays proportional.
+                            // The picture spans the full width at 16:9; the rail cards fill the rail edge to
+                            // edge and their displays take the card's aspect; the main window stays proportional.
                             val wide = profile.canvas(wideIndex)
                             assertEquals(16.0 / 9, wide.width.toDouble() / wide.height, 0.02)
-                            profile.slots.filterIndexed { i, _ -> i != wideIndex }.forEach { slot ->
-                                assertTrue("rail card ${slot.width} in ${g.sidebarWidth}", slot.width <= g.sidebarWidth - profile.gapPixels)
-                                assertTrue(slot.width > 0 && slot.height > 0)
+                            profile.slots.forEachIndexed { i, slot ->
+                                if (i == wideIndex) return@forEachIndexed
+                                assertEquals(g.sidebarWidth - profile.gapPixels, slot.width)
+                                assertTrue(slot.height > 0)
+                                val railCanvas = profile.canvas(i)
+                                assertEquals(slot.width.toDouble() / slot.height, railCanvas.width.toDouble() / railCanvas.height, 0.01)
                             }
                             val railHeight = profile.slots.filterIndexed { i, _ -> i != wideIndex }.sumOf { it.height } + profile.gapPixels * 2
                             assertTrue(railHeight <= g.sidebarLogicalHeight)

@@ -32,8 +32,10 @@ data class WorkspaceLayoutProfile(
     // Apps lay out directly at the recorded usable resolution. Fit that complete
     // buffer into a slot; do not crop navigation pixels off an already laid-out app.
     val source = Source(0, 0, canvas.width, canvas.height)
+    // Under a wide picture the rail cards fill the rail edge to edge; their displays take the
+    // card's own aspect (see canvas) instead of leaving slack beside the main window.
     val slots: List<Slot> = if (wideSlotIndex == null) slotBounds(WORKSPACE_SLOT_COUNT) else {
-        val rail = slotBounds(WORKSPACE_SLOT_COUNT - 1).iterator()
+        val rail = slotBounds(WORKSPACE_SLOT_COUNT - 1, fit = false).iterator()
         List(WORKSPACE_SLOT_COUNT) { index ->
             if (index == wideSlotIndex) Slot(minOf(geometry.availableWidth, geometry.availableHeight),
                 wideHeight(), 0) else rail.next()
@@ -45,10 +47,15 @@ data class WorkspaceLayoutProfile(
 
     private fun wideHeight(): Int = (geometry.topHeight - statusInset).coerceAtLeast(1)
 
-    fun canvas(index: Int): SlotGeometry = if (index == wideSlotIndex) {
-        SlotGeometry(canvas.width, (canvas.width.toDouble() * wideHeight() /
+    fun canvas(index: Int): SlotGeometry = when {
+        index == wideSlotIndex -> SlotGeometry(canvas.width, (canvas.width.toDouble() * wideHeight() /
             minOf(geometry.availableWidth, geometry.availableHeight)).toInt().coerceAtLeast(1), densityDpi)
-    } else canvas
+        // A rail card under a wide picture: the app lays out at the card's aspect, full canvas width.
+        wideSlotIndex != null -> slots[index].let { slot ->
+            SlotGeometry(canvas.width, (canvas.width.toDouble() * slot.height / slot.width).toInt().coerceAtLeast(1), densityDpi)
+        }
+        else -> canvas
+    }
 
     fun source(index: Int): Source = canvas(index).let { Source(0, 0, it.width, it.height) }
 
