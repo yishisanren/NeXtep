@@ -616,6 +616,8 @@ class SlotTaskCoordinator(
         check(validActiveSlot(index) && !recentSelectionPending && !appLaunch.running)
         val normalized = checkNotNull(normalizeExternalIntent(source)) { "External content has no Activity" }
         clearDesktopSelection()
+        // The chosen pane shows the content; whatever was there is parked, as a search would do.
+        replaceSearchDestination(index, normalized)
         appLaunch.begin(listOf(LaunchRequest(normalized, index, slots(index)))) { result ->
             result.onFailure {
                 if (it !is java.util.concurrent.CancellationException) {
