@@ -53,6 +53,7 @@ internal class WorkbenchToolsController(
             panel.addView(TextView(panel.context).apply {
                 text = string(labels[position])
                 textSize = 16f
+                setTextColor(appearance().text)
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 minHeight = dp(56)
                 setPadding(dp(16), dp(4), dp(16), dp(4))
@@ -313,6 +314,13 @@ internal class WorkbenchToolsController(
                 }
             }
             value.show()
+            value.window?.decorView?.let { decor ->
+                // Our colours are final: ColorOS force-dark would re-tint the light accent, and the
+                // ROM's own rounded panel inside the window would show as a second frame.
+                decor.isForceDarkAllowed = false
+                (decor.findViewById<View>(android.R.id.content) as? android.view.ViewGroup)
+                    ?.getChildAt(0)?.background = null
+            }
             true
         }.onFailure {
             dismiss()

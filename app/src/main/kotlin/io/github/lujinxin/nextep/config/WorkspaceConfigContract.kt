@@ -51,7 +51,7 @@ object WorkspaceConfigContract {
     const val EXTRA_NAVIGATION_BUTTONS_ENABLED = "io.github.yishisanren.panes.extra.NAVIGATION_BUTTONS_ENABLED"
     const val EXTRA_LANGUAGE_TAG = "io.github.yishisanren.panes.extra.LANGUAGE_TAG"
     const val RESULT_CONFIG = 35_001
-    private const val MODULE_PACKAGE = "io.github.yishisanren.panes"
+    const val MODULE_PACKAGE = "io.github.yishisanren.panes"
     private val RECEIVER_CLASS = WorkspaceConfigReceiver::class.java.name
 
     fun queryIntent(): Intent = Intent(ACTION_QUERY)
@@ -101,7 +101,7 @@ object WorkspaceConfigClient {
         }
         val direct = runCatching {
             context.contentResolver.call(
-                android.net.Uri.parse("content://io.github.lujinxin.nextep.workspace.config"),
+                android.net.Uri.parse("content://${WorkspaceConfigContract.MODULE_PACKAGE}.workspace.config"),
                 "query", null, null,
             )
         }.getOrNull()
