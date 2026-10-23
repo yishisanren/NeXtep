@@ -19,8 +19,8 @@ data class WorkspaceGeometry(
     val displayRotation: Int = 0,
     /** Control strip at the phone's physical bottom instead of its top; the rail and main region shift to fill. */
     val controlAtBottom: Boolean = false,
-    /** Portrait-bottom only: the status bar no longer sits over the control strip, so the rail starts below it. */
-    val railTopInset: Int = 0,
+    /** Portrait-bottom only: the status bar band above the rail and main window; both start below it. */
+    val statusInset: Int = 0,
 ) {
     val isLandscape: Boolean get() = screenWidth > screenHeight
     // Surface rotations are quarter turns from the phone's natural portrait axes.
@@ -38,7 +38,7 @@ data class WorkspaceGeometry(
     // The task still occupies the full display. Its navigation-safe source rectangle
     // is fitted uniformly, so the native navigation padding is not scaled a second time.
     val availableLeft: Int get() = navigationInsets.left
-    val availableTop: Int get() = navigationInsets.top
+    val availableTop: Int get() = navigationInsets.top + statusInset
     val availableRight: Int get() = screenWidth - navigationInsets.right
     val availableBottom: Int get() = screenHeight - navigationInsets.bottom
     val availableWidth: Int get() = availableRight - availableLeft
@@ -55,7 +55,7 @@ data class WorkspaceGeometry(
             navigationInsets.bottom <= screenHeight - navigationInsets.top - 2)
         require(availableWidth > 1 && availableHeight > 1)
         require(topHeight in 1 until (if (isLandscape) availableWidth else availableHeight))
-        require(railTopInset >= 0)
+        require(statusInset >= 0 && statusInset <= screenHeight - navigationInsets.top - navigationInsets.bottom - 2)
         require(sidebarWidth in 1 until (if (isLandscape) availableHeight else availableWidth))
     }
 
@@ -65,12 +65,11 @@ data class WorkspaceGeometry(
     val controlLeft: Int get() = if (isLandscape && !isControlOnLeft) availableRight - topHeight else availableLeft
     val controlTop: Int get() = if (!isLandscape && controlAtBottom) availableBottom - topHeight else availableTop
     val sidebarLeft: Int get() = if (isLandscape) contentLeft else if (sidebarSide == SidebarSide.LEFT) availableLeft else contentRight
-    private val railInset: Int get() = if (!isLandscape && controlAtBottom) railTopInset.coerceIn(0, contentHeight - 2) else 0
-    val sidebarTop: Int get() = if (!isLandscape) contentTop + railInset else
+    val sidebarTop: Int get() = if (!isLandscape) contentTop else
         if (isSidebarAtTop) availableTop else availableBottom - sidebarWidth
     val sidebarPhysicalWidth: Int get() = if (isLandscape) contentWidth else sidebarWidth
-    val sidebarPhysicalHeight: Int get() = if (isLandscape) sidebarWidth else contentHeight - railInset
-    val sidebarLogicalHeight: Int get() = if (isLandscape) contentWidth else contentHeight - railInset
+    val sidebarPhysicalHeight: Int get() = if (isLandscape) sidebarWidth else contentHeight
+    val sidebarLogicalHeight: Int get() = if (isLandscape) contentWidth else contentHeight
 
     val contentTop: Int get() = availableTop + if (!isLandscape) (if (controlAtBottom) 0 else topHeight) else
         if (isSidebarAtTop) sidebarWidth else 0
@@ -112,6 +111,7 @@ data class WorkspaceGeometry(
             navigationInsets: WorkspaceNavigationInsets = WorkspaceNavigationInsets(),
             displayRotation: Int = 0,
             controlAtBottom: Boolean = false,
+            statusInset: Int = 0,
         ): WorkspaceGeometry {
             require(screenWidth > 1 && screenHeight > 1) { "Display dimensions must be usable" }
             require(density.isFinite() && density > 0f) { "Display density must be positive and finite" }
@@ -122,8 +122,12 @@ data class WorkspaceGeometry(
                 navigationInsets.right.coerceIn(0, screenWidth - left - 2),
                 navigationInsets.bottom.coerceIn(0, screenHeight - top - 2),
             )
+            // Portrait with the strip at the bottom: the status band is solved like a top inset,
+            // so the rail and the main window share one top edge and keep their proportions.
+            val safeStatusInset = if (controlAtBottom && screenHeight > screenWidth)
+                statusInset.coerceIn(0, screenHeight - top - safeInsets.bottom - 2) else 0
             val availableWidth = screenWidth - safeInsets.left - safeInsets.right
-            val availableHeight = screenHeight - safeInsets.top - safeInsets.bottom
+            val availableHeight = screenHeight - safeInsets.top - safeInsets.bottom - safeStatusInset
             val landscape = screenWidth > screenHeight
             val longSide = if (landscape) availableWidth else availableHeight
             val shortSide = if (landscape) availableHeight else availableWidth
@@ -144,6 +148,7 @@ data class WorkspaceGeometry(
                 navigationInsets = safeInsets,
                 displayRotation = displayRotation,
                 controlAtBottom = controlAtBottom,
+                statusInset = safeStatusInset,
             )
         }
 

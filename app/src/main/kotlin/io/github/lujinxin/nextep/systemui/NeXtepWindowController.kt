@@ -143,6 +143,7 @@ class NeXtepWindowController(
         if (controlAtBottom == bottom) return
         controlAtBottom = bottom
         workbenchPreferences?.edit()?.putBoolean("control_bottom", bottom)?.apply()
+        viewport.setControlAtBottom(bottom)
         onViewportChanged()
     }
 

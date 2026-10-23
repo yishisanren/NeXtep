@@ -59,6 +59,7 @@ internal class WorkspaceViewport(
     private var profile: WorkspaceLayoutProfile? = null
     private var baseProfile: WorkspaceLayoutProfile? = null
     private var wideSlotIndex: Int? = null
+    private var controlAtBottom = false
     private val notifyChanged = Runnable { onChanged() }
     private val displayManager = context.getSystemService(DisplayManager::class.java)
 
@@ -83,7 +84,17 @@ internal class WorkspaceViewport(
     }
 
     fun geometry(side: SidebarSide, controlAtBottom: Boolean = false, refreshMetrics: Boolean = false): WorkspaceGeometry {
-        return layout(refreshMetrics).geometry(side, controlAtBottom)
+        setControlAtBottom(controlAtBottom)
+        return layout(refreshMetrics).geometry(side)
+    }
+
+    /** Re-derives the session profile; the caller reconfigures the windows. */
+    fun setControlAtBottom(bottom: Boolean) {
+        if (bottom == controlAtBottom) return
+        controlAtBottom = bottom
+        val recorded = baseProfile ?: return
+        profile = recorded.withWideSlot(wideSlotIndex).withControlAtBottom(bottom)
+        SystemServerWorkspaceBridge.publishLayout(context, checkNotNull(profile))
     }
 
     fun layout(refreshMetrics: Boolean = false): WorkspaceLayoutProfile {
@@ -115,8 +126,8 @@ internal class WorkspaceViewport(
     fun setWideSlot(index: Int?) {
         if (index == wideSlotIndex) return
         wideSlotIndex = index
-        val recorded = baseProfile ?: layout().withWideSlot(null)
-        profile = recorded.withWideSlot(index)
+        val recorded = baseProfile ?: layout().withWideSlot(null).withControlAtBottom(false)
+        profile = recorded.withWideSlot(index).withControlAtBottom(controlAtBottom)
         SystemServerWorkspaceBridge.publishLayout(context, checkNotNull(profile))
         handler.removeCallbacks(notifyChanged)
         handler.post(notifyChanged)
@@ -175,7 +186,7 @@ internal class WorkspaceViewport(
         if (cached != snapshot || profile == null) {
             baseProfile = saved ?: WorkspaceLayoutProfile.create(snapshot.width, snapshot.height,
                 (snapshot.density * 160).roundToInt(), snapshot.navigationInsets, snapshot.displayRotation)
-            profile = checkNotNull(baseProfile).withWideSlot(wideSlotIndex)
+            profile = checkNotNull(baseProfile).withWideSlot(wideSlotIndex).withControlAtBottom(controlAtBottom)
             SystemServerWorkspaceBridge.publishLayout(context, checkNotNull(profile))
         }
         cached = snapshot

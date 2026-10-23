@@ -42,6 +42,8 @@ class VirtualDisplaySlot(
     private var creating = false
     private var creation = 0
     private var outputBoundAction: (() -> Unit)? = null
+    private var boundWidth = 0
+    private var boundHeight = 0
     private val outputBoundFallback = Runnable {
         NeXtepLog.warn("virtual_display", "Output not bound in time slot=$index display=${displayId()}")
         runOutputBound()
@@ -191,7 +193,10 @@ class VirtualDisplaySlot(
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         NeXtepLog.info("virtual_display", "Surface changed slot=$index display=${displayId()} size=${width}x$height")
-        updateDisplay(holder, rebind = true)
+        // The holder keeps its Java Surface across a resize but replaces the producer; a change
+        // at the bound size is the first callback after creation and must not reconnect the
+        // display's queue a second time (that dropped the queued frames: NO_BUFFER_AVAILABLE).
+        updateDisplay(holder, rebind = width != boundWidth || height != boundHeight)
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
@@ -215,10 +220,10 @@ class VirtualDisplaySlot(
             return
         }
         if (output != null && (rebind || surface !== output)) {
-            // SurfaceHolder can retain its Java Surface while replacing the
-            // underlying producer on a resize; identity alone cannot detect it.
             display.setSurface(output)
             surface = output
+            boundWidth = holder.surfaceFrame.width()
+            boundHeight = holder.surfaceFrame.height()
             runOutputBound()
         }
         if (geometry == activeGeometry) {
@@ -266,6 +271,8 @@ class VirtualDisplaySlot(
                 }
                 result.onSuccess { display ->
                     surface = createdSurface
+                    boundWidth = view.textureView.holder.surfaceFrame.width()
+                    boundHeight = view.textureView.holder.surfaceFrame.height()
                     virtualDisplay = display
                     listener?.onDisplayReady(index, display.display.displayId)
                     NeXtepLog.info(

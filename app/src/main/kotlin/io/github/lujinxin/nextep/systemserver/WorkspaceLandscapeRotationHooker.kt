@@ -17,7 +17,7 @@ class WorkspaceLandscapeRotationHooker : XposedInterface.Hooker {
             val display = field(target, "mDisplayContent") ?: return@runCatching null
             if (field(display, "mDisplayId") != Display.DEFAULT_DISPLAY) return@runCatching null
             val context = field(target, "mContext") as? Context ?: return@runCatching null
-            if (!SystemServerWorkspaceBridge.isWorkspaceActive(context)) return@runCatching null
+            if (!SystemServerWorkspaceBridge.observedActive(context)) return@runCatching null
             val portrait = field(target, "mPortraitRotation") as? Int ?: return@runCatching null
             val last = chain.getArg(1) as? Int ?: return@runCatching null
             // A pinned wide video keeps the workspace portrait; a fresh landscape request is held
@@ -33,7 +33,7 @@ class WorkspaceLandscapeRotationHooker : XposedInterface.Hooker {
             val display = field(target, "mDisplayContent") ?: return@runCatching false
             if (field(display, "mDisplayId") != Display.DEFAULT_DISPLAY) return@runCatching false
             val context = field(target, "mContext") as? Context ?: return@runCatching false
-            SystemServerWorkspaceBridge.isWorkspaceActive(context)
+            SystemServerWorkspaceBridge.observedActive(context)
         }.getOrDefault(false)
         // Let Android choose between landscape/seascape using its sensors, docks
         // and user lock policy, instead of hardcoding a result for fixed players.
@@ -48,7 +48,7 @@ class WorkspaceLandscapeRotationHooker : XposedInterface.Hooker {
             val display = field(target, "mDisplayContent") ?: return@runCatching original
             if (field(display, "mDisplayId") != Display.DEFAULT_DISPLAY) return@runCatching original
             val context = field(target, "mContext") as? Context ?: return@runCatching original
-            if (!SystemServerWorkspaceBridge.isWorkspaceActive(context)) return@runCatching original
+            if (!SystemServerWorkspaceBridge.observedActive(context)) return@runCatching original
             val orientation = chain.getArg(0) as? Int ?: return@runCatching original
             if (orientation !in setOf(
                     ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,

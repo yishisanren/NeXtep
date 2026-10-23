@@ -18,6 +18,7 @@ object SystemServerWorkspaceBridge {
     private const val GEOMETRY_KEY = "nextep_workspace_geometry_v1"
     private val geometryObservationStarted = AtomicBoolean(false)
     @Volatile private var observedGeometry: WorkspaceGeometry? = null
+    @Volatile private var observedWideDisplay = -1
     @Volatile private var privateTaskIds: Set<Int> = emptySet()
     private const val PRIVATE_TASKS_KEY = "nextep_workspace_private_task_ids_v1"
     private const val SCENE_KEY = "nextep_workspace_scene_request_v1"
@@ -32,6 +33,8 @@ object SystemServerWorkspaceBridge {
                 val resolver = context.contentResolver
                 fun refresh() {
                     observedGeometry = readActiveGeometry(context)
+                    observedWideDisplay = if (observedGeometry == null) -1 else
+                        Settings.Global.getInt(resolver, WIDE_DISPLAY_KEY, -1)
                     privateTaskIds = if (observedGeometry == null) emptySet() else
                         Settings.Global.getString(resolver, PRIVATE_TASKS_KEY).orEmpty().split(',')
                             .mapNotNull(String::toIntOrNull).filter { it >= 0 }.toSet()
@@ -42,6 +45,7 @@ object SystemServerWorkspaceBridge {
                 resolver.registerContentObserver(Settings.Global.getUriFor(ACTIVE_KEY), false, observer)
                 resolver.registerContentObserver(Settings.Global.getUriFor(GEOMETRY_KEY), false, observer)
                 resolver.registerContentObserver(Settings.Global.getUriFor(PRIVATE_TASKS_KEY), false, observer)
+                resolver.registerContentObserver(Settings.Global.getUriFor(WIDE_DISPLAY_KEY), false, observer)
                 refresh()
             }.onFailure {
                 geometryObservationStarted.set(false)
@@ -51,6 +55,12 @@ object SystemServerWorkspaceBridge {
     }
 
     fun observedActiveGeometry(): WorkspaceGeometry? = observedGeometry
+
+    /** system_server hot paths: RAM only, never a Settings IPC under the WM lock. */
+    fun observedActive(context: Context): Boolean {
+        startGeometryObservation(context)
+        return observedGeometry != null
+    }
 
     fun privateTask(taskId: Int): Boolean = observedGeometry != null && taskId in privateTaskIds
 
@@ -73,23 +83,6 @@ object SystemServerWorkspaceBridge {
 
     internal fun sceneUri(): android.net.Uri = Settings.Global.getUriFor(SCENE_KEY)
 
-    private const val SCENE_TRACE_KEY = "nextep_workspace_scene_trace_v1"
-
-    /** Last 16 scene decisions from system_server; ids and flags only. */
-    internal fun traceScene(context: Context, entry: String) {
-        runCatching {
-            val resolver = context.contentResolver
-            val previous = Settings.Global.getString(resolver, SCENE_TRACE_KEY).orEmpty()
-                .split('|').filter { it.isNotEmpty() }.takeLast(15)
-            Settings.Global.putString(resolver, SCENE_TRACE_KEY,
-                (previous + "${android.os.SystemClock.uptimeMillis()}:$entry").joinToString("|"))
-        }
-    }
-
-    internal fun sceneTrace(context: Context): String = runCatching {
-        Settings.Global.getString(context.contentResolver, SCENE_TRACE_KEY).orEmpty().replace('|', '\n')
-    }.getOrDefault("")
-
     internal fun clearScene(context: Context) {
         runCatching { Settings.Global.putString(context.contentResolver, SCENE_KEY, "") }
     }
@@ -98,13 +91,17 @@ object SystemServerWorkspaceBridge {
         runCatching { Settings.Global.putInt(context.contentResolver, WIDE_DISPLAY_KEY, displayId ?: -1) }
     }
 
-    fun isWideDisplay(context: Context, displayId: Int): Boolean = displayId > 0 && runCatching {
-        Settings.Global.getInt(context.contentResolver, WIDE_DISPLAY_KEY, -1) == displayId && isWorkspaceActive(context)
-    }.getOrDefault(false)
+    fun isWideDisplay(context: Context, displayId: Int): Boolean = displayId > 0 &&
+        if (geometryObservationStarted.get()) observedGeometry != null && observedWideDisplay == displayId
+        else runCatching {
+            Settings.Global.getInt(context.contentResolver, WIDE_DISPLAY_KEY, -1) == displayId && isWorkspaceActive(context)
+        }.getOrDefault(false)
 
-    internal fun hasWideDisplay(context: Context): Boolean = runCatching {
-        Settings.Global.getInt(context.contentResolver, WIDE_DISPLAY_KEY, -1) > 0 && isWorkspaceActive(context)
-    }.getOrDefault(false)
+    internal fun hasWideDisplay(context: Context): Boolean =
+        if (geometryObservationStarted.get()) observedGeometry != null && observedWideDisplay > 0
+        else runCatching {
+            Settings.Global.getInt(context.contentResolver, WIDE_DISPLAY_KEY, -1) > 0 && isWorkspaceActive(context)
+        }.getOrDefault(false)
 
     fun publishLayout(context: Context, profile: WorkspaceLayoutProfile) {
         runCatching {
@@ -125,7 +122,7 @@ object SystemServerWorkspaceBridge {
                     it.screenWidth, it.screenHeight, it.topHeight, it.sidebarWidth, it.sidebarSide.name,
                     it.navigationInsets.left, it.navigationInsets.top,
                     it.navigationInsets.right, it.navigationInsets.bottom, it.displayRotation,
-                    if (it.controlAtBottom) 1 else 0,
+                    if (it.controlAtBottom) 1 else 0, it.statusInset,
                 ).joinToString(","))
             }
             Settings.Global.putInt(resolver, ACTIVE_KEY, if (active) 1 else 0)
@@ -214,7 +211,7 @@ object SystemServerWorkspaceBridge {
 
     private fun decodeGeometry(encoded: String): WorkspaceGeometry? = runCatching {
         val fields = encoded.split(',')
-        if (fields.size !in 9..11) return@runCatching null
+        if (fields.size !in 9..12) return@runCatching null
         WorkspaceGeometry(
             screenWidth = fields[0].toInt(),
             screenHeight = fields[1].toInt(),
@@ -225,7 +222,8 @@ object SystemServerWorkspaceBridge {
                 fields[5].toInt(), fields[6].toInt(), fields[7].toInt(), fields[8].toInt(),
             ),
             displayRotation = if (fields.size >= 10) fields[9].toInt() else 0,
-            controlAtBottom = fields.size == 11 && fields[10] == "1",
+            controlAtBottom = fields.size >= 11 && fields[10] == "1",
+            statusInset = if (fields.size == 12) fields[11].toInt() else 0,
         )
     }.getOrNull()
 }

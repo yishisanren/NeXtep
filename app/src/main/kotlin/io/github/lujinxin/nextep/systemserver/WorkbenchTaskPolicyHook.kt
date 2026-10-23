@@ -67,28 +67,18 @@ internal object WorkbenchTaskPolicyHook {
     private fun reportScene(activity: Any, orientation: Int, window: Any?) {
         val owner = service.read(activity) ?: return
         val ctx = context.read(owner) as? Context ?: return
-        if (!SystemServerWorkspaceBridge.isWorkspaceActive(ctx)) return
-        // Any window of the activity may hide the bars (players often use a child window).
-        val main = mainWindow.read(activity)
-        if (window != null && main !== window && main != null) {
-            SystemServerWorkspaceBridge.traceScene(ctx, "child-window o=$orientation")
-        }
-        val display = displayId.read(activity) as? Int ?: run { SystemServerWorkspaceBridge.traceScene(ctx, "no-display"); return }
-        if (display != 0 && !SystemServerWorkspaceBridge.isWideDisplay(ctx, display)) {
-            SystemServerWorkspaceBridge.traceScene(ctx, "other-display d=$display o=$orientation"); return
-        }
-        if (display == 0 && SystemServerWorkspaceBridge.hasWideDisplay(ctx)) {
-            SystemServerWorkspaceBridge.traceScene(ctx, "wide-busy o=$orientation"); return
-        }
-        val id = task.read(activity)?.let { taskId.read(it) as? Int } ?: run { SystemServerWorkspaceBridge.traceScene(ctx, "no-task"); return }
+        // RAM checks only: this runs for every requested-visibility change on every window.
+        if (!SystemServerWorkspaceBridge.observedActive(ctx)) return
+        val display = displayId.read(activity) as? Int ?: return
+        if (display != 0 && !SystemServerWorkspaceBridge.isWideDisplay(ctx, display)) return
+        if (display == 0 && SystemServerWorkspaceBridge.hasWideDisplay(ctx)) return
+        val id = task.read(activity)?.let { taskId.read(it) as? Int } ?: return
         val attrs = window?.let(attributes::read) as? android.view.WindowManager.LayoutParams
         val types = window?.let(visibleTypes::read) as? Int
         val fullscreen = (types != null && types and android.view.WindowInsets.Type.statusBars() == 0) ||
             (attrs != null && attrs.flags and android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN != 0)
         val previous = SystemServerWorkspaceBridge.scene(ctx)
-        if (previous?.taskId == id && previous.orientation == orientation && previous.fullscreen == fullscreen) {
-            SystemServerWorkspaceBridge.traceScene(ctx, "same t=$id o=$orientation f=$fullscreen"); return
-        }
+        if (previous?.taskId == id && previous.orientation == orientation && previous.fullscreen == fullscreen) return
         val wm = windowManager.read(owner)
         val update = wm?.javaClass?.methods?.firstOrNull {
             it.name == "updateRotation" && it.parameterTypes.contentEquals(
@@ -104,7 +94,6 @@ internal object WorkbenchTaskPolicyHook {
         } else false
         SystemServerWorkspaceBridge.publishScene(ctx,
             WorkspaceSceneRequest(id, orientation, SystemClock.uptimeMillis(), scheduled, fullscreen))
-        SystemServerWorkspaceBridge.traceScene(ctx, "published t=$id o=$orientation f=$fullscreen hold=$scheduled d=$display")
         NeXtepLog.info("workbench_scene", "Published scene task=$id orientation=$orientation fullscreen=$fullscreen hold=$scheduled")
     }
 

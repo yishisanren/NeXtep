@@ -110,16 +110,25 @@ internal object WorkspaceSlotNativeLayoutHook {
         if (warned.compareAndSet(false, true)) NeXtepLog.warn("slot_native_layout", "$operation failed open", error)
     }
 
-    private fun field(target: Any, name: String): Any? =
-        generateSequence(target.javaClass as Class<*>?) { it.superclass }
-            .flatMap { it.declaredFields.asSequence() }.firstOrNull { it.name == name }
-            ?.apply { isAccessible = true }?.get(target)
+    // getInsetsState runs on every layout of every window: resolve each member once per class.
+    private val fields = java.util.concurrent.ConcurrentHashMap<String, java.lang.reflect.Field>()
+    private val methods = java.util.concurrent.ConcurrentHashMap<String, java.lang.reflect.Method>()
+
+    private fun field(target: Any, name: String): Any? {
+        val key = "${target.javaClass.name}#$name"
+        val member = fields[key] ?: generateSequence(target.javaClass as Class<*>?) { it.superclass }
+            .mapNotNull { runCatching { it.getDeclaredField(name) }.getOrNull() }
+            .firstOrNull()?.apply { isAccessible = true; fields[key] = this } ?: return null
+        return member.get(target)
+    }
 
     private fun call(target: Any, name: String, vararg args: Any): Any? {
-        val method = generateSequence(target.javaClass as Class<*>?) { it.superclass }
+        val key = "${target.javaClass.name}#$name/${args.size}"
+        val method = methods[key] ?: generateSequence(target.javaClass as Class<*>?) { it.superclass }
             .flatMap { it.declaredMethods.asSequence() }
             .firstOrNull { it.name == name && it.parameterCount == args.size }
+            ?.apply { isAccessible = true; methods[key] = this }
             ?: error("Missing ${target.javaClass.simpleName}#$name/${args.size}")
-        return method.apply { isAccessible = true }.invoke(target, *args)
+        return method.invoke(target, *args)
     }
 }

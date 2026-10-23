@@ -84,21 +84,24 @@ class WorkspaceLayoutProfileTest {
     @Test
     fun controlEdgeIsASessionChoiceThatNeverEntersTheRecordedProfile() {
         val profile = WorkspaceLayoutProfile.create(1216, 2640, 476, WorkspaceNavigationInsets())
-        val bottom = profile.geometry(SidebarSide.LEFT, controlAtBottom = true)
+        val bottomProfile = profile.withControlAtBottom(true)
+        val bottom = bottomProfile.geometry(SidebarSide.LEFT)
         assertTrue(bottom.controlAtBottom)
         assertEquals(SidebarSide.LEFT, bottom.sidebarSide)
-        // The rail leaves the status-bar band free; the main region and its scale do not change.
-        val top = profile.geometry(SidebarSide.LEFT)
+        // The status band is free; the rail and the main window share that top edge and stay
+        // proportional, so nothing is letterboxed beside the rail.
         val reserve = (WorkspaceControlMetrics.STATUS_HEIGHT_DP * 476 / 160f).toInt()
-        assertEquals(reserve, bottom.sidebarTop - bottom.contentTop)
-        assertEquals(top.sidebarPhysicalHeight - reserve, bottom.sidebarPhysicalHeight)
-        assertEquals(top.contentHeight, bottom.contentHeight)
-        assertEquals(top.contentScale, bottom.contentScale, 0f)
-        val bottomSlots = profile.copy(geometry = bottom).slots
-        assertTrue(bottomSlots.last().top + bottomSlots.last().height <= bottom.sidebarLogicalHeight)
-        assertTrue(bottomSlots.first().height < profile.slots.first().height)
-        assertEquals(profile.slots.first().width.toFloat() / profile.slots.first().height,
-            bottomSlots.first().width.toFloat() / bottomSlots.first().height, .02f)
+        assertEquals(reserve, bottom.contentTop)
+        assertEquals(bottom.contentTop, bottom.sidebarTop)
+        assertEquals(bottom.controlTop, bottom.contentBottom)
+        assertEquals(bottom.contentHeight, bottom.sidebarPhysicalHeight)
+        assertEquals(bottom.contentHeight.toFloat(), bottom.availableHeight * bottom.contentScale, 1f)
+        assertEquals(bottom.contentWidth.toFloat(), bottom.availableWidth * bottom.contentScale, 1f)
+        val rail = bottomProfile.slots
+        assertTrue(rail.last().top + rail.last().height <= bottom.sidebarLogicalHeight)
+        rail.forEach { assertTrue(it.width >= bottom.sidebarWidth - bottomProfile.gapPixels - 1) }
+        assertEquals(profile, bottomProfile.withControlAtBottom(false))
+        assertEquals(profile.withWideSlot(1).withControlAtBottom(true), bottomProfile.withWideSlot(1))
         assertFalse(profile.geometry(SidebarSide.LEFT).controlAtBottom)
         assertFalse(checkNotNull(WorkspaceLayoutProfile.decode(profile.encode())).geometry.controlAtBottom)
     }

@@ -49,10 +49,17 @@ data class WorkspaceLayoutProfile(
 
     fun source(index: Int): Source = canvas(index).let { Source(0, 0, it.width, it.height) }
 
+    /** Session choice derived from the recorded profile; never persisted. */
+    fun withControlAtBottom(bottom: Boolean): WorkspaceLayoutProfile {
+        if (bottom == geometry.controlAtBottom) return this
+        return create(geometry.screenWidth, geometry.screenHeight, densityDpi, geometry.navigationInsets,
+            geometry.displayRotation, bottom, statusInset).withWideSlot(wideSlotIndex)
+    }
+
     fun withWideSlot(index: Int?): WorkspaceLayoutProfile {
         if (index == null && wideSlotIndex == null) return this
         val normal = create(geometry.screenWidth, geometry.screenHeight, densityDpi,
-            geometry.navigationInsets, geometry.displayRotation)
+            geometry.navigationInsets, geometry.displayRotation, geometry.controlAtBottom, geometry.statusInset)
         if (index == null) return normal
         val g = normal.geometry
         val short = minOf(g.availableWidth, g.availableHeight)
@@ -82,11 +89,9 @@ data class WorkspaceLayoutProfile(
         }
     }
 
-    /** The recorded profile is position-neutral; side and control edge are session choices. */
-    fun geometry(side: SidebarSide, controlAtBottom: Boolean = false): WorkspaceGeometry =
-        (if (side == SidebarSide.LEFT) leftGeometry else rightGeometry).let {
-            if (controlAtBottom) it.copy(controlAtBottom = true, railTopInset = statusInset) else it
-        }
+    /** The recorded profile is position-neutral; the side is a session choice. */
+    fun geometry(side: SidebarSide): WorkspaceGeometry =
+        if (side == SidebarSide.LEFT) leftGeometry else rightGeometry
 
     /** Undo TextureView's default stretching and fit the complete recorded canvas.
      * Slot bounds have the same aspect ratio apart from integer-pixel rounding. */
@@ -110,9 +115,10 @@ data class WorkspaceLayoutProfile(
 
     companion object {
         fun create(width: Int, height: Int, densityDpi: Int, insets: WorkspaceNavigationInsets,
-            displayRotation: Int = 0) =
+            displayRotation: Int = 0, controlAtBottom: Boolean = false, statusInset: Int = 0) =
             WorkspaceLayoutProfile(WorkspaceGeometry.forDisplay(width, height, density = densityDpi / 160f,
-                navigationInsets = insets, displayRotation = displayRotation),
+                navigationInsets = insets, displayRotation = displayRotation, controlAtBottom = controlAtBottom,
+                statusInset = statusInset),
                 densityDpi, (densityDpi / 160f).toInt().coerceAtLeast(1))
 
         fun decode(encoded: String?): WorkspaceLayoutProfile? = runCatching {

@@ -279,8 +279,6 @@ internal class WorkbenchToolsController(
             checkNotNull(resolver.openOutputStream(uri)).bufferedWriter().use {
                 it.write("NeXtep diagnostics\nSDK=${android.os.Build.VERSION.SDK_INT}\n")
                 it.write(NeXtepLog.diagnostics())
-                it.write("\n--- system_server scene trace ---\n")
-                it.write(io.github.lujinxin.nextep.workspace.SystemServerWorkspaceBridge.sceneTrace(context))
             }
             resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
         }.onSuccess { message(R.string.workbench_exported) }.onFailure {
