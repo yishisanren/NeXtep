@@ -20,11 +20,16 @@ class WorkspaceLandscapeRotationHooker : XposedInterface.Hooker {
             if (!SystemServerWorkspaceBridge.observedActive(context)) return@runCatching null
             val portrait = field(target, "mPortraitRotation") as? Int ?: return@runCatching null
             val last = chain.getArg(1) as? Int ?: return@runCatching null
+            if (last != portrait) return@runCatching null
+            val now = android.os.SystemClock.uptimeMillis()
+            fun held() = SystemServerWorkspaceBridge.hasWideDisplay(context) ||
+                SystemServerWorkspaceBridge.scene(context)?.holdRotation(now) == true
+            // A manifest-declared landscape Activity reaches rotation policy before any hook has
+            // published its request; publish it from the orientation source so the hold applies now.
+            if (!held()) WorkbenchTaskPolicyHook.reportOrientationSource(field(display, "mLastOrientationSource"), orientation)
             // A pinned wide video keeps the workspace portrait; a fresh landscape request is held
             // briefly while SystemUI decides whether to pin it.
-            if (last == portrait && (SystemServerWorkspaceBridge.hasWideDisplay(context) ||
-                    SystemServerWorkspaceBridge.scene(context)
-                        ?.holdRotation(android.os.SystemClock.uptimeMillis()) == true)) last else null
+            if (held()) last else null
         }.getOrNull()
         if (heldRotation != null) return heldRotation
         val allowBothDirections = runCatching {

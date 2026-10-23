@@ -64,6 +64,20 @@ internal object WorkbenchTaskPolicyHook {
         module.log(android.util.Log.INFO, "NeXtep", "Installed fullscreen scene observer insets=${insetsMethods.size}")
     }
 
+    /**
+     * A landscape request that reached rotation policy before any hook saw it: Activities whose
+     * orientation is declared in the manifest never call setRequestedOrientation, and WindowManager
+     * then applies a fixed-rotation transform before SystemUI can pin the task.
+     */
+    fun reportOrientationSource(source: Any?, orientation: Int) {
+        val activity = source ?: return
+        runCatching {
+            // Only an ActivityRecord belongs to a task; magnification or dream sources are ignored.
+            if (task.read(activity) == null) return
+            reportScene(activity, orientation, mainWindow.read(activity))
+        }.onFailure { NeXtepLog.warn("workbench_scene", "Orientation source unavailable", it) }
+    }
+
     private fun reportScene(activity: Any, orientation: Int, window: Any?) {
         val owner = service.read(activity) ?: return
         val ctx = context.read(owner) as? Context ?: return

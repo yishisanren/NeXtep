@@ -1,7 +1,7 @@
 id=panes
 name=格窗 Panes
-version=2.3.1
-versionCode=81
+version=2.3.2
+versionCode=82
 author=yishisanren
 description=ColorOS 16 side workspace: one main window and four live panes
 minApiVersion=101
