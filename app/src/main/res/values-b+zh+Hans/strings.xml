@@ -3,7 +3,7 @@
     <string name="app_name">格窗</string>
     <string name="navigation_settings">设置</string>
     <string name="navigation_about">关于</string>
-    <string name="module_description">ColorOS 16 原生侧边工作区 LSPosed 模块</string>
+    <string name="module_description">ColorOS 17 原生侧边工作区 LSPosed 模块</string>
     <string name="tile_unavailable">桌面验证钩子尚未就绪</string>
     <string name="action_add">添加</string>
     <string name="tile_add_description">添加 格窗 到控制中心</string>
@@ -97,6 +97,8 @@
     <string name="open_settings">打开 格窗 设置</string>
     <string name="apps_none_available">没有可启动的 App</string>
     <string name="about_based_on">基于 lujinxin 的 NeXtep 修改 · Apache License 2.0</string>
+    <string name="about_donate">如果格窗帮到了你，可以用微信扫码请作者喝杯咖啡。</string>
+    <string name="about_donate_description">微信赞赏收款码</string>
     <string name="section_layout">布局</string>
     <string name="section_open">打开方式</string>
     <string name="section_privacy">隐私</string>

@@ -1,143 +1,151 @@
 <p align="center">
-  <img src="assets/panes-logo.png" alt="Panes icon" width="160">
+  <img src="assets/panes-logo.png" alt="格窗图标" width="160">
 </p>
 
-<h1 align="center">Panes (格窗)</h1>
+<h1 align="center">格窗 Panes</h1>
 
-<p align="center">One window, several things at once.</p>
+<p align="center">一扇窗，几件事。</p>
 
 <p align="center">
-  <a href="README.md">English</a> / <a href="README_CN.md">中文</a>
+  <a href="README.md">中文</a> / <a href="README_EN.md">English</a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/ColorOS-16-1F5CDE?style=flat" alt="ColorOS 16">
-  <img src="https://img.shields.io/github/v/release/yishisanren/NeXtep?display_name=tag&sort=semver" alt="Latest release">
-  <img src="https://img.shields.io/badge/LSPosed-Required-C62828?style=flat" alt="LSPosed required">
+  <img src="https://img.shields.io/badge/ColorOS-17-1F5CDE?style=flat" alt="ColorOS 17">
+  <img src="https://img.shields.io/github/v/release/yishisanren/NeXtep?display_name=tag&sort=semver" alt="最新版本">
+  <img src="https://img.shields.io/badge/LSPosed-Required-C62828?style=flat" alt="需要 LSPosed">
   <img src="https://img.shields.io/badge/License-Apache--2.0-blue?style=flat" alt="Apache-2.0">
 </p>
 
-Panes is an LSPosed module that adds a side workspace to the stock ColorOS 16 launcher: one main window to work in, four live panes waiting beside it, and the things you use most within reach. It does not replace the launcher or restyle the system; leave the workspace and the phone is as it was.
+格窗是一个 LSPosed 模块，给 ColorOS 17 的原生桌面加一个侧边工作台：一个大窗做事，四个小窗候着，常用的都放在手边。不替换桌面，不改系统主题，退出后手机回到原样。
 
 <p align="center">
-  <img src="assets/readme/overview.gif" alt="A diagonal swipe from a bottom corner opens the workspace, another one closes it" width="300">
+  <img src="assets/readme/overview.gif" alt="底角斜滑打开工作台，再斜滑一次关闭" width="300">
 </p>
 
-## Features
+## 功能
 
-### One main pane, four small panes
+### 一个大窗，四个小窗
 
-The main pane is the app you are using. The four small panes beside it are four real running apps, each on its own virtual display, not snapshots. Tap a small pane and it swaps places with the main pane, scaled evenly with nothing stretched or cropped; long-press and drag to reorder the panes or send an app to the background.
+大窗是你正在用的应用，侧栏四个小窗是四个真实运行中的应用，各自跑在独立的虚拟显示器上，不是截图。点一下小窗，它和大窗原地对调，画面等比缩放，不拉伸、不裁切；长按拖动可以换位置，或者把应用退到后台。
 
 <p align="center">
-  <img src="assets/readme/swap.gif" alt="Tapping a small pane swaps it with the main pane, and back" width="300">
+  <img src="assets/readme/swap.gif" alt="点小窗与大窗对调，再换回来" width="300">
 </p>
 
-### Favourite apps
+### 常用应用栏
 
-A row of favourite apps sits at the top: the ones you pin in Settings come first, and the rest is filled from your most-used apps of the last seven days, up to ten. Tap an icon to open it in the main pane, or long-press and drag it onto a small pane to open it there. The "+" on an empty pane adds an app too: the current main app moves into that pane, and the next app you pick from the Home screen opens in the main pane.
+顶部一排常用应用：设置里固定的排在最前面，其余按最近七天的使用时间补齐，最多十个。点图标在大窗打开；长按拖到某个小窗，就在那个小窗打开。空小窗上的「＋」也能加应用：原来的大窗应用先收进这个小窗，回到桌面挑一个新应用放进大窗。
 
 <p align="center">
-  <img src="assets/readme/favorites.gif" alt="Tapping a favourite opens it in the main pane; dragging one opens it in a small pane" width="300">
+  <img src="assets/readme/favorites.gif" alt="点常用栏图标在大窗打开，长按拖进小窗" width="300">
 </p>
 
-### Landscape video moves up
+### 横屏视频自动上去
 
-When the main app asks for landscape, for example when you tap fullscreen in a player, the video moves into a wide pane at the top: full width at 16:9, narrowed to the picture (down to 2.4:1) when it has letterbox bars. The main pane and the other three small panes stay usable, and the wide pane takes taps for pause and seeking; leave fullscreen and the video returns to the main pane.
+大窗里的应用请求横屏（比如点了全屏播放），视频收进顶部的宽窗，默认 16:9 满宽，画面带黑边时按画面比例自动收窄，最多到 2.4:1。下面的大窗和另外三个小窗照常使用，宽窗里也能直接点暂停、拖进度；退出全屏，视频回到大窗。
 
 <p align="center">
-  <img src="assets/readme/video.gif" alt="A fullscreen video moves into the wide pane at the top and back" width="300">
+  <img src="assets/readme/video.gif" alt="视频点全屏后收进顶部宽窗，退出全屏回到大窗" width="300">
 </p>
 
-### Scenes
+### 工作场景
 
-Put apps in the main pane and the small panes, then tap the add button at the far right of the top bar: the layout is saved as a scene. Give it one of eight preset icons (work, study, games, media, reading, shopping, travel, life) or a label of up to two Chinese characters or four letters. Tap a scene to switch to it; the scene matching the current layout is highlighted, and a long press changes its icon or deletes it. Up to six scenes; the add button hides when all six are used. Settings can also pin a scene to the Home screen, so one tap opens the whole set (ColorOS asks once for the "create shortcuts" permission).
+选好大窗和四个小窗的应用，点顶栏最右边的添加按钮，当前这一套就存成一个场景，可以选八个预设图标之一（工作、学习、游戏、影音、阅读、购物、出行、生活），也可以输入两个汉字或四个字母当按钮。点场景按钮一键换成那一套，当前布局正好是某个场景时它会高亮；长按可以换图标或删除。最多 6 个，满了加号自动隐藏。场景也能从设置页添加到桌面，点一下直接打开整套（ColorOS 首次需允许「创建桌面快捷方式」权限）。
 
 <p align="center">
-  <img src="assets/readme/scenes.gif" alt="Saving a scene with the add button and a preset icon, then switching to another scene" width="300">
+  <img src="assets/readme/scenes.gif" alt="点加号存成场景并选图标，再点另一个场景切换" width="300">
 </p>
 
-### Price comparison
+### 比价
 
-One of the two default scenes. Type a product once and it is searched in several delivery or shopping apps at the same time, each in its own pane, so the results sit side by side: delivery searches JD Miaosong, Taobao Shangou and Meituan Waimai; shopping searches Pinduoduo, Douyin Mall, JD and Taobao. Panes only opens the search results; it does not read prices, place orders or pay.
+比价是默认场景之一。输入一次商品词，同时在几个外卖或购物应用里搜，每个应用一个窗口，结果并排对照：外卖查京东秒送、淘宝闪购、美团外卖，购物查拼多多、抖音商城、京东、淘宝。只帮你打开搜索结果，不抓价格、不下单、不付款。
 
 <p align="center">
-  <img src="assets/readme/compare.gif" alt="The price comparison panel: pick a group and type a product" width="300">
+  <img src="assets/readme/compare.gif" alt="打开比价面板，选分组并输入商品词" width="300">
 </p>
 
-### Pay and scan
+### 付款和扫码
 
-The other default scene: WeChat scan, WeChat payment code, Alipay scan and Alipay payment code in one system dialog. It only opens those pages; it never reads accounts or confirms a payment for you.
+另一个默认场景：微信扫一扫、微信收付款码、支付宝扫一扫、支付宝付款码，四个入口放在一个系统弹窗里。只负责打开对应页面，不读取账户，也不会替你确认付款。
 
 <p align="center">
-  <img src="assets/readme/pay.png" alt="The pay and scan dialog" width="300">
+  <img src="assets/readme/pay.png" alt="付款和扫码弹窗" width="300">
 </p>
 
-### Open in Panes
+### 发到格窗
 
-Share a link or text from any app, choose "Open in Panes" and pick the main pane or one of the small panes. Links open in the default browser; other text goes to the default search.
+在任何应用里分享链接或文字，选「发到格窗」，再选在大窗还是哪个小窗打开：链接用默认浏览器打开，其他文字用默认搜索。
 
 <p align="center">
-  <img src="assets/readme/share.gif" alt="Sharing a link from the browser into small pane 2" width="300">
+  <img src="assets/readme/share.gif" alt="从浏览器分享链接，发到格窗的小窗 2" width="300">
 </p>
 
-### Light, dark or follow the system
+### 浅色、深色，跟随系统
 
-The workspace follows the system's light and dark mode, or stays light or dark. Small panes on the left or right, controls at the top or bottom: all changed in Settings and applied immediately.
+工作台可以跟随系统深浅色，也可以固定浅色或深色；小窗放左边还是右边、控制区放顶部还是底部，都在设置里改，立即生效。
 
 <p align="center">
-  <img src="assets/readme/theme.gif" alt="The workspace follows the system switching between dark and light" width="300">
+  <img src="assets/readme/theme.gif" alt="系统切换深色和浅色，工作台跟着变" width="300">
 </p>
 
-## Requirements
+## 使用要求
 
-- ColorOS 16 (Android 16). Developed and verified on the OnePlus PLK110 and the OPPO Find X9s Pro (PME110); other devices and ROMs need their own adaptation and are untested.
-- Root (KernelSU or similar), Zygisk and LSPosed with the modern libxposed API.
-- The module changes SystemUI, launcher and system_server behaviour. Keep a recovery path for the device.
+- ColorOS 17（Android 17）。在 OPPO Find X9s Pro（PME110）上开发和验证；其他机型和 ROM 需要自行适配，未经测试不保证兼容。
+- Root（KernelSU 等）、Zygisk 与 LSPosed（支持 libxposed 新 API）。
+- 本模块会修改 SystemUI、桌面和 system_server 的行为，请确保设备有可用的恢复手段。
 
-## Install
+## 安装
 
-1. Download the APK from [Releases](https://github.com/yishisanren/NeXtep/releases) and install it (package `io.github.yishisanren.panes`).
-2. Enable "格窗 Panes" in LSPosed and tick every entry of the built-in [scope list](app/src/main/resources/META-INF/xposed/scope.list) that exists on your device: SystemUI, the framework, the launcher, the app-cloning service and the assistant screen.
-3. If NeXtep (`io.github.lujinxin.nextep`) is installed, disable and uninstall it first; two modules must not hook SystemUI at once.
-4. Reboot.
-5. Open Panes, pick favourite apps and add the Quick Settings tile.
+1. 从 [Releases](https://github.com/yishisanren/NeXtep/releases) 下载 APK 并安装（包名 `io.github.yishisanren.panes`）。
+2. 在 LSPosed 中启用「格窗 Panes」，勾选内置[作用域列表](app/src/main/resources/META-INF/xposed/scope.list)里适用于本机的全部项目：SystemUI、系统框架、桌面、应用分身服务、负一屏。
+3. 如果以前装过 NeXtep（包名 `io.github.lujinxin.nextep`），先在 LSPosed 里停用并卸载它，两个模块不能同时钩住 SystemUI。
+4. 重启手机。
+5. 打开「格窗」，选常用应用，添加控制中心开关。
 
-## Open and close
+## 打开与关闭
 
-- **Bottom-corner gesture:** one finger from the bottom-left corner towards the upper right, or from the bottom-right corner towards the upper left, opens the workspace; the same swipe inside the workspace closes it. Start within 96 dp of the bottom and side edges and move at least 24 dp inward and upward; a straight swipe up (system home) or a horizontal swipe (system back) does not trigger it.
-- **Quick Settings tile:** add it from Settings → Opening the workspace → Quick Settings shortcut, then toggle "Panes" in Quick Settings.
-- **Settings:** Troubleshooting → Exit small-window mode.
-- **Shell commands** for automation tools (root): see [docs/WORKBENCH.md](docs/WORKBENCH.md).
+- **底角手势**：单指从左下角向右上、或右下角向左上斜滑，打开；工作台里再斜滑一次，关闭。起点在距底边和侧边各 96 dp 的角落内，向内、向上各滑 24 dp 以上；直上滑（系统主页手势）和水平滑（系统返回手势）不会触发。
+- **控制中心开关**：设置页「打开方式 → 控制中心入口」添加，下拉控制中心点「格窗」切换。
+- **设置页**：「遇到问题 → 退出小窗模式」。
+- **Shell 命令**（自动化工具用，需 Root）：见 [docs/WORKBENCH.md](docs/WORKBENCH.md#shell-命令)。
 
-## Settings
+## 设置
 
-Open Panes from its Home screen icon. One page, seven groups:
+点桌面上的「格窗」图标进入，单页七组：
 
-| Group | What it holds |
+| 分组 | 内容 |
 | --- | --- |
-| Favourite apps | Pick and order the favourites row; close the previous app when switching |
-| Scenes | View and delete scenes, pin them to the Home screen, restore deleted default scenes |
-| Layout | Follow system / light / dark, small panes left / right, controls top / bottom |
-| Opening the workspace | Quick Settings tile, bottom-corner gesture |
-| Privacy | Hide workspace apps from Recents, allow screenshots and recording this session |
-| Troubleshooting | Export diagnostics, exit small-window mode |
-| About | Version, update check, credits |
+| 常用应用 | 选择和排序常用栏的应用；切换时收起上一个应用 |
+| 工作场景 | 查看、删除场景，添加到桌面，恢复被删的默认场景 |
+| 布局 | 跟随系统／浅色／深色，小窗靠左／靠右，控制区顶部／底部 |
+| 打开方式 | 控制中心开关、底角手势 |
+| 隐私 | 最近任务里隐藏工作台应用，本次允许截图／录屏 |
+| 遇到问题 | 导出诊断、退出小窗模式 |
+| 关于 | 版本、检查更新、署名 |
 
-## Privacy and limits
+## 隐私与限制
 
-- Screenshots and screen recording of the workspace are blocked by default. Settings can allow them for the current session; leaving the workspace, locking the phone or opening Settings blocks them again.
-- With "Hide workspace tasks from Recents" on, workspace apps stay out of Recents until you leave the workspace.
-- Apps keep their own protection (payment codes, DRM video, enterprise policy); Panes does not lift it.
-- Exported diagnostics hold only the module's last 128 events, with no search terms, links, accounts or screen content.
-- Landscape video detection depends on the app and the system: a muted portrait player without a media session may not be recognised.
+- 工作台默认禁止截图和录屏，可以在设置里「本次允许」，退出、锁屏或打开设置后恢复禁止。
+- 打开「最近任务隐藏」后，工作台里的应用不出现在最近任务里，退出工作台即恢复。
+- 应用自己的安全保护（付款码、DRM 视频、企业策略等）照常生效，格窗不会解除。
+- 诊断导出只保存模块最近 128 条事件，不含搜索词、链接、账户和画面。
+- 横屏视频的识别依赖应用和系统：静音、没有媒体会话的竖屏播放器可能认不出来。
 
-## Build
+## 构建
 
-See [docs/BUILDING.md](docs/BUILDING.md). Feature limits and device validation are recorded in [docs/WORKBENCH.md](docs/WORKBENCH.md); the process layout is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+见 [docs/BUILDING.md](docs/BUILDING.md)。功能边界与真机验证情况见 [docs/WORKBENCH.md](docs/WORKBENCH.md)，进程结构见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
-## Credits and licence
+## 支持作者
 
-Panes is a modified fork of [NeXtep by lujinxin](https://github.com/lujinxin/NeXtep), which itself pays tribute to OneStep in Smartisan OS. The repository keeps the [Apache License 2.0](LICENSE); third-party notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+如果格窗帮到了你，可以用微信扫码请作者喝杯咖啡。App 设置页的「关于」里也有这张码。
 
-Copyright 2026 lujinxin (NeXtep); modifications Copyright 2026 yishisanren.
+<p align="center">
+  <img src="assets/donate-wechat.jpg" alt="微信赞赏收款码" width="240">
+</p>
+
+## 署名与许可证
+
+格窗基于 [lujinxin 的 NeXtep](https://github.com/lujinxin/NeXtep) 修改而来，NeXtep 致敬锤子科技 Smartisan OS 的 OneStep。本仓库沿用 [Apache License 2.0](LICENSE)，第三方声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+Copyright 2026 lujinxin（NeXtep）；修改部分 Copyright 2026 yishisanren。

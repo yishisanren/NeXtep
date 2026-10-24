@@ -3,7 +3,7 @@
     <string name="app_name">격자창</string>
     <string name="navigation_settings">설정</string>
     <string name="navigation_about">앱 정보</string>
-    <string name="module_description">ColorOS 16 기본 런처에 측면 작업 공간을 추가하는 LSPosed 모듈</string>
+    <string name="module_description">ColorOS 17 기본 런처에 측면 작업 공간을 추가하는 LSPosed 모듈</string>
     <string name="tile_unavailable">런처 확인 후크가 아직 준비되지 않았습니다</string>
     <string name="action_add">추가</string>
     <string name="tile_add_description">빠른 설정에 격자창 추가</string>
@@ -97,6 +97,8 @@
     <string name="open_settings">격자창 설정 열기</string>
     <string name="apps_none_available">실행할 수 있는 앱이 없습니다</string>
     <string name="about_based_on">lujinxin의 NeXtep 기반 · Apache License 2.0</string>
+    <string name="about_donate">Panes가 도움이 되었다면 WeChat Pay로 개발자에게 커피 한 잔을 사 주세요.</string>
+    <string name="about_donate_description">WeChat Pay 후원 코드</string>
     <string name="section_layout">레이아웃</string>
     <string name="section_open">여는 방법</string>
     <string name="section_privacy">개인정보 보호</string>

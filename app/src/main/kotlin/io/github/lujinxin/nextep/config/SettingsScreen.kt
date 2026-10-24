@@ -160,6 +160,16 @@ object SettingsScreen {
             }, matchWidth().apply { topMargin = dp(activity, 12) })
             addView(UpdateSection.create(activity), matchWidth())
             addView(sectionDescription(activity, activity.getString(R.string.about_based_on)), matchWidth())
+            addView(sectionDescription(activity, activity.getString(R.string.about_donate)),
+                matchWidth().apply { topMargin = dp(activity, 12) })
+            addView(ImageView(activity).apply {
+                setImageResource(R.drawable.donate_wechat)
+                adjustViewBounds = true
+                contentDescription = activity.getString(R.string.about_donate_description)
+            }, LinearLayout.LayoutParams(dp(activity, 200), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                topMargin = dp(activity, 8)
+            })
         })
     }
 

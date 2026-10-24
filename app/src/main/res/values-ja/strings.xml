@@ -3,7 +3,7 @@
     <string name="app_name">格子窓</string>
     <string name="navigation_settings">設定</string>
     <string name="navigation_about">このアプリについて</string>
-    <string name="module_description">ColorOS 16 の標準ランチャーにサイドワークスペースを追加する LSPosed モジュール</string>
+    <string name="module_description">ColorOS 17 の標準ランチャーにサイドワークスペースを追加する LSPosed モジュール</string>
     <string name="tile_unavailable">ランチャー検証フックの準備ができていません</string>
     <string name="action_add">追加</string>
     <string name="tile_add_description">クイック設定に 格子窓 を追加</string>
@@ -97,6 +97,8 @@
     <string name="open_settings">格子窓 の設定を開く</string>
     <string name="apps_none_available">起動できるアプリがありません</string>
     <string name="about_based_on">lujinxin の NeXtep を改変 · Apache License 2.0</string>
+    <string name="about_donate">Panes が役に立ったら、WeChat Pay で作者にコーヒーを一杯どうぞ。</string>
+    <string name="about_donate_description">WeChat Pay 寄付用コード</string>
     <string name="section_layout">レイアウト</string>
     <string name="section_open">開き方</string>
     <string name="section_privacy">プライバシー</string>
