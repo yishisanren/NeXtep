@@ -180,10 +180,9 @@ class TaskSwitcherView(
         }
     }
 
-    /** Cover the output with [bitmap] until the slot's next occupant has drawn; the view owns the bitmap. */
+    /** Cover the output with [bitmap] until the slot's next occupant has drawn; the caller keeps the bitmap. */
     fun showCover(bitmap: Bitmap) {
         removeCallbacks(clearCover)
-        (coverView.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.takeIf { it !== bitmap }?.recycle()
         coverView.setImageBitmap(bitmap)
         coverView.animate().cancel()
         coverView.alpha = 1f
@@ -199,7 +198,6 @@ class TaskSwitcherView(
         coverView.animate().cancel()
         val release = Runnable {
             coverView.visibility = GONE
-            (coverView.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.recycle()
             coverView.setImageBitmap(null)
         }
         if (fade) coverView.animate().alpha(0f).setDuration(COVER_FADE_MS).withEndAction(release).start()

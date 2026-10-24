@@ -436,8 +436,8 @@ class SlotTaskCoordinator(
         if (active) return
         validateExitedTasks()
         slotRecords.forEachIndexed { index, record ->
-            record.preview?.let { if (record.retainedTaskId != null) slots[index].view.showCover(it) else it.recycle() }
-            record.preview = null
+            // The record keeps its cover: an exit before the rebind shows the same one next time.
+            record.preview?.let { if (record.retainedTaskId != null) slots[index].view.showCover(it) }
         }
         active = true
         activatedAt = SystemClock.uptimeMillis()
@@ -491,10 +491,17 @@ class SlotTaskCoordinator(
         val saved = mutableSetOf<Int>()
         slots.forEachIndexed { index, slot ->
             val record = slotRecords[index]
-            record.exitTask = null
             val task = tasks.firstOrNull { it.displayId == slot.displayId() }
+            // An exit right after an entry: the retained task is still parked in recents, waiting
+            // for its deferred rebind. Keep its reservation and cover instead of forgetting it.
+            if (task == null && record.retainedTaskId != null && record.exitTask != null &&
+                record.state !is SlotState.Occupied) {
+                NeXtepLog.info("slot_retention", "Kept pending slot=$index task=${record.retainedTaskId}")
+                return@forEachIndexed
+            }
+            record.exitTask = null
             record.retainedTaskId = null
-            record.preview?.recycle()
+            // Covers are never recycled explicitly: a card may still draw one until it is cleared.
             record.preview = null
             if (task == null || !saved.add(task.taskId)) return@forEachIndexed
             // Taken while the task still draws on its slot; the next entry shows it until the app redraws.
@@ -512,7 +519,6 @@ class SlotTaskCoordinator(
                     .firstOrNull { it.taskId == task.taskId }
                 record.exitTask = recent
                 record.retainedTaskId = recent?.taskId
-                record.preview?.recycle()
                 record.preview = if (recent == null) null else preview?.let { full ->
                     // Keep the card-sized copy only; the capture is half the task's size.
                     val card = slot.view
@@ -557,7 +563,6 @@ class SlotTaskCoordinator(
                 record.exitTask = null
                 record.retainedTaskId = null
                 record.originalLayout = null
-                record.preview?.recycle()
                 record.preview = null
                 NeXtepLog.info("slot_retention", "Discarded changed/removed task=${saved.taskId}")
             }

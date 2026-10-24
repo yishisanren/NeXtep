@@ -255,7 +255,7 @@ class TopAppStripView(
             if (config != null) AppLanguage.updateHostLanguage(config.languageTag)
             val result = config?.let {
                 runCatching {
-                    repository.load(config.appComponents)
+                    repository.load(config.appComponents).map { it.copy(icon = rasterized(it.icon)) }
                 }
             }
             post {
@@ -473,6 +473,21 @@ class TopAppStripView(
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    /**
+     * Each entry re-records the strip (its window is released on exit), and an adaptive or
+     * icon-pack drawable rendered itself in software for ~6 ms per icon on the main thread.
+     * Draw it once here, off the main thread, at the zoomed on-screen size.
+     */
+    private fun rasterized(icon: android.graphics.drawable.Drawable): android.graphics.drawable.Drawable = runCatching {
+        val size = (dp(WorkspaceControlMetrics.APP_ICON_SIZE_DP) * APP_ICON_ZOOM).toInt().coerceAtLeast(1)
+        // The drawable is freshly loaded for this refresh and not attached anywhere yet.
+        val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+        icon.setBounds(0, 0, size, size)
+        icon.draw(android.graphics.Canvas(bitmap))
+        android.graphics.drawable.BitmapDrawable(resources,
+            bitmap.copy(android.graphics.Bitmap.Config.HARDWARE, false) ?: bitmap)
+    }.getOrDefault(icon)
 
     private companion object {
         const val APP_TILE_WIDTH_DP = 60
