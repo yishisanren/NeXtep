@@ -338,6 +338,11 @@ class NeXtepWindowController(
         publishPrivacy()
         // Restores parked windows too: configureWindow makes them opaque and touchable again.
         val geometry = reconfigure().getOrThrow()
+        // Windows released after a long hide recreate their surfaces in the first frame (~60 ms).
+        // Draw that frame at the start positions, where nothing shows, and slide from the next
+        // one; otherwise the animation's clock skipped a third of the slide.
+        val coldWindows = records.any { it.view.visibility != View.VISIBLE }
+        val enterAnimations = mutableListOf<() -> Unit>()
         records.forEach { record ->
             val view = record.view
             view.animate().cancel()
@@ -350,8 +355,10 @@ class NeXtepWindowController(
                 view.alpha = 1f
                 view.translationX = dx
                 view.translationY = dy
-                view.animate().translationX(0f).translationY(0f)
-                    .setDuration(WORKSPACE_ENTER_DURATION_MS).setInterpolator(transitionInterpolator).start()
+                enterAnimations += {
+                    view.animate().translationX(0f).translationY(0f)
+                        .setDuration(WORKSPACE_ENTER_DURATION_MS).setInterpolator(transitionInterpolator).start()
+                }
                 return@forEach
             }
             view.translationX = 0f
@@ -360,12 +367,24 @@ class NeXtepWindowController(
                 "NeXtepTopBar" -> if (controlAtBottom) dp(ENTER_OFFSET_DP) else -dp(ENTER_OFFSET_DP)
                 else -> dp(ENTER_OFFSET_DP)
             }
-            view.animate()
-                .alpha(1f)
-                .translationY(0f)
-                .setDuration(WORKSPACE_ENTER_DURATION_MS)
-                .setInterpolator(transitionInterpolator)
-                .start()
+            enterAnimations += {
+                view.animate()
+                    .alpha(1f)
+                    .translationY(0f)
+                    .setDuration(WORKSPACE_ENTER_DURATION_MS)
+                    .setInterpolator(transitionInterpolator)
+                    .start()
+            }
+        }
+        val animationGeneration = panelGeneration + 1
+        fun startEnterAnimations() {
+            if (animationGeneration == panelGeneration && workspaceVisible) enterAnimations.forEach { it() }
+        }
+        if (coldWindows) {
+            // A callback posted now runs in the expensive first frame; the one it posts, in the next.
+            android.view.Choreographer.getInstance().postFrameCallback {
+                android.view.Choreographer.getInstance().postFrameCallback { startEnterAnimations() }
+            }
         }
         topAppStrip?.setWorkspaceVisible(true)
         topAppStrip?.refresh()
@@ -375,6 +394,7 @@ class NeXtepWindowController(
         // Rapid exit/enter cycles have left the main task scaled with every panel hidden. Whatever
         // cancels the entry animation, the panels must end visible while the workspace is active.
         val generation = ++panelGeneration
+        if (!coldWindows) startEnterAnimations()
         backdropHandler.postDelayed({
             if (generation != panelGeneration || !workspaceVisible || suspended) return@postDelayed
             records.forEach { record ->
@@ -388,7 +408,7 @@ class NeXtepWindowController(
                     view.translationY = 0f
                 }
             }
-        }, WORKSPACE_ENTER_DURATION_MS + 80)
+        }, WORKSPACE_ENTER_DURATION_MS + 80 + if (coldWindows) COLD_ENTRY_ALLOWANCE_MS else 0L)
         return geometry()
     }
 
@@ -1232,6 +1252,8 @@ class NeXtepWindowController(
         const val WORKSPACE_ENTER_DURATION_MS = 240L
         const val WORKSPACE_EXIT_DURATION_MS = 180L
         const val PARKED_WINDOW_RELEASE_MS = 60_000L
+        /** Upper bound of the surface-recreating first frame that a cold entry waits out. */
+        const val COLD_ENTRY_ALLOWANCE_MS = 250L
         const val APPEARANCE_SYSTEM = "SYSTEM"
         const val SIDEBAR_SWITCH_DURATION_MS = 220L
         const val ENTER_OFFSET_DP = 12
