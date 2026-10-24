@@ -160,9 +160,11 @@ class TaskSwitcherView(
             SlotState.Empty -> showReady(animated = previousState is SlotState.Occupied)
             is SlotState.Ready -> showReady(animated = previousState is SlotState.Occupied)
             is SlotState.Occupied -> {
+                // Under a cover the fade is invisible, yet every frame of it sent a SurfaceView
+                // alpha transaction while the apps were coming back; show the output at once.
                 showOccupied(
-                    animated = freshSurface || previousState !is SlotState.Occupied ||
-                        previousState.taskId != state.taskId,
+                    animated = coverView.visibility != VISIBLE && (freshSurface ||
+                        previousState !is SlotState.Occupied || previousState.taskId != state.taskId),
                 )
             }
             is SlotState.Failed -> showReady(animated = previousState is SlotState.Occupied)
