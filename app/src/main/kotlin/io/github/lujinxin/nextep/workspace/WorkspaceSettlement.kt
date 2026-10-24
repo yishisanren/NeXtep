@@ -9,9 +9,9 @@ internal class WorkspaceSettlement(
 
     fun cancel() { generation++ }
 
-    fun begin(ready: () -> Boolean, completed: (Result<Unit>) -> Unit) {
+    fun begin(ready: () -> Boolean, timeoutMs: Long = 1_500L, completed: (Result<Unit>) -> Unit) {
         val token = ++generation
-        val deadline = now() + 1_500L
+        val deadline = now() + timeoutMs
         fun poll() {
             if (token != generation) return
             val result = runCatching { ready() }

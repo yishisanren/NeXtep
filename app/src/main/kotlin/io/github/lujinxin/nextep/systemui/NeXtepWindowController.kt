@@ -83,6 +83,26 @@ class NeXtepWindowController(
         sidebarView?.let { applySlotLayout(it, geometry) }
     }
     private var pinPending = false
+    /** Bumped by each wide pin or return; a newer one stops the older one's frame polling. */
+    private var wideGeneration = 0
+    private var wideLayoutChanging = false
+    private var wideReturnPending = false
+    /** The wide pane's last picture with content: a player drops its video before it asks for portrait. */
+    private var wideSnapshot: android.graphics.Bitmap? = null
+    private val wideSnapshotTick = object : Runnable {
+        override fun run() {
+            val index = wideSlotIndex ?: return
+            val task = wideTaskId ?: return
+            val crop = slotWindows.getOrNull(index)?.geometry()?.let { android.graphics.Rect(0, 0, it.width, it.height) }
+            io.github.lujinxin.nextep.framework.TaskSurfaceCompat.capturePreview(task, crop, scale = 0.25f)?.let { shot ->
+                if (shot.isMostlyBlack()) shot.recycle() else { wideSnapshot?.recycle(); wideSnapshot = shot }
+            }
+            backdropHandler.postDelayed(this, WIDE_SNAPSHOT_INTERVAL_MS)
+        }
+    }
+
+    private fun android.graphics.Bitmap.isMostlyBlack(): Boolean =
+        io.github.lujinxin.nextep.framework.mostlyBlack(IntArray(width * height).also { getPixels(it, 0, width, 0, 0, width, height) })
     private var seenSceneTime = -1L
     private var observedTasks: List<io.github.lujinxin.nextep.task.TaskRepository.TaskSnapshot> = emptyList()
     private var observedStates: List<SlotState> = emptyList()
@@ -214,9 +234,16 @@ class NeXtepWindowController(
         }
         else -> {
             val scene = scenes.firstOrNull { it.name == name && it.builtin == null } ?: return false
-            slotCoordinator?.takeIf { workspaceVisible }?.applyScene(scene.main, scene.slots) { result ->
-                result.onFailure { NeXtepLog.warn("workspace", "Scene '$name' did not fully apply", it) }
-            }?.isSuccess == true
+            val coordinator = slotCoordinator?.takeIf { workspaceVisible } ?: return false
+            val previous = mainTaskPresenter.currentTaskId()
+            val previousPackage = observedTasks.firstOrNull { it.taskId == previous }?.component?.packageName
+            if (scene.main != null && scene.main != previousPackage) holdMainUntilReplaced(previous)
+            coordinator.applyScene(scene.main, scene.slots) { result ->
+                result.onFailure {
+                    NeXtepLog.warn("workspace", "Scene '$name' did not fully apply", it)
+                    swapAnimator.dismissFrozen()
+                }
+            }.onFailure { swapAnimator.dismissFrozen() }.isSuccess
         }
     }
 
@@ -762,7 +789,8 @@ class NeXtepWindowController(
     private fun applyWindowGeometry(geometry: WorkspaceGeometry) {
         // A re-application of the same geometry (the viewport callback after a wide
         // layout change) must not abort the slot exchange that change just started.
-        if (!contentLayoutChanging && geometry != appliedGeometry) cancelDragVisuals()
+        // A wide layout change keeps the frames that cover it (see pinTask/returnWideToMain).
+        if (!contentLayoutChanging && geometry != appliedGeometry) cancelDragVisuals(keepOverlay = wideLayoutChanging)
         appliedGeometry = geometry
         records.forEach { record ->
             val params = record.view.layoutParams as? WindowManager.LayoutParams ?: return@forEach
@@ -872,13 +900,13 @@ class NeXtepWindowController(
         }
     }
 
-    private fun cancelDragVisuals() {
+    private fun cancelDragVisuals(keepOverlay: Boolean = false) {
         contentDrag.abandon()
         internalDrag.cancel()
         slotWindows.forEach { it.view.cancelBackgroundSwipe() }
         slotCoordinator?.onSlotDragEnded()
         slotCoordinator?.cancelPendingDragExchange()
-        swapAnimator.cancel()
+        if (!keepOverlay) swapAnimator.cancel()
     }
 
     private fun contentSide(side: SidebarSide): Boolean {
@@ -1248,38 +1276,230 @@ class NeXtepWindowController(
 
     private fun returnWideToMain() {
         val index = wideSlotIndex ?: return
+        if (wideReturnPending) return
         val task = wideTaskId
-        setWideLayout(null, null)
-        // The slot view is back in the rail but laid out only on the next traversal; swap
-        // once its output layer is bound so the exchange animates from the rail card.
-        slotWindows[index].whenOutputBound {
-            if ((slotCoordinator?.slotStates()?.getOrNull(index) as? SlotState.Occupied)?.taskId == task)
-                slotCoordinator?.onSlotClicked(index)
+        val generation = ++wideGeneration
+        // Freeze the wide pane and the main app as they are; the apps trade places behind the
+        // frames, which travel once both have drawn at their new size. A player leaving
+        // fullscreen otherwise shows a blank page under its header for most of a second.
+        val strip = slotRect(index)
+        val mainFrom = mainRect()
+        val mainShot = mainPreview()
+        // The player has usually dropped its video by now; hold its last picture instead of black.
+        val fresh = slotWindows[index].view.captureProtectedPreview()
+        val stripShot = if (wideSnapshot != null && (fresh == null || fresh.isMostlyBlack())) {
+            fresh?.recycle()
+            wideSnapshot.also { wideSnapshot = null }
+        } else fresh
+        val frozen = strip != null && swapAnimator.freeze(listOf(
+            WorkspaceSwapAnimator.Frame(stripShot, strip, strip, topFill = true),
+            WorkspaceSwapAnimator.Frame(mainShot, mainFrom, mainFrom),
+        ), listOf(strip, mainFrom), geometry().screenWidth, geometry().screenHeight)
+        if (frozen) backdropHandler.postDelayed({
+            if (generation == wideGeneration) swapAnimator.dismissFrozen()
+        }, WIDE_REVEAL_FALLBACK_MS)
+        wideReturnPending = true
+        // Nothing on screen changes before the frozen frames cover it.
+        swapAnimator.whenShown {
+            wideReturnPending = false
+            if (generation != wideGeneration || wideSlotIndex != index) return@whenShown
+            setWideLayout(null, null)
+            // The slot view is back in the rail but laid out only on the next traversal; swap
+            // once its output layer is bound.
+            slotWindows[index].whenOutputBound {
+                val coordinator = slotCoordinator
+                if (task == null || coordinator == null ||
+                    (coordinator.slotStates().getOrNull(index) as? SlotState.Occupied)?.taskId != task) {
+                    swapAnimator.dismissFrozen()
+                    return@whenOutputBound
+                }
+                // The card that takes the main app back shows it until that app draws there.
+                slotRect(index)?.let { swapAnimator.holdAlso(WorkspaceSwapAnimator.Frame(mainShot, it, it)) }
+                var attempted = false
+                coordinator.returnFromWide(index, task) { settled ->
+                    attempted = true
+                    if (settled.isFailure) swapAnimator.dismissFrozen()
+                    else if (frozen) whenWideDrawn(index, generation) {
+                        val card = slotRect(index)
+                        // The strip's frame grows into the main pane showing the page as now laid out.
+                        if (card == null) swapAnimator.dismissFrozen()
+                        else swapAnimator.play(listOf(mainRect(), card), listOf(card, mainRect()),
+                            replace = mapOf(0 to mainPreview()))
+                    }
+                }.onFailure {
+                    swapAnimator.dismissFrozen()
+                    // Turned away while another move settles: the tap path queues the exchange.
+                    if (!attempted) coordinator.onSlotClicked(index)
+                }
+            }
         }
     }
 
     private fun pinTask(taskId: Int): Boolean {
+        if (pinPending) return false
         val coordinator = slotCoordinator ?: return false
         val states = coordinator.slotStates()
         val index = wideSlotIndex ?: states.indexOfFirst { it is SlotState.Ready }.takeIf { it >= 0 }
             ?: states.indexOfFirst { it is SlotState.Occupied }.takeIf { it >= 0 } ?: return false
         val previousIndex = wideSlotIndex
         val previousTask = wideTaskId
-        setWideLayout(index, taskId)
+        val generation = ++wideGeneration
+        // Freeze the page that becomes the wide pane and the card whose app takes the main pane;
+        // after the layout change they travel to their new places and hold there until both
+        // apps have drawn at their new size.
+        val mainFrom = mainRect()
+        val cardFrom = slotRect(index).takeIf { previousIndex == null }
+        // The top bar turns into the wide pane, black until its output arrives; its still covers that.
+        val topBar = cardFrom?.let { topBarFrame() }
+        val frozen = cardFrom != null && swapAnimator.freeze(listOfNotNull(
+            topBar,
+            WorkspaceSwapAnimator.Frame(mainPreview(), mainFrom, mainFrom, topFill = true),
+            WorkspaceSwapAnimator.Frame(slotWindows[index].view.captureProtectedPreview(), cardFrom, cardFrom,
+                empty = states.getOrNull(index) !is SlotState.Occupied),
+        ), listOfNotNull(topBar?.from, mainFrom, cardFrom), geometry().screenWidth, geometry().screenHeight)
+        var reveal: (() -> Unit)? = null
+        var live = false
+        fun revealWhenLive() {
+            if (live) reveal?.let { reveal = null; it() }
+        }
         pinPending = true
-        // The slot's output layer moves into the top bar and is recreated there on the next
-        // traversal. Park the task once the display feeds that layer, so the move never lands
-        // on a sleeping display that still has the rail canvas.
-        slotWindows[index].whenOutputBound {
-            pinPending = false
-            if (wideSlotIndex != index || wideTaskId != taskId) return@whenOutputBound
-            val result = coordinator.parkMainForWide(taskId, index)
-            result.onFailure {
-                NeXtepLog.warn("wide_layout", "Pin failed task=$taskId slot=$index", it)
-                setWideLayout(previousIndex, previousTask)
+        // Nothing on screen changes before the frozen frames cover it.
+        swapAnimator.whenShown {
+            if (generation != wideGeneration) {
+                pinPending = false
+                return@whenShown
+            }
+            setWideLayout(index, taskId)
+            pinPending = true
+            if (frozen) afterNextLayout {
+                val strip = slotRect(index)
+                if (strip == null || generation != wideGeneration) {
+                    swapAnimator.dismissFrozen()
+                    return@afterNextLayout
+                }
+                val main = mainRect()
+                swapAnimator.play(listOfNotNull(topBar?.from, strip, main), listOf(strip, main)) { done ->
+                    reveal = done
+                    revealWhenLive()
+                }
+            }
+            backdropHandler.postDelayed({
+                live = true
+                revealWhenLive()
+                if (generation == wideGeneration) swapAnimator.dismissFrozen()
+            }, WIDE_REVEAL_FALLBACK_MS)
+            // The slot's output layer moves into the top bar and is recreated there on the next
+            // traversal. Park the task once the display feeds that layer, so the move never lands
+            // on a sleeping display that still has the rail canvas.
+            slotWindows[index].whenOutputBound {
+                pinPending = false
+                if (wideSlotIndex != index || wideTaskId != taskId) return@whenOutputBound
+                val result = coordinator.parkMainForWide(taskId, index) { settled ->
+                    if (settled.isSuccess) whenWideDrawn(index, generation) {
+                        live = true
+                        revealWhenLive()
+                    } else swapAnimator.cancel()
+                }
+                result.onFailure {
+                    NeXtepLog.warn("wide_layout", "Pin failed task=$taskId slot=$index", it)
+                    swapAnimator.cancel()
+                    setWideLayout(previousIndex, previousTask)
+                }
             }
         }
         return true
+    }
+
+    private fun mainRect(): android.graphics.RectF = geometry().let {
+        android.graphics.RectF(it.contentLeft.toFloat(), it.contentTop.toFloat(),
+            it.contentRight.toFloat(), it.contentBottom.toFloat())
+    }
+
+    private fun slotRect(index: Int): android.graphics.RectF? = android.graphics.Rect()
+        .takeIf { slotWindows.getOrNull(index)?.view?.getScreenVisibleRect(it) == true }
+        ?.let { android.graphics.RectF(it) }
+
+    /** The top bar as drawn now, at its place on screen. */
+    private fun topBarFrame(): WorkspaceSwapAnimator.Frame? {
+        val view = records.firstOrNull { it.title == "NeXtepTopBar" }?.view?.takeIf { it.width > 0 && it.height > 0 }
+            ?: return null
+        val bitmap = runCatching {
+            android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
+                .also { view.draw(android.graphics.Canvas(it)) }
+        }.getOrNull() ?: return null
+        val at = IntArray(2).also(view::getLocationOnScreen)
+        val rect = android.graphics.RectF(at[0].toFloat(), at[1].toFloat(),
+            (at[0] + view.width).toFloat(), (at[1] + view.height).toFloat())
+        return WorkspaceSwapAnimator.Frame(bitmap, rect, rect)
+    }
+
+    private fun mainPreview(): android.graphics.Bitmap? = mainTaskPresenter.currentTaskId()?.let {
+        io.github.lujinxin.nextep.framework.TaskSurfaceCompat.capturePreview(it)
+    }
+
+    private fun afterNextLayout(action: () -> Unit) {
+        val observer = topAppStrip?.viewTreeObserver?.takeIf { it.isAlive } ?: return action()
+        observer.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                if (observer.isAlive) observer.removeOnPreDrawListener(this)
+                action()
+                return true
+            }
+        })
+    }
+
+    /** Polls until the main pane's app and slot [index]'s app show frames laid out for their new size. */
+    /**
+     * Holds the main pane's last picture while a scene replaces its app: the new app's first frames
+     * are a blank page (or, with the open animation, the wallpaper behind the old one).
+     */
+    private fun holdMainUntilReplaced(previous: Int?) {
+        val rect = mainRect()
+        if (!swapAnimator.freeze(listOf(WorkspaceSwapAnimator.Frame(mainPreview(), rect, rect)), listOf(rect),
+                geometry().screenWidth, geometry().screenHeight)) return
+        val generation = ++wideGeneration
+        backdropHandler.postDelayed({ if (generation == wideGeneration) swapAnimator.dismissFrozen() }, WIDE_REVEAL_FALLBACK_MS)
+        whenWideDrawn(null, generation, replacing = previous) { swapAnimator.fadeFrozen() }
+    }
+
+    /** Polls until the main pane's app (another than [replacing]) and slot [index]'s app show settled frames. */
+    private fun whenWideDrawn(index: Int?, generation: Int, replacing: Int? = null, action: () -> Unit) {
+        val deadline = android.os.SystemClock.uptimeMillis() + WIDE_DRAW_TIMEOUT_MS
+        val slotCrop = index?.let { slotWindows.getOrNull(it) }?.geometry()?.let { android.graphics.Rect(0, 0, it.width, it.height) }
+        var lastMain: IntArray? = null
+        var mainStableSince = 0L
+        // The main pane's page must also hold still: a stale buffer or a video surface left from
+        // fullscreen has detail too, but it changes until the page has really laid out.
+        fun mainSettled(task: Int?): Boolean {
+            if (replacing != null && (task == null || task == replacing)) return false
+            task ?: return true
+            val grid = io.github.lujinxin.nextep.framework.TaskSurfaceCompat.laidOutLowerHalf(task) ?: return true
+            val now = android.os.SystemClock.uptimeMillis()
+            val previous = lastMain
+            lastMain = grid
+            if (grid.isEmpty() || previous == null ||
+                !io.github.lujinxin.nextep.framework.sameFrame(previous, grid)) {
+                mainStableSince = now
+                return false
+            }
+            return now - mainStableSince >= WIDE_STABLE_MS
+        }
+        fun poll() {
+            if (generation != wideGeneration || !workspaceVisible) return
+            val main = mainTaskPresenter.currentTaskId()
+            val slot = index?.let { (slotCoordinator?.slotStates()?.getOrNull(it) as? SlotState.Occupied)?.taskId }
+            val drawn = mainSettled(main) && (slot == null ||
+                io.github.lujinxin.nextep.framework.TaskSurfaceCompat.showsLaidOutFrame(slot, slotCrop) != false)
+            if (drawn || android.os.SystemClock.uptimeMillis() >= deadline) {
+                NeXtepLog.info("wide_layout", "Live frames ${if (drawn) "drawn" else "timed out"} slot=$index")
+                // The slot's output moved between windows and was once left without a picture;
+                // the frames still cover it while that is checked.
+                val slot = index?.let { slotWindows.getOrNull(it) }
+                if (slot == null) action()
+                else slot.ensureOutputShowing { if (generation == wideGeneration) action() }
+            } else backdropHandler.postDelayed({ poll() }, WIDE_DRAW_POLL_MS)
+        }
+        poll()
     }
 
     private fun setWideLayout(index: Int?, taskId: Int?) {
@@ -1292,9 +1512,14 @@ class NeXtepWindowController(
         // Each pin starts at 16:9; the sampler narrows the slot once the picture shows its bars.
         viewport.setWideSlot(index)
         if (index == null) wideAspectSampler.stop() else wideAspectSampler.start()
+        backdropHandler.removeCallbacks(wideSnapshotTick)
+        wideSnapshot?.recycle()
+        wideSnapshot = null
+        if (index != null) backdropHandler.postDelayed(wideSnapshotTick, WIDE_SNAPSHOT_INTERVAL_MS)
         SystemServerWorkspaceBridge.publishWideDisplay(context, index?.let { slotWindows.getOrNull(it)?.displayId() })
         val geometry = geometry()
-        applyWindowGeometry(geometry)
+        wideLayoutChanging = true
+        try { applyWindowGeometry(geometry) } finally { wideLayoutChanging = false }
         sidebarView?.let { applySlotLayout(it, geometry) }
     }
 
@@ -1317,6 +1542,12 @@ class NeXtepWindowController(
         const val WORKSPACE_ENTER_DURATION_MS = 240L
         const val WORKSPACE_EXIT_DURATION_MS = 180L
         const val PARKED_WINDOW_RELEASE_MS = 60_000L
+        /** A player leaving fullscreen took ~1.7 s to lay out its page on the test phone; past this the frames give way. */
+        const val WIDE_DRAW_TIMEOUT_MS = 2_000L
+        const val WIDE_DRAW_POLL_MS = 40L
+        const val WIDE_STABLE_MS = 200L
+        const val WIDE_SNAPSHOT_INTERVAL_MS = 1_000L
+        const val WIDE_REVEAL_FALLBACK_MS = 4_000L
         /** Upper bound of the surface-recreating first frame that a cold entry waits out. */
         const val COLD_ENTRY_ALLOWANCE_MS = 250L
         const val APPEARANCE_SYSTEM = "SYSTEM"

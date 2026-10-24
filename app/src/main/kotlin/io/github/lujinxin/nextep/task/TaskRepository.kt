@@ -109,9 +109,9 @@ class TaskRepository(context: Context) {
         return tasks.filter { it.component.packageName == component.packageName }.singleOrNull()
     }
 
-    fun bringTaskToFront(taskId: Int): Result<Unit> = runCatching {
+    fun bringTaskToFront(taskId: Int, options: android.os.Bundle? = null): Result<Unit> = runCatching {
         val manager = checkNotNull(activityManager) { "ActivityManager unavailable" }
-        manager.moveTaskToFront(taskId, ActivityManager.MOVE_TASK_WITH_HOME)
+        manager.moveTaskToFront(taskId, ActivityManager.MOVE_TASK_WITH_HOME, options)
         NeXtepLog.info("task_repository", "Brought taskId=$taskId to front")
     }
 

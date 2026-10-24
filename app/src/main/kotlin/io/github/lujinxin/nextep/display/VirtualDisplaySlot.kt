@@ -16,6 +16,8 @@ class VirtualDisplaySlot(
 ) : SurfaceHolder.Callback {
     private companion object {
         const val OUTPUT_BOUND_TIMEOUT_MS = 600L
+        /** Two frames for a reconnected output to show the app. */
+        const val OUTPUT_REBIND_SETTLE_MS = 40L
         const val PARKED_DISPLAY_RELEASE_MS = 60_000L
         val creator: java.util.concurrent.ExecutorService =
             java.util.concurrent.Executors.newSingleThreadExecutor { Thread(it, "NeXtep-VirtualDisplay") }
@@ -113,6 +115,52 @@ class VirtualDisplaySlot(
         mainHandler.postDelayed(outputBoundFallback, OUTPUT_BOUND_TIMEOUT_MS)
     }
 
+    /**
+     * Connects the display to the current output layer again. After a move between windows the
+     * display was once left on the old layer's queue (display on, nothing drawn) until the next
+     * move; callers run this while something still covers the slot.
+     */
+    /**
+     * Runs [done] once the output layer shows the display: when it holds no buffer at all, the
+     * display is connected again first. A reconnect drops the last frame, so a paused or loading
+     * app would show black until it draws again; a layer that already has a picture is left alone.
+     */
+    fun ensureOutputShowing(done: () -> Unit) {
+        val output = view.textureView
+        if (virtualDisplay == null || !active || suspended || !output.holder.surface.isValid) return done()
+        val probe = android.graphics.Bitmap.createBitmap(16, 9, android.graphics.Bitmap.Config.ARGB_8888)
+        runCatching {
+            android.view.PixelCopy.request(output, probe, { result ->
+                probe.recycle()
+                if (result == android.view.PixelCopy.ERROR_SOURCE_NO_DATA) {
+                    rebindOutput()
+                    mainHandler.postDelayed(done, OUTPUT_REBIND_SETTLE_MS)
+                } else done()
+            }, mainHandler)
+        }.onFailure {
+            probe.recycle()
+            done()
+        }
+    }
+
+    private fun rebindOutput() {
+        val display = virtualDisplay ?: return
+        if (!active || suspended) return
+        val holder = view.textureView.holder
+        val output = holder.surface.takeIf { it.isValid } ?: return
+        runCatching {
+            // Through the placeholder, not null: the display must not turn off in between.
+            display.setSurface(placeholderOutput())
+            display.setSurface(output)
+            releasePlaceholder()
+        }.onFailure { NeXtepLog.warn("virtual_display", "Output rebind failed slot=$index", it) }.onSuccess {
+            surface = output
+            boundWidth = holder.surfaceFrame.width()
+            boundHeight = holder.surfaceFrame.height()
+            NeXtepLog.info("virtual_display", "Rebound output slot=$index size=${boundWidth}x$boundHeight")
+        }
+    }
+
     private fun runOutputBound() {
         mainHandler.removeCallbacks(outputBoundFallback)
         val action = outputBoundAction ?: return
@@ -166,6 +214,7 @@ class VirtualDisplaySlot(
         mainHandler.removeCallbacks(outputBoundFallback)
         outputBoundAction = null
         runCatching { display.setSurface(null) }
+        releasePlaceholder()
         surface = null
         parked = true
         view.showWaiting()
@@ -192,6 +241,7 @@ class VirtualDisplaySlot(
             runCatching { virtualDisplay?.setSurface(null) }.onFailure {
                 NeXtepLog.warn("virtual_display", "Unable to suspend output slot=$index", it)
             }
+            releasePlaceholder()
             return
         }
         if (!suspended) return
@@ -227,7 +277,8 @@ class VirtualDisplaySlot(
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-        NeXtepLog.info("virtual_display", "Surface changed slot=$index display=${displayId()} size=${width}x$height")
+        NeXtepLog.info("virtual_display", "Surface changed slot=$index display=${displayId()} size=${width}x$height " +
+            "bound=${boundWidth}x$boundHeight")
         // The holder keeps its Java Surface across a resize but replaces the producer; a change
         // at the bound size is the first callback after creation and must not reconnect the
         // display's queue a second time (that dropped the queued frames: NO_BUFFER_AVAILABLE).
@@ -238,8 +289,35 @@ class VirtualDisplaySlot(
         // A lock, rotation or temporary reparent may replace the output layer.
         // Keep its tasks alive on the same display until the new layer arrives.
         NeXtepLog.info("virtual_display", "Surface destroyed slot=$index display=${displayId()}")
-        runCatching { virtualDisplay?.setSurface(null) }
+        val display = virtualDisplay
+        // Without an output the display turns off; turned off and on again within a frame or two
+        // (the wide pane's move into the top bar), the system once kept its tasks hidden. A
+        // placeholder keeps it on until the new layer arrives.
+        val placeholder = display?.takeIf { active && !suspended }?.let { placeholderOutput() }
+        runCatching { display?.setSurface(placeholder) }.onFailure {
+            NeXtepLog.warn("virtual_display", "Placeholder output failed slot=$index", it)
+            runCatching { display?.setSurface(null) }
+            releasePlaceholder()
+        }
         surface = null
+    }
+
+    private var placeholder: android.media.ImageReader? = null
+
+    /** An output that drops every frame, sized like the display. */
+    private fun placeholderOutput(): Surface? = runCatching {
+        releasePlaceholder()
+        val geometry = activeGeometry ?: layoutProfile?.canvas(index) ?: return null
+        android.media.ImageReader.newInstance(geometry.width, geometry.height, android.graphics.PixelFormat.RGBA_8888, 2)
+            .also { reader ->
+                reader.setOnImageAvailableListener({ runCatching { it.acquireLatestImage()?.close() } }, mainHandler)
+                placeholder = reader
+            }.surface
+    }.onFailure { NeXtepLog.warn("virtual_display", "Placeholder unavailable slot=$index", it) }.getOrNull()
+
+    private fun releasePlaceholder() {
+        placeholder?.let { reader -> runCatching { reader.close() } }
+        placeholder = null
     }
 
     private fun updateDisplay(holder: SurfaceHolder, rebind: Boolean = false) {
@@ -256,6 +334,7 @@ class VirtualDisplaySlot(
         }
         if (output != null && (rebind || surface !== output)) {
             display.setSurface(output)
+            releasePlaceholder()
             surface = output
             boundWidth = holder.surfaceFrame.width()
             boundHeight = holder.surfaceFrame.height()
@@ -349,6 +428,7 @@ class VirtualDisplaySlot(
         outputBoundAction = null
         val releasedDisplayId = virtualDisplay?.display?.displayId
         runCatching { virtualDisplay?.setSurface(null) }
+        releasePlaceholder()
         virtualDisplay?.release()
         virtualDisplay = null
         activeGeometry = null

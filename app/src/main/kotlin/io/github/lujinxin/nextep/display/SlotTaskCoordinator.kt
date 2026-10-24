@@ -91,7 +91,8 @@ class SlotTaskCoordinator(
         schedule = { delay, action -> handler.postDelayed({ action() }, delay) },
         now = SystemClock::uptimeMillis,
     )
-    private data class DeferredMove(val ready: () -> Boolean, val rollback: () -> Unit)
+    private data class DeferredMove(val ready: () -> Boolean, val rollback: () -> Unit,
+                                    val timeoutMs: Long = 1_500L)
     private var deferredMove: DeferredMove? = null
     private val slotRecords = MutableList(slots.size) { SlotRecord() }
     private data class LaunchRequest(
@@ -181,9 +182,12 @@ class SlotTaskCoordinator(
         val component = checkNotNull(request.intent.component)
         val existing = taskRepository.findTaskForComponent(component,
             request.intent.targetUser() ?: android.os.Process.myUserHandle())
-        if (existing != null && existing.displayId != Display.DEFAULT_DISPLAY) promoteExistingToMain(existing)
-        val options = android.app.ActivityOptions.makeBasic().apply { setLaunchDisplayId(Display.DEFAULT_DISPLAY) }
-        UserTargetedActivityLauncher.start(applicationContext, request.intent, options.toBundle()).getOrThrow()
+        // No open animation: it shrinks the old main app over the wallpaper, which showed through for two frames.
+        val quiet = { android.app.ActivityOptions.makeCustomAnimation(applicationContext, 0, 0)
+            .apply { setLaunchDisplayId(Display.DEFAULT_DISPLAY) }.toBundle() }
+        if (existing != null && existing.displayId != Display.DEFAULT_DISPLAY) promoteExistingToMain(existing, options = quiet())
+        val intent = Intent(request.intent).addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION)
+        UserTargetedActivityLauncher.start(applicationContext, intent, quiet()).getOrThrow()
         NeXtepLog.info("app_launch", "Started package=" + component.packageName + " slot=" + request.slot)
     }
 
@@ -642,11 +646,12 @@ class SlotTaskCoordinator(
             replaceSearchDestination(index, intent)
             LaunchRequest(intent, index, slots(index))
         }
-        val mainIntent = main?.let(::launcher)
-        fun openMain(result: Result<Unit>) {
-            complete(result.mapCatching { mainIntent?.let { openInMain(it).getOrThrow() } ?: Unit })
-        }
-        if (requests.isEmpty()) openMain(Result.success(Unit)) else appLaunch.begin(requests, ::openMain).getOrThrow()
+        // The main app goes first: moving the current main app into a slot before its
+        // replacement arrives showed HOME in the main pane.
+        val mainRequest = main?.takeIf { it != taskRepository.foregroundTask()?.component?.packageName }
+            ?.let(::launcher)?.let { LaunchRequest(it, null, null) }
+        val all = listOfNotNull(mainRequest) + requests
+        if (all.isEmpty()) complete(Result.success(Unit)) else appLaunch.begin(all, complete).getOrThrow()
     }
 
     /** Open external content (a link, a search) in one slot, resolved like the compare searches. */
@@ -731,7 +736,8 @@ class SlotTaskCoordinator(
         }
     }
 
-    private fun promoteExistingToMain(existing: TaskRepository.TaskSnapshot, beforePresent: () -> Unit = {}) {
+    private fun promoteExistingToMain(existing: TaskRepository.TaskSnapshot, beforePresent: () -> Unit = {},
+                                      options: android.os.Bundle? = null) {
         val sourceSlot = slotRecords.indexOfFirst { (it.state as? SlotState.Occupied)?.taskId == existing.taskId }
         val sourceLayout = sourceSlot.takeIf { it >= 0 }?.let { slotRecords[it].originalLayout }
             ?: defaultMainLayout(existing.resizeMode)
@@ -753,7 +759,7 @@ class SlotTaskCoordinator(
             setState(sourceSlot, slots[sourceSlot].displayId()?.let(SlotState::Ready) ?: SlotState.Empty,
                 "top app promoted from slot")
         }
-        taskRepository.bringTaskToFront(existing.taskId).getOrThrow()
+        taskRepository.bringTaskToFront(existing.taskId, options).getOrThrow()
         beforePresent()
         mainTaskPresenter.presentTask(existing.taskId, geometryProvider()).getOrThrow()
     }
@@ -898,19 +904,30 @@ class SlotTaskCoordinator(
 
     fun slotStates(): List<SlotState> = slotRecords.map { it.state }
 
-    fun parkMainForWide(taskId: Int, index: Int): Result<Unit> = runCatching {
+    /** The window controller animates the wide transitions itself; [completed] follows the settled move. */
+    fun parkMainForWide(taskId: Int, index: Int, completed: (Result<Unit>) -> Unit): Result<Unit> = runCatching {
         ensureMainThread()
         check(active && !suspended && !transitionInProgress && validActiveSlot(index))
         val current = checkNotNull(taskRepository.foregroundTask())
         check(current.taskId == taskId && isExchangeableMainTask(current))
-        val occupied = slotRecords[index].state as? SlotState.Occupied
-        runTransition("landscape task to wide slot=$index",
-            occupied?.let { SlotTaskDrag(index, it.taskId, it.displayId) to null }) {
+        runTransition("landscape task to wide slot=$index", completed = completed) {
             when (val state = slotRecords[index].state) {
                 is SlotState.Ready -> parkMainTaskInSlot(index, state, current)
                 is SlotState.Occupied -> swapWithMain(index, state)
                 else -> error("Wide slot is not ready")
             }
+        }.getOrThrow()
+    }
+
+    /** Bring the wide slot's [taskId] back to the main pane, without an animation of its own. */
+    fun returnFromWide(index: Int, taskId: Int, completed: (Result<Unit>) -> Unit): Result<Unit> = runCatching {
+        ensureMainThread()
+        check(active && !suspended && !appLaunch.running && validActiveSlot(index))
+        val occupied = slotRecords[index].state as? SlotState.Occupied
+        check(occupied?.taskId == taskId) { "Wide task left its slot" }
+        clearDesktopSelection()
+        runTransition("wide task to main slot=$index", completed = completed) {
+            swapWithMain(index, checkNotNull(occupied), settleTimeoutMs = WIDE_RETURN_SETTLE_MS)
         }.getOrThrow()
     }
 
@@ -1681,7 +1698,7 @@ class SlotTaskCoordinator(
             packageName != TriggerBroadcastContract.SYSTEM_UI_PACKAGE
     }
 
-    private fun swapWithMain(slotIndex: Int, occupied: SlotState.Occupied) {
+    private fun swapWithMain(slotIndex: Int, occupied: SlotState.Occupied, settleTimeoutMs: Long = 1_500L) {
         val tasks = taskRepository.runningTasks()
         val slotTask = tasks.firstOrNull { it.taskId == occupied.taskId }
             ?: error("Slot task ${occupied.taskId} exited")
@@ -1703,6 +1720,7 @@ class SlotTaskCoordinator(
         val sideLayout = TaskLayout(slotBounds, canvas.densityDpi, fullscreenWindowingMode(),
             TASK_RESIZE_MODE_RESIZEABLE)
         var submitted = false
+        var lastWaiting: String? = null
         fun rollback() {
             clearPromotedTaskRecovery()
             TaskSurfaceCompat.cancelDisplayExchange(slotTask.taskId)
@@ -1763,7 +1781,18 @@ class SlotTaskCoordinator(
                     it.displayId == occupied.displayId && it.bounds == slotBounds &&
                         it.densityDpi == canvas.densityDpi && it.windowingMode == fullscreenWindowingMode()
                 } == true
-                if (!mainReady || !sideReady || !TaskSurfaceCompat.hasPresentableSurface(slotTask.taskId)) false
+                val surfaceReady = mainReady && sideReady && TaskSurfaceCompat.hasPresentableSurface(slotTask.taskId)
+                val waiting = when {
+                    !mainReady -> "main display=${promoted?.displayId} bounds=${promoted?.bounds}/$mainBounds " +
+                        "density=${promoted?.densityDpi}/${slotOriginal.densityDpi} mode=${promoted?.windowingMode}/${slotOriginal.windowingMode}"
+                    !sideReady -> "side display=${demoted?.displayId}/${occupied.displayId} bounds=${demoted?.bounds}/$slotBounds " +
+                        "density=${demoted?.densityDpi}/${canvas.densityDpi} mode=${demoted?.windowingMode}"
+                    !surfaceReady -> "surface"
+                    else -> null
+                }
+                if (waiting != null && waiting != lastWaiting) NeXtepLog.info("slot_settle", "Exchange waits for $waiting")
+                lastWaiting = waiting
+                if (!surfaceReady) false
                 else {
                     if (mainTask != null) {
                         val source = slots[slotIndex].sourceBounds()
@@ -1771,12 +1800,16 @@ class SlotTaskCoordinator(
                         // Admit the destination fit now, retaining Shell exchange classification.
                         if (!TaskSurfaceCompat.fitSlotSurface(mainTask.taskId, occupied.displayId,
                             Rect(source.left, source.top, source.right, source.bottom),
-                            finishExchange = true).getOrThrow()) return@ready false
+                            finishExchange = true).getOrThrow()) {
+                            if (lastWaiting != "fit") NeXtepLog.info("slot_settle", "Exchange waits for fit")
+                            lastWaiting = "fit"
+                            return@ready false
+                        }
                     }
                     mainTaskPresenter.presentTask(slotTask.taskId, geometryProvider()).getOrThrow()
                     true
                 }
-            }, rollback = ::rollback)
+            }, rollback = ::rollback, timeoutMs = settleTimeoutMs)
         } catch (error: Throwable) {
             runCatching { rollback() }.onFailure(error::addSuppressed)
             throw error
@@ -1818,7 +1851,7 @@ class SlotTaskCoordinator(
             val pending = deferredMove
             deferredMove = null
             if (result.isSuccess && pending != null) {
-                settlement.begin(pending.ready) { settled ->
+                settlement.begin(pending.ready, pending.timeoutMs) { settled ->
                     settled.onFailure { error ->
                         runCatching { pending.rollback() }.onFailure(error::addSuppressed)
                     }
@@ -2447,6 +2480,8 @@ class SlotTaskCoordinator(
         const val REBIND_AFTER_SLIDE_MS = 80L
         /** An exit waits at most this long for an in-flight rebind transaction before parking. */
         const val REBIND_APPLY_WAIT_MS = 500L
+        /** A player leaving fullscreen relays out while it moves back; 1.5 s was not always enough. */
+        const val WIDE_RETURN_SETTLE_MS = 3_000L
         const val REBIND_RETRY_MS = 100L
         const val REBIND_MAX_ATTEMPTS = 5
         const val MAIN_LAUNCH_POLL_MS = 200L

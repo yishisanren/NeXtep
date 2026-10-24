@@ -205,7 +205,8 @@ object TaskSurfaceCompat {
 
     /** Transient exchange preview, using only this task's layers. Secure layers
      * remain excluded by ScreenCapture's defaults; failure just omits the preview. */
-    fun capturePreview(taskId: Int, sourceCrop: android.graphics.Rect? = null): android.graphics.Bitmap? = runCatching {
+    fun capturePreview(taskId: Int, sourceCrop: android.graphics.Rect? = null,
+                       scale: Float = 0.5f): android.graphics.Bitmap? = runCatching {
         val leash = findTaskLeash(taskId, requireMainDisplay = false) ?: return@runCatching null
         val surfaceType = Class.forName("android.view.SurfaceControl")
         val captureType = Class.forName("android.window.ScreenCaptureInternal")
@@ -219,7 +220,7 @@ object TaskSurfaceCompat {
             builderType.getMethod("setSourceCrop", android.graphics.Rect::class.java)
                 .invoke(builder, android.graphics.Rect(0, 0, crop.width(), crop.height()))
         }
-        builderType.getMethod("setFrameScale", Float::class.javaPrimitiveType).invoke(builder, 0.5f)
+        builderType.getMethod("setFrameScale", Float::class.javaPrimitiveType).invoke(builder, scale)
         builderType.getMethod("setChildrenOnly", Boolean::class.javaPrimitiveType).invoke(builder, true)
         val args = builderType.getMethod("build").invoke(builder)
         val buffer = captureType.methods.firstOrNull {
@@ -230,6 +231,21 @@ object TaskSurfaceCompat {
         try { bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, false) }
         finally { bitmap.recycle() }
     }.onFailure { NeXtepLog.warn("task_preview", "Task preview unavailable taskId=$taskId", it) }.getOrNull()
+
+    /** Whether the task shows a frame laid out for its current bounds; null when it cannot be captured. */
+    fun showsLaidOutFrame(taskId: Int, crop: android.graphics.Rect? = null): Boolean? =
+        laidOutLowerHalf(taskId, crop)?.let { it.isNotEmpty() }
+
+    /** The lower half's luminance grid when the frame looks laid out, empty when not; null when it cannot be captured. */
+    fun laidOutLowerHalf(taskId: Int, crop: android.graphics.Rect? = null): IntArray? {
+        val bitmap = capturePreview(taskId, crop, scale = 0.1f) ?: return null
+        return try {
+            val pixels = IntArray(bitmap.width * bitmap.height)
+            bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+            if (looksLaidOut(pixels, bitmap.width, bitmap.height)) lowerHalfLuminance(pixels, bitmap.width, bitmap.height)
+            else IntArray(0)
+        } finally { bitmap.recycle() }
+    }
 
     /** Task-list delivery can precede Shell's surface callback on a cold launch. */
     fun hasPresentableSurface(taskId: Int, requireMainDisplay: Boolean = true): Boolean =
@@ -744,3 +760,41 @@ object TaskSurfaceCompat {
     private const val REPOSITION_DURATION_MS = 260L
     private const val RESTORE_DURATION_MS = 180L
 }
+
+/**
+ * An app still relaying out after a size change shows bare edges (no buffer there yet) or a blank
+ * page under a stale header, such as a player leaving fullscreen: its lower half carries no detail.
+ * shortcut: luminance spread is a heuristic; a genuinely plain page waits for the caller's timeout.
+ */
+internal fun looksLaidOut(pixels: IntArray, width: Int, height: Int): Boolean {
+    if (width <= 0 || height <= 1 || pixels.size < width * height) return false
+    if (pixels.count { it ushr 24 < 128 } * 50 > width * height) return false
+    var sum = 0.0
+    var squares = 0.0
+    var count = 0
+    for (y in height / 2 until height) for (x in 0 until width) {
+        val color = pixels[y * width + x]
+        val luminance = 0.299 * (color shr 16 and 0xff) + 0.587 * (color shr 8 and 0xff) + 0.114 * (color and 0xff)
+        sum += luminance
+        squares += luminance * luminance
+        count++
+    }
+    val mean = sum / count
+    return squares / count - mean * mean >= 9.0
+}
+
+/** Nearly every pixel is black: a player that has just dropped its video picture. */
+internal fun mostlyBlack(pixels: IntArray): Boolean = pixels.isNotEmpty() && pixels.count { color ->
+    0.299 * (color shr 16 and 0xff) + 0.587 * (color shr 8 and 0xff) + 0.114 * (color and 0xff) < 24
+} * 10 >= pixels.size * 9
+
+/** Luminance of the frame's lower half, for telling a settled page from one still changing. */
+internal fun lowerHalfLuminance(pixels: IntArray, width: Int, height: Int): IntArray =
+    IntArray(width * (height - height / 2)) { index ->
+        val color = pixels[(height / 2 + index / width) * width + index % width]
+        (0.299 * (color shr 16 and 0xff) + 0.587 * (color shr 8 and 0xff) + 0.114 * (color and 0xff)).toInt()
+    }
+
+/** Two lower-half grids show the same settled content (a video frame or a page still loading does not). */
+internal fun sameFrame(a: IntArray, b: IntArray): Boolean =
+    a.size == b.size && a.isNotEmpty() && a.indices.sumOf { kotlin.math.abs(a[it] - b[it]) } <= a.size * 6

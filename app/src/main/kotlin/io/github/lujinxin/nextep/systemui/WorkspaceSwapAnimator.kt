@@ -19,12 +19,15 @@ import io.github.lujinxin.nextep.logging.NeXtepLog
  * preview covers relayout, then fade to the live buffers. Nothing retains an app
  * frame after the transition ends or the workspace is hidden/locked. */
 internal class WorkspaceSwapAnimator(private val context: Context, private val appearance: () -> WorkbenchAppearance) {
-    /** A frame without a bitmap draws as a card; an empty one also carries the plus badge. */
-    data class Frame(val bitmap: Bitmap?, val from: RectF, val to: RectF, val empty: Boolean = false)
+    /** A frame without a bitmap draws as a card; an empty one also carries the plus badge.
+     * A [topFill] frame fills its width from the top, so a portrait page shows its player in a wide pane. */
+    data class Frame(val bitmap: Bitmap?, val from: RectF, var to: RectF, val empty: Boolean = false,
+                     val topFill: Boolean = false)
     private val manager = context.getSystemService(WindowManager::class.java)
     private var overlay: SwapPreviewView? = null
     private var animator: ValueAnimator? = null
     private var generation = 0
+    private var frozen = false
     fun animate(
         source: Bitmap?, target: Bitmap?, targetEmpty: Boolean,
         start: RectF, sourceBounds: RectF, targetBounds: RectF,
@@ -38,14 +41,65 @@ internal class WorkspaceSwapAnimator(private val context: Context, private val a
 
     fun animateFrames(frames: List<Frame>, covers: List<RectF>, screenWidth: Int, screenHeight: Int,
                       move: (() -> Unit) -> Unit) {
+        if (show(frames, covers, screenWidth, screenHeight)) animateOverlay(move) else move {}
+    }
+
+    /** Hold [frames] at their start positions over the live windows until [play]. */
+    fun freeze(frames: List<Frame>, covers: List<RectF>, screenWidth: Int, screenHeight: Int): Boolean =
+        show(frames, covers, screenWidth, screenHeight).also { frozen = it }
+
+    /** Runs [action] once, when the overlay's first frame is on screen (at once without an overlay). */
+    fun whenShown(action: () -> Unit) {
+        val preview = overlay ?: return action()
+        var done = false
+        fun once() {
+            if (!done) { done = true; action() }
+        }
+        preview.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                preview.viewTreeObserver.removeOnPreDrawListener(this)
+                // A new window shows a frame after its commit and the window manager's next pass;
+                // two vsyncs after the draw were once one short, and the layout change showed first.
+                val choreographer = android.view.Choreographer.getInstance()
+                preview.viewTreeObserver.registerFrameCommitCallback {
+                    choreographer.postFrameCallback { choreographer.postFrameCallback { once() } }
+                }
+                return true
+            }
+        })
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(::once, SHOW_TIMEOUT_MS)
+    }
+
+    /** Hold one more still frame over the frozen ones, such as a card laid out after the freeze. */
+    fun holdAlso(frame: Frame) {
+        val preview = overlay?.takeIf { frozen } ?: return
+        preview.frames = preview.frames + frame
+        preview.invalidate()
+    }
+
+    /** Move the frozen frames to [targets] behind [covers]; [move] gets the fade into the live windows. */
+    fun play(targets: List<RectF>, covers: List<RectF>, replace: Map<Int, Bitmap?> = emptyMap(),
+             move: (() -> Unit) -> Unit = { reveal -> reveal() }) {
+        val preview = overlay?.takeIf { frozen } ?: return move {}
+        frozen = false
+        // A frame can travel with a fresher picture of its app, such as the page laid out after the freeze.
+        preview.frames = preview.frames.mapIndexed { index, frame ->
+            val fresh = replace[index] ?: return@mapIndexed frame
+            frame.bitmap?.recycle()
+            frame.copy(bitmap = fresh)
+        }
+        preview.frames.zip(targets).forEach { (frame, target) -> frame.to = target }
+        preview.covers = covers
+        animateOverlay(move)
+    }
+
+    private fun show(frames: List<Frame>, covers: List<RectF>, screenWidth: Int, screenHeight: Int): Boolean {
         cancel()
         val windowType = SystemUiWindowTypeResolver.resolve()
         if (windowType == null) {
             frames.forEach { it.bitmap?.recycle() }
-            move {}
-            return
+            return false
         }
-        val token = ++generation
         val preview = SwapPreviewView(context, frames, covers, appearance())
         val params = WindowManager.LayoutParams(
             screenWidth, screenHeight, windowType,
@@ -64,10 +118,15 @@ internal class WorkspaceSwapAnimator(private val context: Context, private val a
         val added = runCatching { manager.addView(preview, params) }.isSuccess
         if (!added) {
             preview.release()
-            move {}
-            return
+            return false
         }
         overlay = preview
+        return true
+    }
+
+    private fun animateOverlay(move: (() -> Unit) -> Unit) {
+        val preview = overlay ?: return move {}
+        val token = ++generation
         animator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 220L
             interpolator = DecelerateInterpolator(1.6f)
@@ -105,8 +164,34 @@ internal class WorkspaceSwapAnimator(private val context: Context, private val a
         }
     }
 
+    /** Fade the frames held by [freeze] into the live windows beneath, where they are. */
+    fun fadeFrozen() {
+        val preview = overlay?.takeIf { frozen } ?: return
+        frozen = false
+        val token = ++generation
+        animator = ValueAnimator.ofFloat(1f, 0f).apply {
+            duration = 120L
+            addUpdateListener { preview.alpha = it.animatedValue as Float }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    if (generation == token) {
+                        animator = null
+                        this@WorkspaceSwapAnimator.cancel()
+                    }
+                }
+            })
+            start()
+        }
+    }
+
+    /** Drop frames held by [freeze] that will not play; a running exchange keeps its overlay. */
+    fun dismissFrozen() {
+        if (frozen) cancel()
+    }
+
     fun cancel() {
         generation += 1
+        frozen = false
         animator?.cancel()
         animator = null
         val previous = overlay
@@ -117,12 +202,17 @@ internal class WorkspaceSwapAnimator(private val context: Context, private val a
             previous.release()
         }
     }
+
+    private companion object {
+        /** A frozen overlay that never draws must not hold up the transition behind it. */
+        const val SHOW_TIMEOUT_MS = 250L
+    }
 }
 
 internal class SwapPreviewView(
     context: Context,
-    private val frames: List<WorkspaceSwapAnimator.Frame>,
-    private val covers: List<RectF>,
+    var frames: List<WorkspaceSwapAnimator.Frame>,
+    var covers: List<RectF>,
     appearance: WorkbenchAppearance,
 ) : View(context) {
     var progress = 0f
@@ -149,10 +239,11 @@ internal class SwapPreviewView(
         // The live tasks stay put until the compositor move. Cover their old
         // positions so a shrinking preview cannot expose a second stationary app.
         covers.forEach { canvas.drawRoundRect(it, cornerRadius, cornerRadius, coverPaint) }
-        frames.forEach { drawFrame(canvas, it.bitmap, it.from, it.to, it.empty) }
+        frames.forEach { drawFrame(canvas, it) }
     }
 
-    private fun drawFrame(canvas: Canvas, bitmap: Bitmap?, from: RectF, to: RectF, empty: Boolean) {
+    private fun drawFrame(canvas: Canvas, frame: WorkspaceSwapAnimator.Frame) {
+        val (bitmap, from, to, empty) = frame
         fun interpolate(a: Float, b: Float) = a + (b - a) * progress
         destination.set(interpolate(from.left, to.left), interpolate(from.top, to.top),
             interpolate(from.right, to.right), interpolate(from.bottom, to.bottom))
@@ -167,11 +258,13 @@ internal class SwapPreviewView(
             badge.setBounds(left, top, left + badgeSize, top + badgeSize)
             badge.draw(canvas)
         } else if (bitmap != null) {
-            val scale = minOf(destination.width() / bitmap.width, destination.height() / bitmap.height)
+            val scale = if (frame.topFill) destination.width() / bitmap.width
+                else minOf(destination.width() / bitmap.width, destination.height() / bitmap.height)
             val imageWidth = bitmap.width * scale
             val imageHeight = bitmap.height * scale
-            val fitted = RectF(destination.centerX() - imageWidth / 2, destination.centerY() - imageHeight / 2,
-                destination.centerX() + imageWidth / 2, destination.centerY() + imageHeight / 2)
+            val top = if (frame.topFill) destination.top else destination.centerY() - imageHeight / 2
+            val fitted = RectF(destination.centerX() - imageWidth / 2, top,
+                destination.centerX() + imageWidth / 2, top + imageHeight)
             sourceRect.set(0, 0, bitmap.width, bitmap.height)
             canvas.drawBitmap(bitmap, sourceRect, fitted, bitmapPaint)
         }
