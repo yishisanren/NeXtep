@@ -2359,12 +2359,12 @@ class SlotTaskCoordinator(
 
     /** Bounds a fullscreen task resolves to in the main pane: the shortened wide-picture canvas, else the screen. */
     private fun mainPaneBounds(): Rect = geometryProvider().let {
-        Rect(0, 0, it.screenWidth, if (it.mainTaskHeight > 0) it.mainTaskHeight else it.screenHeight)
+        Rect(0, it.mainTaskTop, it.screenWidth, it.screenHeight)
     }
 
     /** The override to apply for the main pane: inherit the display unless the canvas is shortened. */
     private fun mainPaneOverride(): Rect = geometryProvider().let {
-        if (it.mainTaskHeight > 0) Rect(0, 0, it.screenWidth, it.mainTaskHeight) else Rect()
+        if (it.mainTaskHeight > 0) Rect(0, it.mainTaskTop, it.screenWidth, it.screenHeight) else Rect()
     }
 
     private fun defaultMainLayout(resizeMode: Int?): TaskLayout {

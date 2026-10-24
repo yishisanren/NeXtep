@@ -165,13 +165,13 @@ class MainTaskPresentationCoordinator(context: Context) {
             return clearFullscreenBounds(task)
         }
         if (task.vendorWindowed || task.displayId != Display.DEFAULT_DISPLAY) return Result.success(Unit)
+        val bounds = Rect(0, geometry.mainTaskTop, geometry.screenWidth, geometry.screenHeight)
         // A move into the main pane carries these bounds already.
-        if (task.bounds.width() == geometry.screenWidth && task.bounds.height() == height) {
+        if (task.bounds == bounds) {
             shortenedTaskId = task.taskId
             return Result.success(Unit)
         }
-        NeXtepLog.info("main_task_bounds", "Laying out taskId=${task.taskId} at ${geometry.screenWidth}x$height for the wide picture")
-        val bounds = Rect(0, 0, geometry.screenWidth, height)
+        NeXtepLog.info("main_task_bounds", "Laying out taskId=${task.taskId} at $bounds for the wide picture")
         return (task.token?.let { WindowContainerTransactionCompat.applyTaskBounds(it, bounds) }
             ?: ActivityTaskManagerCompat.resizeTask(task.taskId, bounds)).onSuccess { shortenedTaskId = task.taskId }
     }

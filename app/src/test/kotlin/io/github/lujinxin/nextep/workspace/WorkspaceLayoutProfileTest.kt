@@ -48,7 +48,14 @@ class WorkspaceLayoutProfileTest {
                                 assertTrue(g.mainCanvasHeight > 0)
                                 assertEquals(g.contentHeight.toFloat(), g.mainCanvasHeight * g.mainScale, 2f)
                                 assertEquals(g.contentWidth.toFloat(), g.availableWidth * g.mainScale, 1f)
-                            }
+                                // The canvas ends at the screen bottom, where WM lays out the keyboard; with
+                                // the main app's transform the keyboard spans the main pane and ends at its bottom.
+                                assertEquals(g.screenHeight, g.mainTaskTop + g.mainTaskHeight)
+                                assertEquals(g.contentBottom + g.mainScale * (g.screenHeight - g.availableBottom),
+                                    g.imeTranslationY + g.mainScale * g.screenHeight, 2f)
+                                assertEquals(g.contentLeft.toFloat(), g.mainTranslationX + g.mainScale * g.availableLeft, 1f)
+                                assertEquals(g.contentRight.toFloat(), g.mainTranslationX + g.mainScale * g.availableRight, 1f)
+                            } else assertEquals(0, g.mainTaskTop)
                             assertEquals(0, normal.geometry.mainCanvasHeight)
                             val narrower = normal.withWideSlot(wideIndex, 2.4)
                             assertTrue(narrower.geometry.topHeight < g.topHeight)

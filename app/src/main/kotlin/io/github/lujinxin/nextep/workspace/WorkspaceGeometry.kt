@@ -111,6 +111,11 @@ data class WorkspaceGeometry(
     val mainTranslationY: Float get() = if (mainCanvasHeight > 0) contentTop - availableTop * mainScale else contentTranslationY
     /** Task bounds height that lays the main app out at [mainCanvasHeight] below the usual insets; 0 = native. */
     val mainTaskHeight: Int get() = if (mainCanvasHeight > 0) mainCanvasHeight + availableTop + (screenHeight - availableBottom) else 0
+    /** The shortened canvas sits at the screen bottom, where WM lays out the input method, so the app's
+     * keyboard inset is the keyboard's full height. */
+    val mainTaskTop: Int get() = if (mainCanvasHeight > 0) (screenHeight - mainTaskHeight).coerceAtLeast(0) else 0
+    /** The input method container's offset: the main app's transform, applied in screen coordinates. */
+    val imeTranslationY: Float get() = mainTranslationY - mainTaskTop * mainScale
 
     companion object {
         const val TOP_HEIGHT_FRACTION = 0.265f
