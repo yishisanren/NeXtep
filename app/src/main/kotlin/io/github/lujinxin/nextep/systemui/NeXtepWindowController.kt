@@ -378,7 +378,10 @@ class NeXtepWindowController(
         }
         val animationGeneration = panelGeneration + 1
         fun startEnterAnimations() {
-            if (animationGeneration == panelGeneration && workspaceVisible) enterAnimations.forEach { it() }
+            if (animationGeneration != panelGeneration || !workspaceVisible) return
+            enterAnimations.forEach { it() }
+            // Retained apps come back after the slide, never in its last frames.
+            slotCoordinator?.onEntrySlideStarted(WORKSPACE_ENTER_DURATION_MS)
         }
         if (coldWindows) {
             // A callback posted now runs in the expensive first frame; the one it posts, in the next.

@@ -441,6 +441,7 @@ class SlotTaskCoordinator(
         }
         active = true
         activatedAt = SystemClock.uptimeMillis()
+        rebindNotBefore = 0L
         reconcilePaused = false
         reconciliationTick = 0
         TaskSurfaceCompat.taskChangeListener = ::onTaskChanged
@@ -459,6 +460,10 @@ class SlotTaskCoordinator(
         // loop kept running and re-shrank the restored foreground app behind hidden panels.
         settlement.cancel()
         deferredMove = null
+        // A rebind transaction still being applied would move tasks after they are parked below.
+        rebindGeneration += 1
+        rebindInFlight?.let { runCatching { it.get(REBIND_APPLY_WAIT_MS, java.util.concurrent.TimeUnit.MILLISECONDS) } }
+        rebindInFlight = null
         active = false
         TaskSurfaceCompat.taskChangeListener = null
         cancelPendingDragExchange()
@@ -499,6 +504,9 @@ class SlotTaskCoordinator(
                 NeXtepLog.info("slot_retention", "Kept pending slot=$index task=${record.retainedTaskId}")
                 return@forEachIndexed
             }
+            // A task that reached its slot but was not shown yet (exit during its rebind) has no
+            // fresh frame to capture; its previous cover stays the best picture of it.
+            val previousCover = record.preview.takeIf { record.state !is SlotState.Occupied && record.retainedTaskId == task?.taskId }
             record.exitTask = null
             record.retainedTaskId = null
             // Covers are never recycled explicitly: a card may still draw one until it is cleared.
@@ -528,7 +536,7 @@ class SlotTaskCoordinator(
                     if (width <= 0 || height <= 0) full
                     else android.graphics.Bitmap.createScaledBitmap(full, width, height, true)
                         .also { if (it !== full) full.recycle() }
-                }
+                } ?: previousCover?.takeIf { recent != null }
                 NeXtepLog.info("slot_retention", "Parked slot=$index task=${recent?.taskId} " +
                     "preview=${record.preview?.let { "${it.width}x${it.height}" }}")
             }.onFailure {
@@ -929,17 +937,30 @@ class SlotTaskCoordinator(
         // system_server is still creating the others, and each call stalled frames ~50 ms.
         // activate() validated the retained tasks; the deferred rebind re-checks them.
         setState(slotIndex, SlotState.Ready(displayId), "display ready")
-        if (slotRecords[slotIndex].retainedTaskId != null) {
-            // Rebind after the entry animation, behind the card's cover; slots that are ready
-            // by then go back together.
-            handler.removeCallbacks(rebindRetained)
-            handler.postDelayed(rebindRetained,
-                (REBIND_AFTER_ENTRY_MS - (SystemClock.uptimeMillis() - activatedAt)).coerceAtLeast(0L))
-        }
+        if (slotRecords[slotIndex].retainedTaskId != null) scheduleRebind()
         handler.postDelayed({ reconcile("display ready") }, SETTLE_DELAY_MS)
     }
 
     private var rebindAttempts = 0
+    private var rebindNotBefore = 0L
+    private var rebindGeneration = 0
+    private var rebindInFlight: java.util.concurrent.Future<*>? = null
+    private val rebindExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { Thread(it, "NeXtep-Rebind") }
+
+    /** The panels started their entry slide (a frame late on a cold entry); apps come back after it. */
+    fun onEntrySlideStarted(durationMs: Long) {
+        ensureMainThread()
+        if (!active) return
+        rebindNotBefore = SystemClock.uptimeMillis() + durationMs + REBIND_AFTER_SLIDE_MS
+        if (handler.hasCallbacks(rebindRetained)) scheduleRebind()
+    }
+
+    /** Rebind behind the cards' covers once the slide is over; slots ready by then go back together. */
+    private fun scheduleRebind() {
+        handler.removeCallbacks(rebindRetained)
+        val at = maxOf(activatedAt + REBIND_AFTER_ENTRY_MS, rebindNotBefore)
+        handler.postDelayed(rebindRetained, (at - SystemClock.uptimeMillis()).coerceAtLeast(0L))
+    }
 
     /**
      * Brings the retained tasks back into their ready slots without blocking the main thread: one
@@ -973,20 +994,36 @@ class SlotTaskCoordinator(
             RetainedRebind(index, ready.displayId, task, canvas)
         }
         if (moves.isEmpty()) return@Runnable
-        val submitted = runCatching {
-            moves.forEach { move ->
-                if (move.task.resizeMode != TASK_RESIZE_MODE_RESIZEABLE) {
-                    ActivityTaskManagerCompat.setTaskResizeable(move.task.taskId, TASK_RESIZE_MODE_RESIZEABLE).getOrThrow()
-                }
-                TaskSurfaceCompat.markDisplayExchange(move.task.taskId, move.displayId)
-                TaskSurfaceCompat.cancelPreparedPromotion(move.task.taskId)
-            }
-            WindowContainerTransactionCompat.moveTasks(moves.map { move ->
-                WindowContainerTransactionCompat.TaskMove(checkNotNull(move.task.token), move.displayId,
-                    Rect(), move.canvas.densityDpi, fullscreen)
-            }).getOrThrow()
+        moves.forEach { move ->
+            TaskSurfaceCompat.markDisplayExchange(move.task.taskId, move.displayId)
+            TaskSurfaceCompat.cancelPreparedPromotion(move.task.taskId)
         }
+        // Applying the transaction waits for system_server to reparent and reconfigure the tasks,
+        // 50-120 ms onto freshly created displays; that wait happens on a worker. Taps and
+        // reconciles are held meanwhile, as during any slot transition.
+        transitionInProgress = true
+        val generation = ++rebindGeneration
+        rebindInFlight = rebindExecutor.submit {
+            val submitted = runCatching {
+                moves.forEach { move ->
+                    if (move.task.resizeMode != TASK_RESIZE_MODE_RESIZEABLE) {
+                        ActivityTaskManagerCompat.setTaskResizeable(move.task.taskId, TASK_RESIZE_MODE_RESIZEABLE).getOrThrow()
+                    }
+                }
+                WindowContainerTransactionCompat.moveTasks(moves.map { move ->
+                    WindowContainerTransactionCompat.TaskMove(checkNotNull(move.task.token), move.displayId,
+                        Rect(), move.canvas.densityDpi, fullscreen)
+                }).getOrThrow()
+            }
+            handler.post { if (generation == rebindGeneration && active) settleRebind(moves, submitted) }
+        }
+    }
+
+    private fun settleRebind(moves: List<RetainedRebind>, submitted: Result<Unit>) {
+        rebindInFlight = null
+        val fullscreen = fullscreenWindowingMode()
         submitted.onFailure { error ->
+            transitionInProgress = false
             moves.forEach { TaskSurfaceCompat.cancelDisplayExchange(it.task.taskId) }
             // A display created moments ago may not have its task display area registered yet.
             if (++rebindAttempts < REBIND_MAX_ATTEMPTS) {
@@ -997,11 +1034,11 @@ class SlotTaskCoordinator(
                 rebindAttempts = 0
                 moves.forEach { rebindRetainedBlocking(it.slot, it.displayId, it.task.taskId) }
             }
-            return@Runnable
+            dispatchPendingSelection()
+            return
         }
         rebindAttempts = 0
         NeXtepLog.info("slot_retention", "Rebinding ${moves.map { "slot=${it.slot} task=${it.task.taskId}" }}")
-        transitionInProgress = true
         val remaining = moves.toMutableList()
         settlement.begin(ready = {
             val current = taskRepository.runningTasks()
@@ -2401,6 +2438,10 @@ class SlotTaskCoordinator(
         const val SETTLE_DELAY_MS = 700L
         /** The rail's entry animation is 240 ms; retained tasks come back once it has settled. */
         const val REBIND_AFTER_ENTRY_MS = 320L
+        /** Quiet frames between the end of the entry slide and the rebind. */
+        const val REBIND_AFTER_SLIDE_MS = 80L
+        /** An exit waits at most this long for an in-flight rebind transaction before parking. */
+        const val REBIND_APPLY_WAIT_MS = 500L
         const val REBIND_RETRY_MS = 100L
         const val REBIND_MAX_ATTEMPTS = 5
         const val MAIN_LAUNCH_POLL_MS = 200L
