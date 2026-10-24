@@ -929,22 +929,118 @@ class SlotTaskCoordinator(
         // system_server is still creating the others, and each call stalled frames ~50 ms.
         // activate() validated the retained tasks; the deferred rebind re-checks them.
         setState(slotIndex, SlotState.Ready(displayId), "display ready")
-        val retainedTaskId = slotRecords[slotIndex].retainedTaskId
-        if (retainedTaskId != null) {
-            // Rebinding blocks the main thread (display move and layout waits). Run it after
-            // the entry animation, behind the card's cover, spaced so frames get through.
-            val delay = (REBIND_AFTER_ENTRY_MS + slotIndex * REBIND_STAGGER_MS -
-                (SystemClock.uptimeMillis() - activatedAt)).coerceAtLeast(0L)
-            handler.postDelayed({ rebindRetained(slotIndex, displayId, retainedTaskId) }, delay)
+        if (slotRecords[slotIndex].retainedTaskId != null) {
+            // Rebind after the entry animation, behind the card's cover; slots that are ready
+            // by then go back together.
+            handler.removeCallbacks(rebindRetained)
+            handler.postDelayed(rebindRetained,
+                (REBIND_AFTER_ENTRY_MS - (SystemClock.uptimeMillis() - activatedAt)).coerceAtLeast(0L))
         }
         handler.postDelayed({ reconcile("display ready") }, SETTLE_DELAY_MS)
     }
 
-    private fun rebindRetained(slotIndex: Int, displayId: Int, retainedTaskId: Int) {
+    private var rebindAttempts = 0
+
+    /**
+     * Brings the retained tasks back into their ready slots without blocking the main thread: one
+     * window transaction moves and lays them all out, then the settlement polls every 32 ms and
+     * each card shows its app as soon as it has arrived. The former path waited on the main
+     * thread for each move and layout (80-220 ms frames right after entry).
+     */
+    private val rebindRetained: Runnable = Runnable {
+        if (!active || suspended) return@Runnable
+        if (transitionInProgress || recentSelectionPending || appLaunch.running) {
+            handler.postDelayed(rebindRetained, REBIND_RETRY_MS)
+            return@Runnable
+        }
+        val tasks = taskRepository.runningTasks()
+        val fullscreen = fullscreenWindowingMode()
+        val moves = slotRecords.indices.mapNotNull { index ->
+            val record = slotRecords[index]
+            val ready = record.state as? SlotState.Ready ?: return@mapNotNull null
+            val taskId = record.retainedTaskId ?: return@mapNotNull null
+            val task = tasks.firstOrNull { it.taskId == taskId }
+            val canvas = slots[index].geometry()
+            if (task?.token == null || canvas == null || mainTaskPresenter.currentTaskId() == taskId) {
+                // Not running (restored from recents), presented in the main pane, or not laid
+                // out yet: the rare cases keep the former path.
+                rebindRetainedBlocking(index, ready.displayId, taskId)
+                return@mapNotNull null
+            }
+            // exitTask stays until the task has arrived: an exit before that keeps the reservation.
+            if (record.originalLayout == null) record.originalLayout =
+                if (task.displayId == Display.DEFAULT_DISPLAY) task.toLayout() else defaultMainLayout(task.resizeMode)
+            RetainedRebind(index, ready.displayId, task, canvas)
+        }
+        if (moves.isEmpty()) return@Runnable
+        val submitted = runCatching {
+            moves.forEach { move ->
+                if (move.task.resizeMode != TASK_RESIZE_MODE_RESIZEABLE) {
+                    ActivityTaskManagerCompat.setTaskResizeable(move.task.taskId, TASK_RESIZE_MODE_RESIZEABLE).getOrThrow()
+                }
+                TaskSurfaceCompat.markDisplayExchange(move.task.taskId, move.displayId)
+                TaskSurfaceCompat.cancelPreparedPromotion(move.task.taskId)
+            }
+            WindowContainerTransactionCompat.moveTasks(moves.map { move ->
+                WindowContainerTransactionCompat.TaskMove(checkNotNull(move.task.token), move.displayId,
+                    Rect(), move.canvas.densityDpi, fullscreen)
+            }).getOrThrow()
+        }
+        submitted.onFailure { error ->
+            moves.forEach { TaskSurfaceCompat.cancelDisplayExchange(it.task.taskId) }
+            // A display created moments ago may not have its task display area registered yet.
+            if (++rebindAttempts < REBIND_MAX_ATTEMPTS) {
+                NeXtepLog.info("slot_retention", "Rebind deferred attempt=$rebindAttempts: ${error.message}")
+                handler.postDelayed(rebindRetained, REBIND_RETRY_MS)
+            } else {
+                NeXtepLog.warn("slot_retention", "Rebind transaction unavailable; moving one by one", error)
+                rebindAttempts = 0
+                moves.forEach { rebindRetainedBlocking(it.slot, it.displayId, it.task.taskId) }
+            }
+            return@Runnable
+        }
+        rebindAttempts = 0
+        NeXtepLog.info("slot_retention", "Rebinding ${moves.map { "slot=${it.slot} task=${it.task.taskId}" }}")
+        transitionInProgress = true
+        val remaining = moves.toMutableList()
+        settlement.begin(ready = {
+            val current = taskRepository.runningTasks()
+            remaining.removeAll { move ->
+                val task = current.firstOrNull { it.taskId == move.task.taskId }
+                    ?: error("Task ${move.task.taskId} exited during its rebind")
+                val arrived = task.displayId == move.displayId &&
+                    task.bounds == Rect(0, 0, move.canvas.width, move.canvas.height) &&
+                    task.densityDpi == move.canvas.densityDpi && task.windowingMode == fullscreen
+                if (!arrived) return@removeAll false
+                val source = slots[move.slot].sourceBounds()
+                if (!TaskSurfaceCompat.fitSlotSurface(move.task.taskId, move.displayId,
+                        Rect(source.left, source.top, source.right, source.bottom), finishExchange = true).getOrThrow()) {
+                    return@removeAll false
+                }
+                slotRecords[move.slot].exitTask = null
+                setState(move.slot, SlotState.Occupied(move.displayId, move.task.taskId, move.task.component),
+                    "retained task rebound")
+                true
+            }
+            remaining.isEmpty()
+        }) { result ->
+            transitionInProgress = false
+            result.onFailure { error ->
+                // Late arrivals are adopted by the reconcile below; the rest stay retained.
+                remaining.forEach { TaskSurfaceCompat.cancelDisplayExchange(it.task.taskId) }
+                NeXtepLog.warn("slot_retention", "Rebind incomplete ${remaining.map { it.slot }}", error)
+            }
+            dispatchPendingSelection()
+            handler.postDelayed({ reconcile("retained tasks rebound") }, SETTLE_DELAY_MS)
+        }
+    }
+
+    private data class RetainedRebind(val slot: Int, val displayId: Int,
+                                      val task: TaskRepository.TaskSnapshot, val canvas: SlotGeometry)
+
+    private fun rebindRetainedBlocking(slotIndex: Int, displayId: Int, retainedTaskId: Int) {
         if (!active || slotRecords[slotIndex].state != SlotState.Ready(displayId) ||
             slotRecords[slotIndex].retainedTaskId != retainedTaskId) return
-        validateExitedTasks()
-        if (slotRecords[slotIndex].retainedTaskId != retainedTaskId) return
         run {
             val exited = slotRecords[slotIndex].exitTask
             if (exited != null && taskRepository.findTask(retainedTaskId) == null) {
@@ -2305,7 +2401,8 @@ class SlotTaskCoordinator(
         const val SETTLE_DELAY_MS = 700L
         /** The rail's entry animation is 240 ms; retained tasks come back once it has settled. */
         const val REBIND_AFTER_ENTRY_MS = 320L
-        const val REBIND_STAGGER_MS = 60L
+        const val REBIND_RETRY_MS = 100L
+        const val REBIND_MAX_ATTEMPTS = 5
         const val MAIN_LAUNCH_POLL_MS = 200L
         const val MAX_MAIN_LAUNCH_POLLS = 3
         const val FOREGROUND_RECONCILE_INTERVAL_MS = 500L
