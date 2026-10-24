@@ -969,7 +969,8 @@ class SlotTaskCoordinator(
      * thread for each move and layout (80-220 ms frames right after entry).
      */
     private val rebindRetained: Runnable = Runnable {
-        if (!active || suspended) return@Runnable
+        // Not during the exit fade: the tasks stay retained and come back on the next entry.
+        if (!active || suspended || reconcilePaused) return@Runnable
         if (transitionInProgress || recentSelectionPending || appLaunch.running) {
             handler.postDelayed(rebindRetained, REBIND_RETRY_MS)
             return@Runnable
@@ -1849,7 +1850,8 @@ class SlotTaskCoordinator(
 
     private fun dispatchPendingSelection() {
         handler.post {
-            if (!active || suspended || transitionInProgress || recentSelectionPending) return@post
+            // reconcilePaused: a tap queued behind a transition must not promote an app mid-exit.
+            if (!active || suspended || transitionInProgress || recentSelectionPending || reconcilePaused) return@post
             val selected = pendingSelection ?: return@post
             pendingSelection = null
             selected()
@@ -1858,7 +1860,9 @@ class SlotTaskCoordinator(
 
     private fun reconcile(reason: String) {
         ensureMainThread()
-        if (!active || suspended || transitionInProgress) return
+        // reconcilePaused: the exit fade is running. Its last step re-presents the main task,
+        // and a pass posted earlier (display ready, rebind settled) re-shrank the app growing back.
+        if (!active || suspended || transitionInProgress || reconcilePaused) return
         val tasks = taskRepository.runningTasks()
         val assignedTaskIds = mutableSetOf<Int>()
 
@@ -2126,6 +2130,7 @@ class SlotTaskCoordinator(
     }
 
     private fun reconcileForeground(reason: String) {
+        if (!active || reconcilePaused) return
         val tasks = taskRepository.runningTasks()
         val foreground = tasks.firstOrNull { it.displayId == Display.DEFAULT_DISPLAY } ?: return
         val promotedSlot = slotRecords.indexOfFirst { record ->
