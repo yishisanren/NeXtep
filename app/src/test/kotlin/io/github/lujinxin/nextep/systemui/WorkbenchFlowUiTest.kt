@@ -21,6 +21,7 @@ import io.github.lujinxin.nextep.display.TaskSwitcherView
 import io.github.lujinxin.nextep.framework.WorkspaceIntentResolver
 import io.github.lujinxin.nextep.trigger.TriggerBroadcastContract
 import io.github.lujinxin.nextep.workspace.SidebarSide
+import io.github.lujinxin.nextep.workspace.WorkbenchScene
 import io.github.lujinxin.nextep.workspace.WorkspaceControlMetrics
 import io.github.lujinxin.nextep.workspace.WorkspaceGeometry
 import io.github.lujinxin.nextep.workspace.WorkspaceLaunchSequence
@@ -48,35 +49,41 @@ class WorkbenchFlowUiTest {
         view.layout(0, 0, width, height)
     }
 
-    @Test fun compactHeaderHasOnlyComparePayAndSettingsAndAlwaysShowsADate() {
+    @Test fun headerShowsTheScenesThenTheAddButtonUntilSixAndAlwaysShowsADate() {
         val tapped = mutableListOf<String>()
+        var added = 0
         val strip = TopAppStripView(context, {}, {}, { _, _ -> false }, { _, _ -> false },
-            { tapped += "pay" }, { tapped += "settings" }, { tapped += "compare" })
+            onSceneTapped = { tapped += it.name }, onSceneLongPressed = { tapped += "long:" + it.name }, onAddScene = { added++ })
+        val text = WorkbenchScene("上班模式", "com.a.mail", List(4) { null })
+        strip.setScenes(WorkbenchScene.builtins() + text, null)
         strip.setWorkspaceVisible(false)
         val density = context.resources.displayMetrics.density
         for (landscape in listOf(false, true)) {
             strip.setLandscape(landscape, landscape)
             layout(strip, (360 * density).toInt(), (142 * density).toInt())
-            val compare = field(strip, "compareButton") as android.widget.ImageButton
-            val pay = field(strip, "paymentButton") as android.widget.ImageButton
-            val more = field(strip, "toolsButton") as android.widget.ImageButton
-            val row = compare.parent as LinearLayout
-            assertEquals(4, row.childCount) // Heading/date plus exactly three controls.
-            assertSame(compare, row.getChildAt(1))
-            assertSame(pay, row.getChildAt(2))
-            assertSame(more, row.getChildAt(3))
-            assertTrue(compare.right <= pay.left && pay.right <= more.left)
-            assertTrue(more.right <= row.width)
-            assertEquals((40 * density).toInt(), compare.height)
+            val bar = field(strip, "sceneBar") as LinearLayout
+            val row = bar.parent as LinearLayout
+            assertEquals(2, row.childCount) // Heading/date, then the scene bar.
+            assertEquals(4, bar.childCount) // Price comparison, payment, the text scene, add.
+            val buttons = (0 until bar.childCount).map(bar::getChildAt)
+            buttons.zipWithNext().forEach { (a, b) -> assertTrue(a.right <= b.left) }
+            assertTrue(bar.right <= row.width)
+            assertEquals((36 * density).toInt(), buttons[0].height)
+            assertEquals("上班", (buttons[2] as TextView).text.toString())
             val title = field(strip, "titleView") as TextView
             assertTrue(title.text.any(Char::isDigit))
             assertTrue((field(strip, "heading") as TextView).text.isNotBlank())
             val player = field(strip, "mediaHost") as View
             assertEquals(View.GONE, player.visibility)
             assertEquals(View.VISIBLE, (field(strip, "controls") as View).visibility)
-            compare.performClick(); pay.performClick(); more.performClick()
+            buttons.forEach { it.performClick() }
+            buttons[2].performLongClick()
         }
-        assertEquals(listOf("compare", "pay", "settings", "compare", "pay", "settings"), tapped)
+        assertEquals(List(2) { listOf(WorkbenchScene.BUILTIN_COMPARE, WorkbenchScene.BUILTIN_PAYMENT, "上班模式", "long:上班模式") }.flatten(), tapped)
+        assertEquals(2, added)
+        // Six scenes fill the bar: the add button goes away.
+        strip.setScenes((1..6).map { WorkbenchScene("s$it", "com.s$it", List(4) { null }, icon = "work") }, "s2")
+        assertEquals(6, (field(strip, "sceneBar") as LinearLayout).childCount)
         assertNull(ShadowAlertDialog.getLatestAlertDialog())
         assertEquals(0, (field(strip, "appRow") as LinearLayout).childCount)
         for (theme in WorkbenchAppearance.entries) {
@@ -96,7 +103,7 @@ class WorkbenchFlowUiTest {
         layout(strip, (360 * density).toInt(), (142 * density).toInt())
         assertEquals(0, controls.top)
         assertEquals(strip.height - reserve, controls.bottom)
-        val row = (field(strip, "compareButton") as View).parent as View
+        val row = (field(strip, "sceneBar") as View).parent as View
         assertTrue(row.bottom <= controls.height)
     }
 
@@ -124,7 +131,7 @@ class WorkbenchFlowUiTest {
             assertEquals(View.VISIBLE, controls.visibility)
             assertEquals(View.GONE, media.visibility)
             assertNull(video.parent)
-            for (name in listOf("heading", "titleView", "compareButton", "paymentButton", "toolsButton", "appScroll")) {
+            for (name in listOf("heading", "titleView", "sceneBar", "appScroll")) {
                 assertEquals(View.VISIBLE, (field(strip, name) as View).visibility)
             }
         }

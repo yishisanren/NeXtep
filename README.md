@@ -22,9 +22,9 @@ Panes is an LSPosed module that adds a side workspace to the stock ColorOS 16 la
 ## What you get
 
 - **One main pane, four small panes.** The small panes are real running apps on their own virtual displays, not snapshots. Tap one and it swaps with the main pane in place; long-press and drag to reorder or send to the background.
-- **A control bar on top:** title and date, up to ten favourite apps (recently used apps appear automatically; apps pinned in Settings come first), four pay/scan entries (WeChat scan, WeChat payment code, Alipay scan, Alipay payment code), price comparison (one product searched in several delivery or shopping apps, each in its own pane), and a gear that opens Settings.
+- **A control bar on top:** title and date, up to ten favourite apps (recently used apps appear automatically; apps pinned in Settings come first), and a scene bar at the top right. It starts with two default scenes: price comparison (one product searched in several delivery or shopping apps, each in its own pane) and pay/scan (WeChat scan, WeChat payment code, Alipay scan, Alipay payment code).
 - **Landscape video moves up.** When the main app asks for landscape (for example a fullscreen player), it moves into a full-width pane at the top (16:9 by default, narrowed to the picture when it has letterbox bars) while the main pane stays usable; leaving fullscreen brings it back.
-- **Scenes:** save the main pane and the four small panes as a set and restore it from Settings in one tap, or pin it to the Home screen.
+- **Scenes:** with apps in the main pane and the small panes, tap the add button at the top right to save them as a set, and give it a preset icon or a short text label. Tap a scene to switch to it, long-press to change its icon or delete it; up to six. Settings can also restore or delete scenes and pin one to the Home screen.
 - **Open in Panes:** share a link or text from any app and pick the pane that opens it.
 - **Light, dark or follow the system, panes left or right, controls top or bottom**, applied immediately.
 - **Privacy:** hide workspace apps from Recents while the workspace is open; screenshots are blocked unless allowed for the current session.

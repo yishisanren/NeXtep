@@ -9,8 +9,19 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
 
 /** One optical grid for controls, independent of the host's installed font. */
-class WorkbenchIcon(private val kind: Kind, color: Int) : Drawable() {
-    enum class Kind { COMPARE, PAYMENT, SETTINGS, ADD, BACK, HOME, RECENTS, SCAN, CODE, EXPAND }
+class WorkbenchIcon(private val kind: Kind, color: Int, private val variant: Int = 0) : Drawable() {
+    enum class Kind {
+        COMPARE, PAYMENT, SETTINGS, ADD, BACK, HOME, RECENTS, SCAN, CODE, EXPAND,
+        SCENE_ADD, WORK, STUDY, GAME, MEDIA, READ, SHOP, TRAVEL, LIFE,
+    }
+    companion object {
+        /** The glyph of a scene preset key (see WorkbenchScene.PRESET_ICONS). */
+        fun preset(key: String?): Kind? = when (key) {
+            "work" -> Kind.WORK; "study" -> Kind.STUDY; "game" -> Kind.GAME; "media" -> Kind.MEDIA
+            "read" -> Kind.READ; "shop" -> Kind.SHOP; "travel" -> Kind.TRAVEL; "life" -> Kind.LIFE
+            else -> null
+        }
+    }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         this.color = color
         style = Paint.Style.STROKE
@@ -68,6 +79,85 @@ class WorkbenchIcon(private val kind: Kind, color: Int) : Drawable() {
             Kind.CODE -> {
                 canvas.drawRoundRect(3f, 4f, 21f, 20f, 2f, 2f, paint)
                 listOf(7f, 10f, 14f, 17f).forEach { line(it, 8f, it, 16f) }
+            }
+            Kind.SCENE_ADD -> when (variant) {
+                1 -> {
+                    // Two stacked cards, a plus on the front one.
+                    canvas.save()
+                    canvas.clipOutRect(2f, 6f, 18f, 21f)
+                    canvas.drawRoundRect(7f, 3f, 21f, 16f, 2.5f, 2.5f, paint)
+                    canvas.restore()
+                    canvas.drawRoundRect(3f, 7f, 17f, 20f, 2.5f, 2.5f, paint)
+                    line(10f, 10.5f, 10f, 16.5f); line(7f, 13.5f, 13f, 13.5f)
+                }
+                2 -> {
+                    // Four panes, the fourth one still to be added.
+                    canvas.drawRoundRect(3f, 3f, 10.5f, 10.5f, 2f, 2f, paint)
+                    canvas.drawRoundRect(13.5f, 3f, 21f, 10.5f, 2f, 2f, paint)
+                    canvas.drawRoundRect(3f, 13.5f, 10.5f, 21f, 2f, 2f, paint)
+                    line(17.25f, 13.5f, 17.25f, 21f); line(13.5f, 17.25f, 21f, 17.25f)
+                }
+                else -> {
+                    // The workbench itself, one large pane and three small ones, with a plus badge.
+                    canvas.save()
+                    canvas.clipOutPath(Path().apply { addCircle(18.5f, 18.5f, 5.6f, Path.Direction.CW) })
+                    canvas.drawRoundRect(2.5f, 3.5f, 19f, 18f, 2.5f, 2.5f, paint)
+                    line(11f, 3.5f, 11f, 18f); line(11f, 8.3f, 19f, 8.3f); line(11f, 13.2f, 19f, 13.2f)
+                    canvas.restore()
+                    canvas.drawCircle(18.5f, 18.5f, 4.3f, paint)
+                    line(18.5f, 16.3f, 18.5f, 20.7f); line(16.3f, 18.5f, 20.7f, 18.5f)
+                }
+            }
+            Kind.WORK -> {
+                // Briefcase.
+                canvas.drawRoundRect(3f, 7.5f, 21f, 19.5f, 2.5f, 2.5f, paint)
+                canvas.drawPath(Path().apply { moveTo(9f, 7.5f); lineTo(9f, 5f); lineTo(15f, 5f); lineTo(15f, 7.5f) }, paint)
+                line(3f, 12.5f, 21f, 12.5f); line(12f, 11.5f, 12f, 13.5f)
+            }
+            Kind.STUDY -> {
+                // Open book.
+                canvas.drawPath(Path().apply {
+                    moveTo(12f, 6.5f); lineTo(4f, 5f); lineTo(4f, 18f); lineTo(12f, 19.5f)
+                    lineTo(20f, 18f); lineTo(20f, 5f); lineTo(12f, 6.5f); lineTo(12f, 19.5f)
+                }, paint)
+            }
+            Kind.GAME -> {
+                // Gamepad: a cross and two buttons.
+                canvas.drawRoundRect(2.5f, 7.5f, 21.5f, 17.5f, 5f, 5f, paint)
+                line(6.5f, 12.5f, 10.5f, 12.5f); line(8.5f, 10.5f, 8.5f, 14.5f)
+                paint.style = Paint.Style.FILL
+                canvas.drawCircle(15.5f, 11.3f, 1.2f, paint); canvas.drawCircle(18f, 13.8f, 1.2f, paint)
+                paint.style = Paint.Style.STROKE
+            }
+            Kind.MEDIA -> {
+                // Screen with a play mark.
+                canvas.drawRoundRect(3f, 5f, 21f, 19f, 3f, 3f, paint)
+                canvas.drawPath(Path().apply { moveTo(10f, 9f); lineTo(15.5f, 12f); lineTo(10f, 15f); close() }, paint)
+            }
+            Kind.READ -> {
+                // Page of text.
+                canvas.drawRoundRect(5f, 3f, 19f, 21f, 2.5f, 2.5f, paint)
+                line(8.5f, 8f, 15.5f, 8f); line(8.5f, 12f, 15.5f, 12f); line(8.5f, 16f, 12.5f, 16f)
+            }
+            Kind.SHOP -> {
+                // Shopping bag.
+                canvas.drawRoundRect(4f, 8f, 20f, 21f, 2.5f, 2.5f, paint)
+                canvas.drawPath(Path().apply { moveTo(9f, 10.5f); lineTo(9f, 6.5f); cubicTo(9f, 3.5f, 15f, 3.5f, 15f, 6.5f); lineTo(15f, 10.5f) }, paint)
+            }
+            Kind.TRAVEL -> {
+                // Map pin.
+                canvas.drawPath(Path().apply {
+                    moveTo(12f, 21f); cubicTo(7f, 15.5f, 5f, 12.5f, 5f, 9.5f)
+                    cubicTo(5f, 5.6f, 8.1f, 3f, 12f, 3f); cubicTo(15.9f, 3f, 19f, 5.6f, 19f, 9.5f)
+                    cubicTo(19f, 12.5f, 17f, 15.5f, 12f, 21f)
+                }, paint)
+                canvas.drawCircle(12f, 9.5f, 2.5f, paint)
+            }
+            Kind.LIFE -> {
+                // Cup with steam.
+                canvas.drawRoundRect(4f, 10f, 16f, 20f, 3f, 3f, paint)
+                canvas.drawArc(13f, 11.5f, 20f, 17.5f, -90f, 180f, false, paint)
+                line(7.5f, 4f, 7.5f, 7f); line(10f, 3.5f, 10f, 7f); line(12.5f, 4f, 12.5f, 7f)
             }
         }
         canvas.restoreToCount(saved)

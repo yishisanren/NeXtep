@@ -40,6 +40,11 @@ internal class WorkbenchSettingsCard(
         text = activity.getString(R.string.scene_save_action)
         setOnClickListener { askSceneName() }
     }
+    /** Puts back price comparison and payment after they were deleted from the scene bar. */
+    private val restoreDefaults = SettingsRowButton.create(activity).apply {
+        text = activity.getString(R.string.scene_apply_action)
+        setOnClickListener { command(TriggerBroadcastContract.COMMAND_SCENE_RESTORE_DEFAULTS, "true") }
+    }
     private var workspaceActive = false
 
     init {
@@ -48,6 +53,7 @@ internal class WorkbenchSettingsCard(
         scenes.addView(row(activity.getString(R.string.section_scenes), activity.getString(R.string.scenes_summary), saveScene),
             SettingsScreen.matchWidth())
         scenes.addView(scenesList, SettingsScreen.matchWidth())
+        scenes.addView(row(activity.getString(R.string.scene_restore_defaults), "", restoreDefaults), SettingsScreen.matchWidth())
         scenesCard = SettingsScreen.sectionCard(activity).apply { addView(scenes) }
 
         val layout = SettingsScreen.sectionContent(activity)
@@ -123,7 +129,11 @@ internal class WorkbenchSettingsCard(
         workspaceActive = state?.getBoolean(TriggerBroadcastContract.EXTRA_ACTIVE) == true
         // Saving and restoring act on the live panes, so both need an open workspace.
         saveScene.isEnabled = workspaceActive
-        renderScenes(WorkbenchScene.decode(state?.getString(TriggerBroadcastContract.EXTRA_SCENES)))
+        val scenes = WorkbenchScene.decode(state?.getString(TriggerBroadcastContract.EXTRA_SCENES))
+        // Only when a default scene is missing and there is room for it.
+        restoreDefaults.isEnabled = state != null && scenes.size < WorkbenchScene.MAX_SCENES &&
+            WorkbenchScene.builtins().any { builtin -> scenes.none { it.builtin == builtin.builtin } }
+        renderScenes(scenes)
         syncing = false
     }
 
@@ -140,6 +150,16 @@ internal class WorkbenchSettingsCard(
         scenes.forEach { scene ->
             val apps = (listOfNotNull(scene.main) + scene.slots.filterNotNull()).map(::label)
             val summary = if (apps.isEmpty()) activity.getString(R.string.scene_apps_none) else apps.joinToString("、")
+            if (scene.builtin != null) {
+                // A default tool scene runs from the scene bar; here it can only be deleted.
+                val title = activity.getString(if (scene.builtin == WorkbenchScene.BUILTIN_COMPARE) R.string.workbench_compare
+                    else R.string.workbench_payment)
+                scenesList.addView(row(title, "", SettingsRowButton.create(activity).apply {
+                    text = activity.getString(R.string.scene_delete_action)
+                    setOnClickListener { command(TriggerBroadcastContract.COMMAND_SCENE_DELETE, scene.name) }
+                }), SettingsScreen.matchWidth())
+                return@forEach
+            }
             val buttons = LinearLayout(activity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 addView(SettingsRowButton.create(activity).apply {

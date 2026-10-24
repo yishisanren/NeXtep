@@ -74,4 +74,22 @@
     <string name="scene_shortcut_label">Panes シーン：%1$s</string>
     <string name="scene_shortcut_unsupported">このランチャーはショートカットの追加に対応していません。</string>
     <string name="scene_shortcut_failed">シーンを復元できませんでした。ワークスペースが開かないか、シーンが削除されています。</string>
+    <string name="scene_add_action">シーンを追加</string>
+    <string name="scene_change_icon">アイコンを変更</string>
+    <string name="scene_pick_title">アイコンを選択</string>
+    <string name="scene_text_hint">または文字を入力（2文字まで）</string>
+    <string name="scene_use_text">文字にする</string>
+    <string name="scene_text_empty">文字を入力してください</string>
+    <string name="scene_needs_apps">先にメイン画面かカードにアプリを入れてください。</string>
+    <string name="scene_full">シーンは6個までです。先に1つ削除してください。</string>
+    <string name="scene_restore_defaults">既定のシーンを戻す</string>
+    <string name="scene_defaults_restored">比較と支払いを戻しました。</string>
+    <string name="scene_icon_work">仕事</string>
+    <string name="scene_icon_study">勉強</string>
+    <string name="scene_icon_game">ゲーム</string>
+    <string name="scene_icon_media">動画</string>
+    <string name="scene_icon_read">読書</string>
+    <string name="scene_icon_shop">買い物</string>
+    <string name="scene_icon_travel">お出かけ</string>
+    <string name="scene_icon_life">暮らし</string>
 </resources>

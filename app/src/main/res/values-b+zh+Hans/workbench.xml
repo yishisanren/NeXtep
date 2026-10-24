@@ -75,4 +75,22 @@
     <string name="scene_shortcut_label">格窗场景：%1$s</string>
     <string name="scene_shortcut_unsupported">当前桌面不支持添加快捷方式。</string>
     <string name="scene_shortcut_failed">场景没有恢复：工作台没能打开，或场景已被删除。</string>
+    <string name="scene_add_action">添加工作场景</string>
+    <string name="scene_change_icon">换图标</string>
+    <string name="scene_pick_title">选择图标</string>
+    <string name="scene_text_hint">或输入文字（最多 2 个字）</string>
+    <string name="scene_use_text">用文字</string>
+    <string name="scene_text_empty">先输入文字</string>
+    <string name="scene_needs_apps">先把应用放进大窗或小窗，再添加场景。</string>
+    <string name="scene_full">最多 6 个工作场景，先删除一个。</string>
+    <string name="scene_restore_defaults">恢复默认场景</string>
+    <string name="scene_defaults_restored">已恢复比价和支付。</string>
+    <string name="scene_icon_work">工作</string>
+    <string name="scene_icon_study">学习</string>
+    <string name="scene_icon_game">游戏</string>
+    <string name="scene_icon_media">影音</string>
+    <string name="scene_icon_read">阅读</string>
+    <string name="scene_icon_shop">购物</string>
+    <string name="scene_icon_travel">出行</string>
+    <string name="scene_icon_life">生活</string>
 </resources>

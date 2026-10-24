@@ -52,6 +52,8 @@ object TriggerBroadcastContract {
     const val COMMAND_SCENE_SAVE = "scene_save"
     const val COMMAND_SCENE_APPLY = "scene_apply"
     const val COMMAND_SCENE_DELETE = "scene_delete"
+    /** Puts back the deleted default scenes (price comparison, payment) as far as the limit allows. */
+    const val COMMAND_SCENE_RESTORE_DEFAULTS = "scene_restore_defaults"
     /** Value: "<slot index or -1 for the main pane>|<intent URI>". */
     const val COMMAND_OPEN_IN_PANE = "open_in_pane"
     const val RUNTIME_PROTOCOL_VERSION = 52

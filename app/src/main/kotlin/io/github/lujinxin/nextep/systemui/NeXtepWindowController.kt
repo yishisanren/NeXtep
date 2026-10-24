@@ -136,23 +136,84 @@ class NeXtepWindowController(
         putString(TriggerBroadcastContract.EXTRA_SCENES, WorkbenchScene.encode(scenes))
     }
 
-    private var scenes = WorkbenchScene.decode(workbenchPreferences?.getString("scenes", null))
+    // Price comparison and payment become the first two scenes once; deleting them later sticks.
+    private var scenes = WorkbenchScene.decode(workbenchPreferences?.getString("scenes", null)).let { saved ->
+        val preferences = workbenchPreferences
+        if (preferences == null || preferences.getBoolean("scenes_seeded", false)) saved
+        else WorkbenchScene.seeded(saved).also { seeded ->
+            preferences.edit().putString("scenes", WorkbenchScene.encode(seeded)).putBoolean("scenes_seeded", true).apply()
+        }
+    }
+    private var activeSceneName: String? = null
     private fun storeScenes(updated: List<WorkbenchScene>) {
         scenes = updated
         workbenchPreferences?.edit()?.putString("scenes", WorkbenchScene.encode(updated))?.apply()
+        refreshScenes()
+    }
+
+    /** Shows the scenes, highlighting the one the workspace shows, from the last observed tasks. */
+    private fun refreshScenes() {
+        val home = TriggerBroadcastContract.resolveHomePackage(context)
+        val shownMain = observedTasks.firstOrNull { it.displayId == android.view.Display.DEFAULT_DISPLAY }?.component?.packageName
+            ?.takeIf { it != home && it != TriggerBroadcastContract.SYSTEM_UI_PACKAGE && it != TriggerBroadcastContract.MODULE_PACKAGE }
+        activeSceneName = WorkbenchScene.active(scenes, shownMain,
+            observedStates.map { (it as? SlotState.Occupied)?.component?.packageName })?.name
+        topAppStrip?.setScenes(scenes, activeSceneName)
+    }
+
+    private fun onSceneTapped(scene: WorkbenchScene) {
+        when (scene.builtin) {
+            WorkbenchScene.BUILTIN_COMPARE -> tools.showSearch()
+            WorkbenchScene.BUILTIN_PAYMENT -> tools.showPayment()
+            else -> sceneCommand(TriggerBroadcastContract.COMMAND_SCENE_APPLY, scene.name)
+        }
+    }
+
+    private fun onAddScene() {
+        val coordinator = slotCoordinator?.takeIf { workspaceVisible && !suspended } ?: return
+        if (scenes.size >= WorkbenchScene.MAX_SCENES) { tools.message(AppLanguage.string(context, R.string.scene_full)); return }
+        // The layout at the tap is what gets saved, whatever happens while the picker is open.
+        val (main, slots) = coordinator.scenePackages()
+        if (main == null && slots.all { it == null }) {
+            tools.message(AppLanguage.string(context, R.string.scene_needs_apps)); return
+        }
+        tools.showScenePicker(AppLanguage.string(context, R.string.scene_add_action), null, null) { icon, text ->
+            val base = text ?: AppLanguage.string(context, WorkbenchToolsController.presetLabel(checkNotNull(icon)))
+            val saved = WorkbenchScene.save(scenes, WorkbenchScene(WorkbenchScene.uniqueName(scenes, base), main, slots, icon))
+            if (saved === scenes) tools.message(AppLanguage.string(context, R.string.scene_full)) else storeScenes(saved)
+        }
+    }
+
+    private fun onSceneLongPressed(scene: WorkbenchScene) {
+        val label = topAppStrip?.sceneLabel(scene) ?: scene.name
+        tools.showSceneMenu(label, canChangeIcon = scene.builtin == null, changeIcon = {
+            tools.showScenePicker(AppLanguage.string(context, R.string.scene_change_icon), scene.icon,
+                scene.name.takeIf { scene.icon == null }) { icon, text ->
+                // An icon keeps the name (desktop shortcuts use it); text is shown, so it becomes the name.
+                val typed = text.orEmpty()
+                val updated = if (icon != null) scene.copy(icon = icon)
+                else scene.copy(name = if (typed == scene.name) typed else WorkbenchScene.uniqueName(scenes, typed), icon = null)
+                storeScenes(scenes.map { if (it.name == scene.name) updated else it })
+            }
+        }, delete = { storeScenes(scenes.filterNot { it.name == scene.name }) })
     }
 
     private fun sceneCommand(key: String, name: String): Boolean = when (key) {
         TriggerBroadcastContract.COMMAND_SCENE_SAVE -> {
             val (main, slots) = slotCoordinator?.takeIf { workspaceVisible }?.scenePackages() ?: return false
-            storeScenes(WorkbenchScene.save(scenes, WorkbenchScene(name, main, slots)))
-            true
+            val saved = WorkbenchScene.save(scenes, WorkbenchScene(name, main, slots))
+            if (saved !== scenes) storeScenes(saved)
+            saved !== scenes
         }
         TriggerBroadcastContract.COMMAND_SCENE_DELETE -> {
             storeScenes(scenes.filterNot { it.name == name }); true
         }
+        TriggerBroadcastContract.COMMAND_SCENE_RESTORE_DEFAULTS -> {
+            storeScenes(WorkbenchScene.restoreBuiltins(scenes))
+            WorkbenchScene.builtins().all { builtin -> scenes.any { it.builtin == builtin.builtin } }
+        }
         else -> {
-            val scene = scenes.firstOrNull { it.name == name } ?: return false
+            val scene = scenes.firstOrNull { it.name == name && it.builtin == null } ?: return false
             slotCoordinator?.takeIf { workspaceVisible }?.applyScene(scene.main, scene.slots) { result ->
                 result.onFailure { NeXtepLog.warn("workspace", "Scene '$name' did not fully apply", it) }
             }?.isSuccess == true
@@ -197,8 +258,10 @@ class NeXtepWindowController(
         }
         TriggerBroadcastContract.COMMAND_EXPORT_DIAGNOSTICS -> tools.exportDiagnostics()
         TriggerBroadcastContract.COMMAND_SCENE_SAVE, TriggerBroadcastContract.COMMAND_SCENE_APPLY,
-        TriggerBroadcastContract.COMMAND_SCENE_DELETE ->
+        TriggerBroadcastContract.COMMAND_SCENE_DELETE, TriggerBroadcastContract.COMMAND_SCENE_RESTORE_DEFAULTS ->
             value?.trim()?.takeIf { it.isNotEmpty() }?.let { sceneCommand(key, it) } ?: false
+        // Temporary: shows each drawing of the add button for the user to choose from.
+        "scene_add_style" -> value?.toIntOrNull()?.let { topAppStrip?.setAddVariant(it); true } ?: false
         TriggerBroadcastContract.COMMAND_OPEN_IN_PANE -> value?.let(::openInPane) ?: false
         else -> false
     }
@@ -599,10 +662,10 @@ class NeXtepWindowController(
                     )
                 },
                 onAppDragTouch = internalDrag::touch,
-                onPaymentRequested = tools::showPayment,
-                onToolsRequested = { setCaptureAllowed(false); onSettingsRequested() },
-                onCompareRequested = tools::showSearch,
-            ).also { topAppStrip = it },
+                onSceneTapped = ::onSceneTapped,
+                onSceneLongPressed = ::onSceneLongPressed,
+                onAddScene = ::onAddScene,
+            ).also { strip -> topAppStrip = strip; strip.setScenes(scenes, activeSceneName) },
             width = geometry.screenWidth,
             height = geometry.topHeight,
             gravity = Gravity.TOP,
@@ -1132,6 +1195,7 @@ class NeXtepWindowController(
         observedTasks = tasks
         observedStates = states
         publishPrivacy()
+        refreshScenes()
         if (!workspaceVisible || suspended || contentDrag.active || slotCoordinator?.launchingApps == true ||
             slotCoordinator?.movingTasks == true) return
         val scene = SystemServerWorkspaceBridge.scene(context)

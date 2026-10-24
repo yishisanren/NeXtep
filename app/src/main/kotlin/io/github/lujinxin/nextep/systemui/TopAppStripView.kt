@@ -19,6 +19,7 @@ import io.github.lujinxin.nextep.config.AppLanguage
 import io.github.lujinxin.nextep.config.WorkspaceConfigClient
 import io.github.lujinxin.nextep.config.WorkspaceTopConfig
 import io.github.lujinxin.nextep.logging.NeXtepLog
+import io.github.lujinxin.nextep.workspace.WorkbenchScene
 import io.github.lujinxin.nextep.workspace.WorkspaceControlMetrics
 import java.lang.reflect.Proxy
 import java.util.Date
@@ -29,9 +30,9 @@ class TopAppStripView(
     private val onFrostStrengthChanged: (Int) -> Unit,
     private val onAppDragStarting: (View, Intent) -> Boolean,
     private val onAppDragTouch: (View, android.view.MotionEvent) -> Boolean,
-    private val onPaymentRequested: () -> Unit = {},
-    private val onToolsRequested: () -> Unit = {},
-    private val onCompareRequested: () -> Unit = {},
+    private val onSceneTapped: (WorkbenchScene) -> Unit = {},
+    private val onSceneLongPressed: (WorkbenchScene) -> Unit = {},
+    private val onAddScene: () -> Unit = {},
 ) : FrameLayout(context) {
     private var landscape = false
     private var controlOnLeft = false
@@ -92,14 +93,19 @@ class TopAppStripView(
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(6), 0, dp(6), 0)
     }
-    private val compareButton = toolButton(WorkbenchIcon.Kind.COMPARE, R.string.workbench_compare, onCompareRequested)
     private val appScroll = HorizontalScrollView(context).apply {
         isHorizontalScrollBarEnabled = false
         isFillViewport = true
         addView(appRow, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
     }
-    private val paymentButton = toolButton(WorkbenchIcon.Kind.PAYMENT, R.string.workbench_payment, onPaymentRequested)
-    private val toolsButton = toolButton(WorkbenchIcon.Kind.SETTINGS, R.string.open_settings, onToolsRequested)
+    /** Saved scenes left to right, then the add button while there is room. */
+    private val sceneBar = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL or Gravity.END
+    }
+    private var scenes = emptyList<WorkbenchScene>()
+    private var activeScene: String? = null
+    private var addVariant = 0
     private var appearance = WorkbenchAppearance.DARK
     private val dividerPaint = Paint().apply { color = WorkbenchAppearance.DARK.outline }
     private var loading = false
@@ -180,9 +186,7 @@ class TopAppStripView(
 
     private fun updateTitle() {
         heading.text = AppLanguage.string(context, R.string.workbench_title)
-        paymentButton.contentDescription = AppLanguage.string(context, R.string.workbench_payment)
-        toolsButton.contentDescription = AppLanguage.string(context, R.string.open_settings)
-        compareButton.contentDescription = AppLanguage.string(context, R.string.workbench_compare)
+        renderScenes()
         dismissHint.text = AppLanguage.string(context, R.string.window_drop_background)
         removeCallbacks(titleTick)
         titleTick.run()
@@ -305,33 +309,93 @@ class TopAppStripView(
         titleView.setTextColor(value.text)
         heading.setTextColor(value.text)
         dividerPaint.color = value.outline
-        listOf(paymentButton, compareButton, toolsButton).forEach {
-            it.imageTintList = android.content.res.ColorStateList.valueOf(value.accent)
-            // Buttons share the empty-slot card tone so the whole panel reads as one surface.
-            it.background = android.graphics.drawable.RippleDrawable(
-                android.content.res.ColorStateList.valueOf(value.accent and 0x33ffffff),
-                android.graphics.drawable.GradientDrawable().apply {
-                    cornerRadius = dp(13).toFloat()
-                    setColor(value.card)
-                    setStroke(dp(1), value.outline)
-                }, null)
-        }
+        renderScenes()
         invalidate()
     }
 
-    private fun toolButton(kind: WorkbenchIcon.Kind, label: Int, action: () -> Unit) = android.widget.ImageButton(context).apply {
-        setImageDrawable(WorkbenchIcon(kind, Color.WHITE))
-        scaleType = ImageView.ScaleType.FIT_CENTER
-        setPadding(dp(9), dp(9), dp(9), dp(9))
-        contentDescription = AppLanguage.string(context, label)
-        isFocusable = true
-        setOnClickListener { action() }
+    /** The saved scenes and the one the workspace currently shows (highlighted). */
+    fun setScenes(value: List<WorkbenchScene>, active: String?) {
+        if (scenes == value && activeScene == active) return
+        scenes = value
+        activeScene = active
+        renderScenes()
     }
+
+    /** Which drawing of the add button to show; see WorkbenchIcon.Kind.SCENE_ADD. */
+    fun setAddVariant(value: Int) {
+        if (addVariant == value) return
+        addVariant = value
+        renderScenes()
+    }
+
+    private fun renderScenes() {
+        sceneBar.removeAllViews()
+        val shown = scenes.take(WorkbenchScene.MAX_SCENES)
+        val size = dp(SCENE_BUTTON_SIZE_DP)
+        fun add(view: View) = sceneBar.addView(view, LinearLayout.LayoutParams(size, size).apply {
+            if (sceneBar.childCount > 0) marginStart = dp(SCENE_BUTTON_GAP_DP)
+        })
+        shown.forEach { scene -> add(sceneButton(scene, scene.name == activeScene)) }
+        if (shown.size < WorkbenchScene.MAX_SCENES) {
+            add(iconButton(WorkbenchIcon(WorkbenchIcon.Kind.SCENE_ADD, appearance.accent, addVariant), selected = false).apply {
+                contentDescription = AppLanguage.string(context, R.string.scene_add_action)
+                setOnClickListener { onAddScene() }
+            })
+        }
+    }
+
+    private fun sceneButton(scene: WorkbenchScene, selected: Boolean): View {
+        val kind = when (scene.builtin) {
+            WorkbenchScene.BUILTIN_COMPARE -> WorkbenchIcon.Kind.COMPARE
+            WorkbenchScene.BUILTIN_PAYMENT -> WorkbenchIcon.Kind.PAYMENT
+            else -> WorkbenchIcon.preset(scene.icon)
+        }
+        val view = if (kind != null) iconButton(WorkbenchIcon(kind, appearance.accent), selected) else TextView(context).apply {
+            // A text scene shows (the start of) its name where an icon would be.
+            text = WorkbenchScene.textLabel(scene.name)
+            gravity = Gravity.CENTER
+            maxLines = 1
+            includeFontPadding = false
+            setTextColor(appearance.accent)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setAutoSizeTextTypeUniformWithConfiguration(8, 13, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+            setPadding(dp(3), 0, dp(3), 0)
+            background = buttonBackground(selected)
+        }
+        return view.apply {
+            contentDescription = sceneLabel(scene)
+            isFocusable = true
+            setOnClickListener { onSceneTapped(scene) }
+            setOnLongClickListener { onSceneLongPressed(scene); true }
+        }
+    }
+
+    internal fun sceneLabel(scene: WorkbenchScene): String = when (scene.builtin) {
+        WorkbenchScene.BUILTIN_COMPARE -> AppLanguage.string(context, R.string.workbench_compare)
+        WorkbenchScene.BUILTIN_PAYMENT -> AppLanguage.string(context, R.string.workbench_payment)
+        else -> scene.name
+    }
+
+    private fun iconButton(icon: WorkbenchIcon, selected: Boolean) = android.widget.ImageButton(context).apply {
+        setImageDrawable(icon)
+        scaleType = ImageView.ScaleType.FIT_CENTER
+        setPadding(dp(8), dp(8), dp(8), dp(8))
+        isFocusable = true
+        background = buttonBackground(selected)
+    }
+
+    /** Buttons share the empty-slot card tone; the current scene carries an accent ring. */
+    private fun buttonBackground(selected: Boolean) = android.graphics.drawable.RippleDrawable(
+        android.content.res.ColorStateList.valueOf(appearance.accent and 0x33ffffff),
+        android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = dp(12).toFloat()
+            setColor(if (selected) (appearance.accent and 0x00ffffff) or 0x26000000 else appearance.card)
+            setStroke(dp(if (selected) 2 else 1), if (selected) appearance.accent else appearance.outline)
+        }, null)
 
     private fun actionRow(): View = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        val buttonSize = dp(ACTION_BUTTON_SIZE_DP)
         addView(
             LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -344,12 +408,8 @@ class TopAppStripView(
                 marginEnd = dp(10)
             },
         )
-        // Three equal 40dp buttons with an 8dp gap read as one group beside the 18sp title.
-        listOf(compareButton, paymentButton, toolsButton).forEachIndexed { index, button ->
-            addView(button, LinearLayout.LayoutParams(buttonSize, buttonSize).apply {
-                if (index > 0) marginStart = dp(ACTION_BUTTON_GAP_DP)
-            })
-        }
+        // Up to six 36dp scene buttons with 6dp gaps; the title column narrows to make room.
+        addView(sceneBar, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
     }
 
     private fun renderApps(entries: List<TopAppRepository.AppEntry>) {
@@ -492,8 +552,8 @@ class TopAppStripView(
     private companion object {
         const val APP_TILE_WIDTH_DP = 60
         const val APP_ICON_ZOOM = 1.15f
-        const val ACTION_BUTTON_SIZE_DP = 40
-        const val ACTION_BUTTON_GAP_DP = 8
+        const val SCENE_BUTTON_SIZE_DP = 36
+        const val SCENE_BUTTON_GAP_DP = 6
         const val REFRESH_INTERVAL_MS = 15_000L
         const val TOUCHABLE_INSETS_REGION = 3
     }

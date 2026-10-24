@@ -32,16 +32,19 @@ class WorkbenchUiTest {
     private fun field(target: Any, name: String): Any = target.javaClass.getDeclaredField(name)
         .apply { isAccessible = true }.get(target)!!
 
-    @Test fun paymentIsInTheTopRightControlRowAndNeverInTheAppCatalogue() {
+    @Test fun sceneBarIsInTheTopRightControlRowAndNeverInTheAppCatalogue() {
         var opened = 0
         val view = TopAppStripView(context, {}, {},
-            { _, _ -> false }, { _, _ -> false }, onPaymentRequested = { opened++ })
+            { _, _ -> false }, { _, _ -> false },
+            onSceneTapped = { if (it.builtin == io.github.lujinxin.nextep.workspace.WorkbenchScene.BUILTIN_PAYMENT) opened++ })
+        view.setScenes(io.github.lujinxin.nextep.workspace.WorkbenchScene.builtins(), null)
         val width = (411 * context.resources.displayMetrics.density).toInt()
         val height = (190 * context.resources.displayMetrics.density).toInt()
         view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
         view.layout(0, 0, width, height)
-        val payment = field(view, "paymentButton") as View
+        val bar = field(view, "sceneBar") as android.widget.LinearLayout
+        val payment = bar.getChildAt(1)
         val bounds = Rect()
         payment.getDrawingRect(bounds)
         view.offsetDescendantRectToMyCoords(payment, bounds)
@@ -58,19 +61,18 @@ class WorkbenchUiTest {
         assertTrue(headingBounds.top >= (40 * density).toInt())
         val apps = field(view, "appScroll") as View
         assertTrue(apps.height >= (WorkspaceControlMetrics.APP_ICON_SIZE_DP * density).toInt())
-        val row = payment.parent as View
+        val row = bar.parent as View
         val rowBounds = Rect(); row.getDrawingRect(rowBounds); view.offsetDescendantRectToMyCoords(row, rowBounds)
         val appsBounds = Rect(); apps.getDrawingRect(appsBounds); view.offsetDescendantRectToMyCoords(apps, appsBounds)
         val above = rowBounds.top - (40 * density).toInt()
         val below = height - appsBounds.bottom
         assertTrue("above=$above below=$below", below >= (6 * density).toInt() && kotlin.math.abs(above - below) <= (4 * density).toInt())
-        // Three equal 40dp buttons separated by 8dp gaps.
-        val compare = field(view, "compareButton") as View
-        val tools = field(view, "toolsButton") as View
-        assertEquals((40 * density).toInt(), payment.width)
-        assertEquals((8 * density).toInt(), payment.left - compare.right)
-        assertEquals((8 * density).toInt(), tools.left - payment.right)
-        assertNotSame(field(view, "appRow"), payment.parent)
+        // Equal 36dp buttons separated by 6dp gaps: two default scenes and the add button.
+        assertEquals(3, bar.childCount)
+        assertEquals((36 * density).toInt(), payment.width)
+        assertEquals((6 * density).toInt(), payment.left - bar.getChildAt(0).right)
+        assertEquals((6 * density).toInt(), bar.getChildAt(2).left - payment.right)
+        assertNotSame(field(view, "appRow"), bar)
         assertTrue(payment.performClick())
         assertEquals(1, opened)
     }
@@ -78,11 +80,13 @@ class WorkbenchUiTest {
     @Test fun lightAndDarkAppearancesActuallyRecolourTheDrawnControlIcons() {
         val view = TopAppStripView(context, {}, {},
             { _, _ -> false }, { _, _ -> false })
+        val mine = io.github.lujinxin.nextep.workspace.WorkbenchScene("游戏", "com.g", List(4) { null }, icon = "game")
+        view.setScenes(io.github.lujinxin.nextep.workspace.WorkbenchScene.builtins() + mine, "游戏")
         for (theme in WorkbenchAppearance.entries) {
             view.setAppearance(theme)
-            for (name in listOf("paymentButton", "compareButton", "toolsButton")) {
-                val button = field(view, name) as android.widget.ImageButton
-                assertEquals(theme.accent, button.imageTintList!!.defaultColor)
+            val bar = field(view, "sceneBar") as android.widget.LinearLayout
+            for (index in 0 until bar.childCount) {
+                val button = bar.getChildAt(index) as android.widget.ImageButton
                 val icon = button.drawable as WorkbenchIcon
                 assertEquals(theme.accent, icon.color)
                 val image = android.graphics.Bitmap.createBitmap(48, 48, android.graphics.Bitmap.Config.ARGB_8888)
@@ -90,16 +94,19 @@ class WorkbenchUiTest {
                 icon.draw(android.graphics.Canvas(image))
                 val painted = (0 until 48).flatMap { x -> (0 until 48).map { y -> image.getPixel(x, y) } }
                     .filter { android.graphics.Color.alpha(it) == 255 }
-                assertTrue(name, painted.isNotEmpty())
+                assertTrue("button $index", painted.isNotEmpty())
                 // Light icons must not stay white on the light panel (±4 covers premultiply rounding).
                 fun near(a: Int, b: Int) = listOf(16, 8, 0).all { kotlin.math.abs((a shr it and 0xFF) - (b shr it and 0xFF)) <= 4 }
-                assertTrue(name, painted.all { near(it, theme.accent) })
+                assertTrue("button $index", painted.all { near(it, theme.accent) })
                 val background = button.background as android.graphics.drawable.RippleDrawable
-                assertEquals(theme.card, (background.getDrawable(0) as android.graphics.drawable.GradientDrawable).color!!.defaultColor)
+                val fill = (background.getDrawable(0) as android.graphics.drawable.GradientDrawable).color!!.defaultColor
+                // The scene the workspace shows (the third button) is tinted; the rest use the card tone.
+                if (index == 2) assertNotEquals(theme.card, fill) else assertEquals(theme.card, fill)
             }
         }
-        assertEquals(context.getString(io.github.lujinxin.nextep.R.string.open_settings),
-            (field(view, "toolsButton") as View).contentDescription)
+        val bar = field(view, "sceneBar") as android.widget.LinearLayout
+        assertEquals(context.getString(io.github.lujinxin.nextep.R.string.scene_add_action),
+            bar.getChildAt(bar.childCount - 1).contentDescription)
     }
 
     @Test fun emptySlotBadgeIsSmallerThanBeforeAndFollowsTheAppearance() {

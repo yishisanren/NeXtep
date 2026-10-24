@@ -247,6 +247,150 @@ internal class WorkbenchToolsController(
         query.setOnEditorActionListener { _, _, _ -> submit(); true }
     }
 
+    /**
+     * Icon picker for a new or existing scene: a preset glyph is chosen with one tap; typed text
+     * (at most WorkbenchScene.TEXT_UNITS wide) makes a text scene. [picked] gets (icon, null) or (null, text).
+     */
+    fun showScenePicker(title: String, currentIcon: String?, currentText: String?, picked: (String?, String?) -> Unit) {
+        dismiss()
+        val a = appearance()
+        val panel = LinearLayout(themedContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(22), dp(20), dp(18))
+        }
+        fun rounded(fill: Int, radius: Int, stroke: Int = 0, strokeColor: Int = a.outline) =
+            android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(radius).toFloat()
+                setColor(fill)
+                if (stroke > 0) setStroke(stroke, strokeColor)
+            }
+        val fill = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        panel.addView(TextView(panel.context).apply {
+            text = title
+            textSize = 20f
+            setTextColor(a.text)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }, fill)
+        lateinit var window: AlertDialog
+        val labels = io.github.lujinxin.nextep.workspace.WorkbenchScene.PRESET_ICONS.associateWith(::presetLabel)
+        io.github.lujinxin.nextep.workspace.WorkbenchScene.PRESET_ICONS.chunked(4).forEachIndexed { row, keys ->
+            panel.addView(LinearLayout(panel.context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                keys.forEach { key ->
+                    val selected = key == currentIcon
+                    addView(LinearLayout(panel.context).apply {
+                        orientation = LinearLayout.VERTICAL
+                        gravity = android.view.Gravity.CENTER
+                        background = rounded(if (selected) (a.accent and 0x00ffffff) or 0x26000000 else a.card, 14,
+                            dp(if (selected) 2 else 1), if (selected) a.accent else a.outline)
+                        setPadding(0, dp(10), 0, dp(8))
+                        contentDescription = string(labels.getValue(key))
+                        addView(android.widget.ImageView(panel.context).apply {
+                            setImageDrawable(WorkbenchIcon(checkNotNull(WorkbenchIcon.preset(key)), a.accent))
+                        }, LinearLayout.LayoutParams(dp(28), dp(28)))
+                        addView(TextView(panel.context).apply {
+                            text = string(labels.getValue(key))
+                            textSize = 12f
+                            setTextColor(a.secondary)
+                            gravity = android.view.Gravity.CENTER
+                        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                            .apply { topMargin = dp(4) })
+                        setOnClickListener { picked(key, null); if (dialog === window) dismiss() }
+                    }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        marginStart = dp(4); marginEnd = dp(4)
+                    })
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = dp(if (row == 0) 16 else 8) })
+        }
+        val onAccent = if (a == WorkbenchAppearance.DARK) 0xFF0C131F.toInt() else android.graphics.Color.WHITE
+        val label = EditText(panel.context).apply {
+            hint = string(R.string.scene_text_hint)
+            contentDescription = hint
+            setSingleLine(true)
+            // Width units, not characters: two CJK characters or four Latin letters fit a button.
+            filters = arrayOf(InputFilter { source, start, end, dest, dstart, dend ->
+                val kept = dest.subSequence(0, dstart).toString() + dest.subSequence(dend, dest.length)
+                var room = io.github.lujinxin.nextep.workspace.WorkbenchScene.TEXT_UNITS -
+                    io.github.lujinxin.nextep.workspace.WorkbenchScene.textUnits(kept)
+                val accepted = StringBuilder()
+                source.subSequence(start, end).codePoints().forEach { cp ->
+                    val units = if (cp >= 0x1100) 2 else 1
+                    if (units <= room) { accepted.appendCodePoint(cp); room -= units } else room = 0
+                }
+                if (accepted.length == end - start) null else accepted
+            })
+            if (currentIcon == null && currentText != null) setText(currentText)
+            textSize = 16f
+            setTextColor(a.text)
+            setHintTextColor(a.secondary)
+            background = rounded(a.card, 14, dp(1))
+            setPadding(dp(16), 0, dp(16), 0)
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+        }
+        val useText = TextView(panel.context).apply {
+            text = string(R.string.scene_use_text)
+            textSize = 15f
+            setTextColor(onAccent)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            gravity = android.view.Gravity.CENTER
+            background = rounded(a.accent, 12)
+            setPadding(dp(16), 0, dp(16), 0)
+        }
+        panel.addView(LinearLayout(panel.context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(label, LinearLayout.LayoutParams(0, dp(48), 1f))
+            addView(useText, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(48)).apply { marginStart = dp(10) })
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = dp(18) })
+        panel.addView(TextView(panel.context).apply {
+            text = string(R.string.workbench_cancel)
+            textSize = 15f
+            setTextColor(a.secondary)
+            gravity = android.view.Gravity.CENTER
+            background = rounded(a.card, 12, dp(1))
+            setOnClickListener { dismiss() }
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46)).apply { topMargin = dp(14) })
+        window = builder().setView(panel).create()
+        fun submitText() {
+            val text = label.text.toString().trim()
+            if (text.isEmpty()) { label.error = string(R.string.scene_text_empty); return }
+            picked(null, text)
+            if (dialog === window) dismiss()
+        }
+        useText.setOnClickListener { submitText() }
+        label.setOnEditorActionListener { _, _, _ -> submitText(); true }
+        show(window)
+    }
+
+    /** Long-press menu of a scene: change its icon (layout scenes) or delete it. */
+    fun showSceneMenu(title: String, canChangeIcon: Boolean, changeIcon: () -> Unit, delete: () -> Unit) {
+        dismiss()
+        val a = appearance()
+        val panel = column().apply { setPadding(dp(8), dp(4), dp(8), dp(4)) }
+        val ripple = android.util.TypedValue().also {
+            panel.context.theme.resolveAttribute(android.R.attr.selectableItemBackground, it, true)
+        }
+        listOfNotNull(
+            if (canChangeIcon) R.string.scene_change_icon to changeIcon else null,
+            R.string.scene_delete_action to delete,
+        ).forEach { (label, action) ->
+            panel.addView(TextView(panel.context).apply {
+                text = string(label)
+                textSize = 16f
+                setTextColor(a.text)
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                minHeight = dp(56)
+                setPadding(dp(16), dp(4), dp(16), dp(4))
+                if (ripple.resourceId != 0) setBackgroundResource(ripple.resourceId)
+                setOnClickListener { dismiss(); action() }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        show(builder().setTitle(title).setView(panel).setNegativeButton(string(R.string.workbench_cancel), null).create())
+    }
+
+    fun message(text: String) = Toast.makeText(context, text, Toast.LENGTH_LONG).show()
+
     private fun startPaymentShortcut(action: WorkbenchIntents.Payment): Boolean = runCatching {
         val wechat = action == WorkbenchIntents.Payment.WECHAT_SCAN || action == WorkbenchIntents.Payment.WECHAT_PAY
         val scan = action == WorkbenchIntents.Payment.WECHAT_SCAN || action == WorkbenchIntents.Payment.ALIPAY_SCAN
@@ -325,6 +469,16 @@ internal class WorkbenchToolsController(
             NeXtepLog.warn("workbench_dialog", "Tool window unavailable", it)
             message(R.string.workbench_unavailable)
         }.getOrDefault(false)
+    }
+
+    companion object {
+        /** The label of a scene preset key; also the new scene's name. */
+        fun presetLabel(key: String): Int = when (key) {
+            "work" -> R.string.scene_icon_work; "study" -> R.string.scene_icon_study
+            "game" -> R.string.scene_icon_game; "media" -> R.string.scene_icon_media
+            "read" -> R.string.scene_icon_read; "shop" -> R.string.scene_icon_shop
+            "travel" -> R.string.scene_icon_travel; else -> R.string.scene_icon_life
+        }
     }
 
     private fun builder(): AlertDialog.Builder = AlertDialog.Builder(themedContext())

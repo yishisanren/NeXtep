@@ -75,4 +75,22 @@
     <string name="scene_shortcut_label">Panes scene: %1$s</string>
     <string name="scene_shortcut_unsupported">This launcher does not accept pinned shortcuts.</string>
     <string name="scene_shortcut_failed">Could not restore the scene: the workspace did not open or the scene no longer exists.</string>
+    <string name="scene_add_action">Add scene</string>
+    <string name="scene_change_icon">Change icon</string>
+    <string name="scene_pick_title">Choose an icon</string>
+    <string name="scene_text_hint">Or type a label (up to 4 letters)</string>
+    <string name="scene_use_text">Use text</string>
+    <string name="scene_text_empty">Type a label first</string>
+    <string name="scene_needs_apps">Put apps in the main pane or the cards first.</string>
+    <string name="scene_full">Up to 6 scenes. Delete one first.</string>
+    <string name="scene_restore_defaults">Restore default scenes</string>
+    <string name="scene_defaults_restored">Price comparison and payment are back.</string>
+    <string name="scene_icon_work">Work</string>
+    <string name="scene_icon_study">Study</string>
+    <string name="scene_icon_game">Games</string>
+    <string name="scene_icon_media">Media</string>
+    <string name="scene_icon_read">Reading</string>
+    <string name="scene_icon_shop">Shopping</string>
+    <string name="scene_icon_travel">Travel</string>
+    <string name="scene_icon_life">Life</string>
 </resources>

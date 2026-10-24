@@ -74,4 +74,22 @@
     <string name="scene_shortcut_label">Panes 장면: %1$s</string>
     <string name="scene_shortcut_unsupported">이 런처는 바로가기 추가를 지원하지 않습니다.</string>
     <string name="scene_shortcut_failed">장면을 복원하지 못했습니다. 작업 공간이 열리지 않았거나 장면이 삭제되었습니다.</string>
+    <string name="scene_add_action">장면 추가</string>
+    <string name="scene_change_icon">아이콘 변경</string>
+    <string name="scene_pick_title">아이콘 선택</string>
+    <string name="scene_text_hint">또는 글자 입력(최대 2자)</string>
+    <string name="scene_use_text">글자로</string>
+    <string name="scene_text_empty">글자를 입력하세요</string>
+    <string name="scene_needs_apps">먼저 메인 창이나 카드에 앱을 넣으세요.</string>
+    <string name="scene_full">장면은 최대 6개입니다. 먼저 하나를 삭제하세요.</string>
+    <string name="scene_restore_defaults">기본 장면 복원</string>
+    <string name="scene_defaults_restored">가격 비교와 결제를 복원했습니다.</string>
+    <string name="scene_icon_work">업무</string>
+    <string name="scene_icon_study">공부</string>
+    <string name="scene_icon_game">게임</string>
+    <string name="scene_icon_media">영상</string>
+    <string name="scene_icon_read">독서</string>
+    <string name="scene_icon_shop">쇼핑</string>
+    <string name="scene_icon_travel">외출</string>
+    <string name="scene_icon_life">생활</string>
 </resources>

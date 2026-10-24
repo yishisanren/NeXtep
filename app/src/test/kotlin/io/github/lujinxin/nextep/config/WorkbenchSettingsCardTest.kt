@@ -89,7 +89,9 @@ class WorkbenchSettingsCardTest {
     @Test fun scenesAreListedWithRestoreHomeAndDeleteAndRestoreNeedsAnOpenWorkspace() {
         val activity = Robolectric.buildActivity(AppCompatActivity::class.java).create().get()
         activity.setTheme(com.google.android.material.R.style.Theme_MaterialComponents_DayNight_NoActionBar)
+        // Price comparison is a default tool scene (delete only); payment was deleted, so it can be restored.
         val scenes = io.github.lujinxin.nextep.workspace.WorkbenchScene.encode(listOf(
+            io.github.lujinxin.nextep.workspace.WorkbenchScene.builtins()[0],
             io.github.lujinxin.nextep.workspace.WorkbenchScene("工作", "com.a.mail", listOf("com.a.chat", null, null, null))))
         fun withScenes(active: Boolean) = state("LIGHT", "LEFT", false, false, false, active).apply {
             putString(TriggerBroadcastContract.EXTRA_SCENES, scenes)
@@ -107,15 +109,21 @@ class WorkbenchSettingsCardTest {
             walk(card.scenesCard); return found
         }
         val labels = buttons().map { it.text.toString() }
-        assertEquals(listOf(activity.getString(R.string.scene_save_action), activity.getString(R.string.scene_apply_action),
-            activity.getString(R.string.scene_shortcut_action), activity.getString(R.string.scene_delete_action)), labels)
-        buttons()[1].performClick()
+        assertEquals(listOf(activity.getString(R.string.scene_save_action), activity.getString(R.string.scene_delete_action),
+            activity.getString(R.string.scene_apply_action), activity.getString(R.string.scene_shortcut_action),
+            activity.getString(R.string.scene_delete_action), activity.getString(R.string.scene_apply_action)), labels)
+        buttons()[2].performClick()
         assertEquals(listOf(TriggerBroadcastContract.COMMAND_SCENE_APPLY to "工作"), sent)
-        buttons()[3].performClick()
+        buttons()[4].performClick()
         assertEquals(TriggerBroadcastContract.COMMAND_SCENE_DELETE to "工作", sent.last())
+        buttons()[1].performClick()
+        assertEquals(TriggerBroadcastContract.COMMAND_SCENE_DELETE to io.github.lujinxin.nextep.workspace.WorkbenchScene.BUILTIN_COMPARE, sent.last())
+        assertTrue(buttons()[5].isEnabled)
+        buttons()[5].performClick()
+        assertEquals(TriggerBroadcastContract.COMMAND_SCENE_RESTORE_DEFAULTS to "true", sent.last())
         card.apply(withScenes(false))
         assertFalse(buttons()[0].isEnabled)
-        assertFalse(buttons()[1].isEnabled)
-        assertTrue(buttons()[3].isEnabled)
+        assertFalse(buttons()[2].isEnabled)
+        assertTrue(buttons()[4].isEnabled)
     }
 }

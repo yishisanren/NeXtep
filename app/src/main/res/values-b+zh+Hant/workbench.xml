@@ -75,4 +75,22 @@
     <string name="scene_shortcut_label">格窗場景：%1$s</string>
     <string name="scene_shortcut_unsupported">目前的桌面不支援新增捷徑。</string>
     <string name="scene_shortcut_failed">場景沒有恢復：工作台沒能開啟，或場景已被刪除。</string>
+    <string name="scene_add_action">新增工作場景</string>
+    <string name="scene_change_icon">換圖示</string>
+    <string name="scene_pick_title">選擇圖示</string>
+    <string name="scene_text_hint">或輸入文字（最多 2 個字）</string>
+    <string name="scene_use_text">用文字</string>
+    <string name="scene_text_empty">先輸入文字</string>
+    <string name="scene_needs_apps">先把應用放進大窗或小窗，再新增場景。</string>
+    <string name="scene_full">最多 6 個工作場景，先刪除一個。</string>
+    <string name="scene_restore_defaults">恢復預設場景</string>
+    <string name="scene_defaults_restored">已恢復比價和支付。</string>
+    <string name="scene_icon_work">工作</string>
+    <string name="scene_icon_study">學習</string>
+    <string name="scene_icon_game">遊戲</string>
+    <string name="scene_icon_media">影音</string>
+    <string name="scene_icon_read">閱讀</string>
+    <string name="scene_icon_shop">購物</string>
+    <string name="scene_icon_travel">出行</string>
+    <string name="scene_icon_life">生活</string>
 </resources>
