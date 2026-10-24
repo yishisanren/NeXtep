@@ -122,8 +122,11 @@ class VirtualDisplaySlot(
 
     fun activate() {
         active = true
-        val textureView = if (freshSurfaceRequired) {
-            freshSurfaceRequired = false
+        // The output view survives a hidden workspace (its window stays parked); creating a new
+        // one cost the entry frame a surface each. Replace it only when its protection is stale.
+        val replace = freshSurfaceRequired && view.outputSecurityStale
+        freshSurfaceRequired = false
+        val textureView = if (replace) {
             surfaceGeneration += 1
             view.replaceTextureView(this).also {
                 NeXtepLog.info(

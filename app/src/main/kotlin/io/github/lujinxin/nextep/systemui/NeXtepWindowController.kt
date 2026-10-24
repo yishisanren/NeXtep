@@ -334,12 +334,15 @@ class NeXtepWindowController(
         check(records.size == EXPECTED_WINDOW_COUNT) { "SystemUI windows are unavailable" }
         followSystemAppearance()
         workspaceVisible = true
+        backdropHandler.removeCallbacks(releaseParkedWindows)
         publishPrivacy()
+        // Restores parked windows too: configureWindow makes them opaque and touchable again.
         val geometry = reconfigure().getOrThrow()
         records.forEach { record ->
             val view = record.view
             view.animate().cancel()
             view.visibility = View.VISIBLE
+            view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
             if (record.title == "NeXtepSidebar") {
                 // Fading the rail builds a hardware layer, and SurfaceView holes inside a layer
                 // show through as black. Slide the rail in from its edge at full alpha instead.
@@ -435,12 +438,36 @@ class NeXtepWindowController(
                 )
                 .setDuration(WORKSPACE_EXIT_DURATION_MS)
                 .setInterpolator(transitionInterpolator)
-                .withEndAction {
-                    view.visibility = View.GONE
-                    view.translationX = 0f
-                    view.translationY = 0f
-                }
+                .withEndAction { parkWindow(record) }
                 .start()
+        }
+        backdropHandler.removeCallbacks(releaseParkedWindows)
+        backdropHandler.postDelayed(releaseParkedWindows, WORKSPACE_EXIT_DURATION_MS + PARKED_WINDOW_RELEASE_MS)
+    }
+
+    /**
+     * Keep a hidden panel's window and surfaces for the next entry: recreating them (GONE ->
+     * VISIBLE) cost the first entry frame ~50 ms. The window becomes transparent, untouchable
+     * and hidden from accessibility; its views stay faded or off screen where the exit left them.
+     */
+    private fun parkWindow(record: WindowRecord) {
+        if (workspaceVisible) return
+        val view = record.view
+        view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        val params = view.layoutParams as? WindowManager.LayoutParams ?: return
+        params.alpha = 0f
+        params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        runCatching { windowManager.updateViewLayout(view, params) }
+            .onFailure { NeXtepLog.warn("workspace", "Could not park ${record.title}", it) }
+    }
+
+    /** A workspace hidden for a while gives its window surfaces back. */
+    private val releaseParkedWindows = Runnable {
+        if (workspaceVisible) return@Runnable
+        records.forEach { record ->
+            record.view.visibility = View.GONE
+            record.view.translationX = 0f
+            record.view.translationY = 0f
         }
     }
 
@@ -666,10 +693,12 @@ class NeXtepWindowController(
         params: WindowManager.LayoutParams,
         geometry: WorkspaceGeometry,
     ) {
-        val touchable = !suspended && (record.title == "NeXtepTopBar" ||
+        // A hidden workspace keeps its windows parked: transparent and untouchable (see parkWindow).
+        val touchable = workspaceVisible && !suspended && (record.title == "NeXtepTopBar" ||
             (record.title == "NeXtepSidebar" && FeatureGate.TASK_SWAP.defaultEnabled))
         params.flags = if (touchable) params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
         else params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        params.alpha = if (workspaceVisible) 1f else 0f
         // A foreground app normally hides live wallpaper, so screenshotWallpaper()
         // has no surface to read on entry. Keep that surface available behind the
         // workspace until exit/lock, without sending control gestures to it.
@@ -1202,6 +1231,7 @@ class NeXtepWindowController(
         const val BACKDROP_MAX_RETRIES = 8
         const val WORKSPACE_ENTER_DURATION_MS = 240L
         const val WORKSPACE_EXIT_DURATION_MS = 180L
+        const val PARKED_WINDOW_RELEASE_MS = 60_000L
         const val APPEARANCE_SYSTEM = "SYSTEM"
         const val SIDEBAR_SWITCH_DURATION_MS = 220L
         const val ENTER_OFFSET_DP = 12

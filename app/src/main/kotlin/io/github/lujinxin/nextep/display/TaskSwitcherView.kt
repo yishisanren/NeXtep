@@ -231,6 +231,7 @@ class TaskSwitcherView(
     fun replaceTextureView(listener: SurfaceHolder.Callback): SurfaceView {
         backgroundSwipe.cancel()
         waiting = true
+        outputSecurityStale = false
         val previous = textureView
         previous.animate().cancel()
         previous.holder.removeCallback(listener)
@@ -441,9 +442,15 @@ class TaskSwitcherView(
     private var badgeHighlighted = false
 
     fun setCaptureAllowed(allowed: Boolean) {
+        // setSecure reaches only surfaces created afterwards; the current one keeps its old flag.
+        if (captureAllowed != allowed) outputSecurityStale = true
         captureAllowed = allowed
         textureView.setSecure(!allowed)
     }
+
+    /** True once the capture policy changed after the current output view was created. */
+    var outputSecurityStale = false
+        private set
 
     fun isCaptureAllowed(): Boolean = captureAllowed
 
