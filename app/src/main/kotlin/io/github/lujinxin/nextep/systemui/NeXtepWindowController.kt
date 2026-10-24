@@ -260,8 +260,6 @@ class NeXtepWindowController(
         TriggerBroadcastContract.COMMAND_SCENE_SAVE, TriggerBroadcastContract.COMMAND_SCENE_APPLY,
         TriggerBroadcastContract.COMMAND_SCENE_DELETE, TriggerBroadcastContract.COMMAND_SCENE_RESTORE_DEFAULTS ->
             value?.trim()?.takeIf { it.isNotEmpty() }?.let { sceneCommand(key, it) } ?: false
-        // Temporary: shows each drawing of the add button for the user to choose from.
-        "scene_add_style" -> value?.toIntOrNull()?.let { topAppStrip?.setAddVariant(it); true } ?: false
         TriggerBroadcastContract.COMMAND_OPEN_IN_PANE -> value?.let(::openInPane) ?: false
         else -> false
     }

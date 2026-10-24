@@ -105,7 +105,6 @@ class TopAppStripView(
     }
     private var scenes = emptyList<WorkbenchScene>()
     private var activeScene: String? = null
-    private var addVariant = 0
     private var appearance = WorkbenchAppearance.DARK
     private val dividerPaint = Paint().apply { color = WorkbenchAppearance.DARK.outline }
     private var loading = false
@@ -321,13 +320,6 @@ class TopAppStripView(
         renderScenes()
     }
 
-    /** Which drawing of the add button to show; see WorkbenchIcon.Kind.SCENE_ADD. */
-    fun setAddVariant(value: Int) {
-        if (addVariant == value) return
-        addVariant = value
-        renderScenes()
-    }
-
     private fun renderScenes() {
         sceneBar.removeAllViews()
         val shown = scenes.take(WorkbenchScene.MAX_SCENES)
@@ -337,7 +329,7 @@ class TopAppStripView(
         })
         shown.forEach { scene -> add(sceneButton(scene, scene.name == activeScene)) }
         if (shown.size < WorkbenchScene.MAX_SCENES) {
-            add(iconButton(WorkbenchIcon(WorkbenchIcon.Kind.SCENE_ADD, appearance.accent, addVariant), selected = false).apply {
+            add(iconButton(WorkbenchIcon(WorkbenchIcon.Kind.SCENE_ADD, appearance.accent), selected = false).apply {
                 contentDescription = AppLanguage.string(context, R.string.scene_add_action)
                 setOnClickListener { onAddScene() }
             })

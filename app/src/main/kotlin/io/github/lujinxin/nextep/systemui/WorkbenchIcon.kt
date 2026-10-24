@@ -9,7 +9,7 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
 
 /** One optical grid for controls, independent of the host's installed font. */
-class WorkbenchIcon(private val kind: Kind, color: Int, private val variant: Int = 0) : Drawable() {
+class WorkbenchIcon(private val kind: Kind, color: Int) : Drawable() {
     enum class Kind {
         COMPARE, PAYMENT, SETTINGS, ADD, BACK, HOME, RECENTS, SCAN, CODE, EXPAND,
         SCENE_ADD, WORK, STUDY, GAME, MEDIA, READ, SHOP, TRAVEL, LIFE,
@@ -80,33 +80,14 @@ class WorkbenchIcon(private val kind: Kind, color: Int, private val variant: Int
                 canvas.drawRoundRect(3f, 4f, 21f, 20f, 2f, 2f, paint)
                 listOf(7f, 10f, 14f, 17f).forEach { line(it, 8f, it, 16f) }
             }
-            Kind.SCENE_ADD -> when (variant) {
-                1 -> {
-                    // Two stacked cards, a plus on the front one.
-                    canvas.save()
-                    canvas.clipOutRect(2f, 6f, 18f, 21f)
-                    canvas.drawRoundRect(7f, 3f, 21f, 16f, 2.5f, 2.5f, paint)
-                    canvas.restore()
-                    canvas.drawRoundRect(3f, 7f, 17f, 20f, 2.5f, 2.5f, paint)
-                    line(10f, 10.5f, 10f, 16.5f); line(7f, 13.5f, 13f, 13.5f)
-                }
-                2 -> {
-                    // Four panes, the fourth one still to be added.
-                    canvas.drawRoundRect(3f, 3f, 10.5f, 10.5f, 2f, 2f, paint)
-                    canvas.drawRoundRect(13.5f, 3f, 21f, 10.5f, 2f, 2f, paint)
-                    canvas.drawRoundRect(3f, 13.5f, 10.5f, 21f, 2f, 2f, paint)
-                    line(17.25f, 13.5f, 17.25f, 21f); line(13.5f, 17.25f, 21f, 17.25f)
-                }
-                else -> {
-                    // The workbench itself, one large pane and three small ones, with a plus badge.
-                    canvas.save()
-                    canvas.clipOutPath(Path().apply { addCircle(18.5f, 18.5f, 5.6f, Path.Direction.CW) })
-                    canvas.drawRoundRect(2.5f, 3.5f, 19f, 18f, 2.5f, 2.5f, paint)
-                    line(11f, 3.5f, 11f, 18f); line(11f, 8.3f, 19f, 8.3f); line(11f, 13.2f, 19f, 13.2f)
-                    canvas.restore()
-                    canvas.drawCircle(18.5f, 18.5f, 4.3f, paint)
-                    line(18.5f, 16.3f, 18.5f, 20.7f); line(16.3f, 18.5f, 20.7f, 18.5f)
-                }
+            Kind.SCENE_ADD -> {
+                // Two stacked cards, a plus on the front one: one more scene on the stack.
+                canvas.save()
+                canvas.clipOutRect(2f, 6f, 18f, 21f)
+                canvas.drawRoundRect(7f, 3f, 21f, 16f, 2.5f, 2.5f, paint)
+                canvas.restore()
+                canvas.drawRoundRect(3f, 7f, 17f, 20f, 2.5f, 2.5f, paint)
+                line(10f, 10.5f, 10f, 16.5f); line(7f, 13.5f, 13f, 13.5f)
             }
             Kind.WORK -> {
                 // Briefcase.
