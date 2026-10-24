@@ -16,6 +16,7 @@ class VirtualDisplaySlot(
 ) : SurfaceHolder.Callback {
     private companion object {
         const val OUTPUT_BOUND_TIMEOUT_MS = 600L
+        const val PARKED_DISPLAY_RELEASE_MS = 60_000L
         val creator: java.util.concurrent.ExecutorService =
             java.util.concurrent.Executors.newSingleThreadExecutor { Thread(it, "NeXtep-VirtualDisplay") }
     }
@@ -82,7 +83,8 @@ class VirtualDisplaySlot(
         this.listener = listener
     }
 
-    fun displayId(): Int? = virtualDisplay?.display?.displayId
+    /** A parked display (hidden workspace) is not offered: to callers the slot has no display. */
+    fun displayId(): Int? = if (parked) null else virtualDisplay?.display?.displayId
 
     fun geometry(): SlotGeometry? = activeGeometry
 
@@ -137,7 +139,14 @@ class VirtualDisplaySlot(
         } else {
             view.textureView
         }
+        val reused = parked
+        parked = false
+        mainHandler.removeCallbacks(releaseParked)
         updateDisplay(textureView.holder)
+        // A parked display is ready as soon as its output is bound again; no new display is created.
+        if (reused) virtualDisplay?.display?.displayId?.let { displayId ->
+            whenOutputBound { if (active && virtualDisplay?.display?.displayId == displayId) listener?.onDisplayReady(index, displayId) }
+        }
     }
 
     fun deactivate() {
@@ -145,8 +154,31 @@ class VirtualDisplaySlot(
         active = false
         suspended = false
         pendingLaunch = null
-        releaseDisplay("workspace hidden")
         freshSurfaceRequired = true
+        val display = virtualDisplay
+        if (display == null || creating) {
+            releaseDisplay("workspace hidden")
+            return
+        }
+        // Keep the display, off and without output, for a quick re-entry: creating four displays
+        // on entry stalled SystemUI's main thread on DisplayManager's lock during the slide-in.
+        // The tasks already left it; a minute later it is released as before.
+        mainHandler.removeCallbacks(outputBoundFallback)
+        outputBoundAction = null
+        runCatching { display.setSurface(null) }
+        surface = null
+        parked = true
+        view.showWaiting()
+        mainHandler.postDelayed(releaseParked, PARKED_DISPLAY_RELEASE_MS)
+        NeXtepLog.info("virtual_display", "Parked slot=$index displayId=${display.display.displayId}")
+        listener?.onDisplayReleased(index, display.display.displayId, "workspace hidden")
+    }
+
+    private var parked = false
+    private val releaseParked = Runnable {
+        if (active || !parked) return@Runnable
+        parked = false
+        releaseDisplay("parked display expired")
     }
 
     fun setSuspended(value: Boolean) {
